@@ -64,12 +64,17 @@ ser o último.
   input-buffer (~0.12s), **pulo duplo**, **planar** segurando jump no ar
   (queda lenta, após o duplo), soco (0.22s de hitbox à frente, cooldown 0.35s).
   Gravidade ~2200 px/s², pulo ~-720 px/s, velocidade máx ~340 px/s.
-- `draw(ctx, cam)` — desenha o herói: sprite do Heitor (`FG.assets.heitor`,
-  embutido em base64 no `assets.js`, carregado antes de todos), com aura de
-  fagulha, espelhado pelo `facing`, animado por transformação (inclina na
-  corrida, estica no pulo, hélice de fogo sobre a cabeça ao planar, pisca no
-  invuln) e uma luva de boxe desenhada em canvas que dispara no soco.
-  Fallback: chama simples enquanto a foto não decodificou.
+- `draw(ctx, cam)` — desenha o herói como boneco articulado no estereótipo
+  criança de desenho: cabeça GRANDE (foto real, `FG.assets.heitorHead`,
+  embutida em base64 no `assets.js`, carregado antes de todos), tronco curto
+  de casaco preto e **braços e pernas compridos e finos** estilo mangueira de
+  borracha (curvas sem cotovelo/joelho), terminando em luvas de boxe
+  vermelhas e tênis. Poses por estado: guarda de boxe parado, passada larga
+  com braços bombeando na corrida, braços pro alto no pulo, abertos como asas
+  ao planar (com hélice de fogo sobre a cabeça); no soco o braço da frente
+  estica até a `attackBox` com rastro de fogo. Espelhado pelo `facing`,
+  squash/stretch por transformação, pisca no invuln, aura de fagulha.
+  Fallback: rosto simples enquanto a foto não decodificou.
 - `hurt(dmg, fromX)` — aplica dano se `invuln <= 0`, knockback na direção
   oposta a `fromX`, seta `invuln = 1.2`, chama `FG.audio.sfx('hurt')`.
   Se `hp <= 0` chama `FG.engine.setState('dead')`.

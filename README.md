@@ -1,10 +1,11 @@
 # 🔥 Fagulho: Lendas do Bosque
 
 Um jogo de plataforma 2D em HTML5 inspirado no visual exuberante de **Rayman
-Legends** — mundo, chefão e inimigos desenhados em canvas puro, e o herói
-**recortado diretamente de uma foto**: o **Heitor**, de luvas de boxe
-vermelhas, pronto para socar tudo que se mexer no bosque. O sprite vem
-embutido em base64 (`assets.js`), então continua sem nenhum arquivo externo.
+Legends** — mundo, chefão e inimigos desenhados em canvas puro. O herói é o
+**Heitor**: a **cabeça vem recortada de uma foto real** (embutida em base64
+no `assets.js`) e o corpo é um boneco desenhado e animado em canvas, no
+estereótipo criança de desenho — cabeçudo, tronco curto e **braços e pernas
+compridos e finos**, com luvas de boxe vermelhas.
 
 Envolto numa aura de fagulha, Heitor atravessa um bosque encantado ao
 crepúsculo, coletando **lumis** (orbes douradas) até a clareira final, onde o
@@ -44,9 +45,11 @@ python3 -m http.server 8000   # acesse http://localhost:8000
   tonto. Na metade da vida, tudo acelera.
 - **Música procedural** (WebAudio): tema saltitante no bosque, tema tenso no
   chefão — nenhum arquivo de áudio no projeto.
-- **Herói de foto**: o sprite do Heitor mantém as animações do jogo por
-  transformação (inclina na corrida, estica no pulo, pisca ao levar dano) e
-  ganha uma luva de boxe voadora com rastro de fogo a cada soco.
+- **Boneco articulado**: pernas com passada larga na corrida, braços em
+  guarda de boxe parado, bombeando ao correr, esticados para o alto no pulo e
+  abertos como asas ao planar; no soco, o braço da frente **estica de
+  verdade** até a hitbox do golpe, com rastro de fogo na luva. A cabeça (da
+  foto) faz um bob próprio na corrida, e tudo pisca ao levar dano.
 
 ## Arquitetura
 

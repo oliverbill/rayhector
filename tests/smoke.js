@@ -61,7 +61,7 @@ global.window.webkitAudioContext = undefined;
 
 // stub de Image: o sprite embutido do assets.js "carrega" na hora, para o
 // caminho de desenho com drawImage ser exercitado
-function ImageStub() { this.complete = true; this.naturalWidth = 70; this.naturalHeight = 160; }
+function ImageStub() { this.complete = true; this.naturalWidth = 68; this.naturalHeight = 96; }
 Object.defineProperty(ImageStub.prototype, 'src', { set() {} });
 
 // ---------- carrega os scripts na ordem do index.html ----------
