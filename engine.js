@@ -94,8 +94,10 @@ window.FG = window.FG || {};
 
   let deadTimer = 0;
   let arenaLocked = false;
+  let playStart = 0;   // engine.time em que a partida começou (fade do tooltip)
 
   function startGame() {
+    playStart = engine.time;
     engine.lumis = 0;
     engine.checkpoint = { x: FG.level.playerStart.x, y: FG.level.playerStart.y };
     FG.player.respawn(FG.level.playerStart.x, FG.level.playerStart.y);
@@ -251,6 +253,7 @@ window.FG = window.FG || {};
     ctx.fillStyle = '#fff2d0';
     ctx.fillText(String(engine.lumis), VIEW_W - 30, 42);
     ctx.restore();
+    drawControls();
     // barra do boss
     const boss = FG.enemies.boss;
     if (boss.started && !boss.dead && boss.hp > 0) {
@@ -268,6 +271,50 @@ window.FG = window.FG || {};
       ctx.fillText('DRAGOMILÃO', VIEW_W / 2, by - 10);
       ctx.restore();
     }
+  }
+
+  // Tooltip de comandos, no canto superior direito logo abaixo das lumis.
+  // Fica sempre visível (é o que ensina o pulo duplo e a planagem), mas
+  // esmaece um pouco depois dos primeiros segundos para não roubar a cena.
+  const CONTROLS = [
+    { key: '← →', desc: 'correr' },
+    { key: 'ESPAÇO', desc: 'pular' },
+    { key: 'ESPAÇO ×2', desc: 'pulo duplo' },
+    { key: 'segurar ESPAÇO', desc: 'planar' },
+    { key: 'X', desc: 'socar' },
+  ];
+  const TIP = { x: VIEW_W - 214, y: 58, w: 194, rowH: 21, padY: 12 };
+
+  function drawControls() {
+    const h = TIP.padY * 2 + CONTROLS.length * TIP.rowH;
+    // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
+    const elapsed = engine.time - playStart;
+    const fade = Math.max(0.55, Math.min(1, 1 - (elapsed - 8) / 4 * 0.45));
+    ctx.save();
+    ctx.globalAlpha = fade;
+
+    // caixa arredondada com borda âmbar
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(TIP.x, TIP.y, TIP.w, h, 10);
+    else ctx.rect(TIP.x, TIP.y, TIP.w, h);
+    ctx.fillStyle = 'rgba(24,12,36,0.62)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,190,90,0.4)';
+    ctx.stroke();
+
+    for (let i = 0; i < CONTROLS.length; i++) {
+      const y = TIP.y + TIP.padY + i * TIP.rowH + 14;
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#ffd870';
+      ctx.fillText(CONTROLS[i].key, TIP.x + 12, y);
+      ctx.textAlign = 'right';
+      ctx.font = '13px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.82)';
+      ctx.fillText(CONTROLS[i].desc, TIP.x + TIP.w - 12, y);
+    }
+    ctx.restore();
   }
 
   function drawHeart(x, y, fill) {

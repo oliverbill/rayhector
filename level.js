@@ -52,7 +52,7 @@ window.FG = window.FG || {};
     S(2370, 556, 130, 26, 'g'),
     S(2580, 510, 125, 24, 'g'),
     S(2740, 564, 90, 26, 'g'),
-    S(2300, 390, 120, 22, 'g'),     // bônus alto sobre a poça
+    S(2300, 424, 120, 22, 'g'),     // bônus alto sobre a poça (94px acima do vizinho)
     // chão entre a poça e a escada
     S(2840, 620, 560, 100, 'g'),
     S(2870, 580, 60, 40, 'r'),
@@ -151,7 +151,7 @@ window.FG = window.FG || {};
   lumiArc(2035, 468, 4, 160, 40);
   lumiArc(2330, 462, 4, 170, 40);
   lumiArc(2650, 460, 4, 170, 40);
-  lumiLine(2315, 346, 4, 32);
+  lumiLine(2315, 380, 4, 32);
   // espinhos 2
   lumiArc(2985, 530, 4, 150, 40);
   // escada de cogumelos (um par por chapéu)
