@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Fagulho: Lendas do Bosque</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #120a1e; overflow: hidden;
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  #wrap {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    display: block; background: #1a0f2e;
+    box-shadow: 0 0 60px rgba(255, 150, 40, 0.15);
+    image-rendering: auto;
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="960" height="540"></canvas></div>
+<script src="audio.js"></script>
+<script src="level.js"></script>
+<script src="player.js"></script>
+<script src="enemies.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
