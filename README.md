@@ -12,10 +12,15 @@ crepúsculo, coletando **lumis** (orbes douradas) até a clareira final, onde o
 espera o **Dragomilão** — uma bocarra gigante de dragão vermelho, de dentes
 tortos e olhos esbugalhados, que só pensa em comer.
 
-## 🎮 Jogar
+## 🎮 Jogar agora
 
-**Basta dar duplo-clique em `index.html`** — abre em qualquer navegador
-moderno, sem servidor, sem build e sem dependências. Tudo (gráficos, música e
+**https://oliverbill.github.io/rayhector/**
+
+Publicado automaticamente pelo GitHub Pages a cada push na `main`
+(`.github/workflows/pages.yml`) — é um site estático, sem build.
+
+Localmente, **basta dar duplo-clique em `index.html`** — abre em qualquer
+navegador moderno, sem servidor e sem dependências. Tudo (gráficos, música e
 efeitos sonoros) é gerado por código em tempo real.
 
 Se preferir, também funciona por HTTP local:
@@ -25,6 +30,9 @@ python3 -m http.server 8000   # acesse http://localhost:8000
 ```
 
 ## Controles
+
+Os comandos também aparecem num quadro no canto superior direito, durante o
+jogo.
 
 | tecla | ação |
 |---|---|
@@ -63,3 +71,16 @@ python3 -m http.server 8000   # acesse http://localhost:8000
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
 
 Contratos entre os módulos em `SPEC.md`.
+
+## Testes
+
+```bash
+node tests/smoke.js   # joga o jogo inteiro sem navegador (menu → chefão → vitória)
+node tests/reach.js   # simula a física do pulo e prova que dá para alcançar tudo
+```
+
+`reach.js` responde à pergunta "essa plataforma está alta demais?" sem
+achismo: reproduz a física do `player.js` sobre a geometria do `level.js`,
+percorre o nível em busca larga e reporta o que for inalcançável, o que só é
+alcançável com timing perfeito, e o maior degrau vertical que cada plataforma
+cobra (referência: pulo simples sobe ~118px, duplo ~236px).
