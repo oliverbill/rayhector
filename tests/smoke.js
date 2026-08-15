@@ -59,15 +59,20 @@ global.performance = global.performance || { now: () => 0 };
 global.window.AudioContext = undefined;
 global.window.webkitAudioContext = undefined;
 
+// stub de Image: o sprite embutido do assets.js "carrega" na hora, para o
+// caminho de desenho com drawImage ser exercitado
+function ImageStub() { this.complete = true; this.naturalWidth = 70; this.naturalHeight = 160; }
+Object.defineProperty(ImageStub.prototype, 'src', { set() {} });
+
 // ---------- carrega os scripts na ordem do index.html ----------
 // No browser, `FG` e `window.FG` são o mesmo global; aqui pré-criamos o objeto
 // e o passamos também como parâmetro `FG` para os bare references funcionarem.
 global.window.FG = {};
-const order = ['audio.js', 'level.js', 'player.js', 'enemies.js', 'engine.js'];
+const order = ['assets.js', 'audio.js', 'level.js', 'player.js', 'enemies.js', 'engine.js'];
 for (const f of order) {
   const src = fs.readFileSync(path.join(DIR, f), 'utf8');
-  const fn = new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', src);
-  fn(global.window, global.document, global.requestAnimationFrame, global.performance, global.window.FG);
+  const fn = new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', 'Image', src);
+  fn(global.window, global.document, global.requestAnimationFrame, global.performance, global.window.FG, ImageStub);
 }
 const FG = global.window.FG;
 if (!FG || !FG.engine || !FG.player || !FG.level || !FG.enemies || !FG.audio) {

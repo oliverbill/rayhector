@@ -38,9 +38,6 @@ window.FG = window.FG || {};
   let attackTimer = 0;       // tempo restante da hitbox ativa
   let attackCooldown = 0;    // tempo até poder socar de novo
   let sparkAccum = 0;        // acumulador de emissão de faíscas
-  // mãos-brasas: posição com atraso (seguem o corpo suavemente)
-  const handL = { x: 0, y: 0 };
-  const handR = { x: 0, y: 0 };
 
   const player = {
     // ---------- campos do contrato ----------
@@ -150,21 +147,6 @@ window.FG = window.FG || {};
         s.vy += 300 * dt;
       }
 
-      // mãos-brasas seguem o corpo com atraso e bobbing
-      const t = FG.engine.time;
-      const cx = this.x + this.w / 2, cy = this.y + this.h * 0.55;
-      const runPhase = Math.sin(t * 14) * (running ? 7 : 0);
-      let txL = cx - this.w * 0.75, tyL = cy + Math.sin(t * 3) * 3 + runPhase;
-      let txR = cx + this.w * 0.75, tyR = cy + Math.sin(t * 3 + 1.7) * 3 - runPhase;
-      // soco: a mão da frente dispara para a hitbox
-      if (box.active) {
-        const punchX = this.facing > 0 ? box.x + box.w * 0.7 : box.x + box.w * 0.3;
-        if (this.facing > 0) { txR = punchX; tyR = cy; }
-        else { txL = punchX; tyL = cy; }
-      }
-      const k = 1 - Math.pow(0.000001, dt); // suavização independente de fps
-      handL.x += (txL - handL.x) * k; handL.y += (tyL - handL.y) * k;
-      handR.x += (txR - handR.x) * k; handR.y += (tyR - handR.y) * k;
     },
 
     // rajada de faíscas (pulos, dano)
@@ -203,8 +185,6 @@ window.FG = window.FG || {};
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; attackTimer = 0; attackCooldown = 0;
-      handL.x = x; handL.y = y + this.h / 2;
-      handR.x = x + this.w; handR.y = y + this.h / 2;
       for (let i = 0; i < SPARKS; i++) sparks[i].life = 0;
     },
 
@@ -236,37 +216,53 @@ window.FG = window.FG || {};
       // esticar/achatar conforme o estado
       let sx = 1, sy = 1;
       if (!this.onGround) {
-        if (gliding) { sx = 1.12; sy = 0.9; }                    // aberto, flutuando
-        else if (this.vy < 0) { sx = 0.85; sy = 1.18; }          // subindo: estica
-        else { sx = 0.95; sy = 1.05; }                           // caindo
+        if (gliding) { sx = 1.08; sy = 0.94; }                   // aberto, flutuando
+        else if (this.vy < 0) { sx = 0.9; sy = 1.12; }           // subindo: estica
+        else { sx = 0.96; sy = 1.04; }                           // caindo
       } else if (running) {
-        sy = 1 + Math.sin(t * 14) * 0.06;                        // bomba no ritmo
+        sy = 1 + Math.sin(t * 14) * 0.05;                        // bomba no ritmo
         sx = 1 / sy;
       } else {
-        sy = 1 + Math.sin(t * 2.2) * 0.035;                      // respira parado
+        sy = 1 + Math.sin(t * 2.2) * 0.03;                       // respira parado
         sx = 1 / sy;
       }
       const tilt = running ? this.facing * 0.12 : 0;             // inclina na corrida
 
-      // mão de trás (atrás do corpo)
-      this.drawHand(ctx, cam, this.facing > 0 ? handL : handR, t, false);
+      // sprite do Heitor: pés na base da hitbox, cabeça um pouco acima dela
+      const img = FG.assets && FG.assets.heitor;
+      const sh = this.h * 1.3;
+      const sw = sh * (FG.assets ? FG.assets.heitorRatio : 0.44);
 
       ctx.save();
       ctx.translate(cx, bottom);
       ctx.rotate(tilt);
-      ctx.scale(sx, sy);
+      ctx.scale(this.facing * sx, sy); // espelha pelo facing
 
-      const bw = this.w * 1.15, bh = this.h; // corpo um pouco mais gordo que a hitbox
-
-      // topete de fogo (tremula com o tempo)
-      ctx.save();
-      ctx.translate(0, -bh);
-      if (gliding) {
-        // planando: topete vira hélice girando
+      if (img && img.complete && img.naturalWidth > 0) {
         ctx.save();
+        ctx.shadowColor = '#ff8000';                             // aura de fagulha
+        ctx.shadowBlur = 12;
+        ctx.drawImage(img, -sw / 2, -sh, sw, sh);
+        ctx.restore();
+      } else {
+        // foto ainda decodificando: chama simples de reserva por 1-2 frames
+        const g0 = ctx.createRadialGradient(0, -this.h * 0.5, 2, 0, -this.h * 0.5, this.h * 0.6);
+        g0.addColorStop(0, '#ffd040');
+        g0.addColorStop(1, '#e03408');
+        ctx.fillStyle = g0;
+        ctx.beginPath();
+        ctx.ellipse(0, -this.h / 2, this.w * 0.55, this.h * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // planando: hélice de fogo girando sobre a cabeça
+      if (gliding) {
+        ctx.save();
+        ctx.translate(0, -sh - 5);
         ctx.rotate(t * 22);
         ctx.fillStyle = 'rgba(255,200,80,0.85)';
-        ctx.shadowColor = '#ffb000'; ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ffb000';
+        ctx.shadowBlur = 10;
         for (let i = 0; i < 3; i++) {
           ctx.rotate((Math.PI * 2) / 3);
           ctx.beginPath();
@@ -275,97 +271,50 @@ window.FG = window.FG || {};
         }
         ctx.restore();
         ctx.fillStyle = '#fff0b0';
-        ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill();
-      } else {
-        const wob = Math.sin(t * 9) * 3 + Math.sin(t * 23) * 1.5; // tremulação
-        const g = ctx.createLinearGradient(0, 4, wob, -20);
-        g.addColorStop(0, '#ffdf70'); g.addColorStop(1, '#ff5010');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(-7, 3);
-        ctx.quadraticCurveTo(-6 + wob * 0.5, -12, wob, -19 - Math.sin(t * 13) * 2);
-        ctx.quadraticCurveTo(6 + wob * 0.5, -10, 7, 3);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // corpo-gota: gradiente radial branco-amarelo → laranja → vermelho
-      const grad = ctx.createRadialGradient(0, -bh * 0.58, 2, 0, -bh * 0.5, bh * 0.62);
-      grad.addColorStop(0, '#fff8d8');
-      grad.addColorStop(0.35, '#ffd040');
-      grad.addColorStop(0.72, '#ff7818');
-      grad.addColorStop(1, '#e03408');
-      ctx.save();
-      ctx.shadowColor = '#ff8000';
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(0, -bh);                                        // ponta da gota
-      ctx.bezierCurveTo(bw * 0.62, -bh * 0.82, bw * 0.58, -bh * 0.12, 0, 0);
-      ctx.bezierCurveTo(-bw * 0.58, -bh * 0.12, -bw * 0.62, -bh * 0.82, 0, -bh);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      // olhos grandes e expressivos, pupilas na direção do movimento
-      const lookX = Math.max(-1, Math.min(1, this.vx / MAX_VX)) * 2.5 + this.facing * 1.5;
-      const lookY = Math.max(-1, Math.min(1, this.vy / 700)) * 2;
-      const eyeY = -bh * 0.62;
-      for (const ex of [-6.5, 6.5]) {
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(ex, eyeY, 5.5, 7, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#2a1408';
-        ctx.beginPath();
-        ctx.arc(ex + lookX, eyeY + lookY, 2.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';                 // brilho da pupila
-        ctx.beginPath();
-        ctx.arc(ex + lookX - 1, eyeY + lookY - 1, 0.9, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(0, -sh - 5, 3.5, 0, Math.PI * 2); ctx.fill();
       }
 
-      // boca: sorriso simples (aberta se planando)
-      ctx.strokeStyle = '#7a1c00';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      if (gliding) ctx.arc(0, -bh * 0.4, 3.5, 0, Math.PI);
-      else ctx.arc(0, -bh * 0.44, 4.5, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-
       ctx.restore();
 
-      // mão da frente (na frente do corpo), com rastro se socando
-      this.drawHand(ctx, cam, this.facing > 0 ? handR : handL, t, this.attackBox.active);
+      // luva extra que dispara durante o soco (mira a hitbox do golpe)
+      if (this.attackBox.active) this.drawGlove(ctx, cam, t);
     },
 
-    // uma mão-brasa: esfera laranja com glow, sem braço
-    drawHand(ctx, cam, hand, t, punching) {
-      const hx = hand.x - cam.x, hy = hand.y - cam.y;
+    // luva de boxe vermelha voadora, com rastro de fogo
+    drawGlove(ctx, cam, t) {
+      const box = this.attackBox;
+      const gx = box.x + box.w / 2 - cam.x + this.facing * 4;
+      const gy = box.y + box.h / 2 - cam.y;
       ctx.save();
-      // rastro de fogo durante o soco
-      if (punching) {
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = '#ff9020';
-        for (let i = 1; i <= 3; i++) {
-          ctx.beginPath();
-          ctx.arc(hx - this.facing * i * 7, hy + Math.sin(t * 40 + i) * 2, 6 - i, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
+      // rastro de fogo entre o corpo e a luva
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#ff9020';
+      for (let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.arc(gx - this.facing * i * 8, gy + Math.sin(t * 40 + i) * 2, 7 - i, 0, Math.PI * 2);
+        ctx.fill();
       }
-      const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 8);
-      g.addColorStop(0, '#ffe8a0');
-      g.addColorStop(0.6, '#ff9020');
-      g.addColorStop(1, '#e04808');
-      ctx.shadowColor = '#ff7000';
-      ctx.shadowBlur = punching ? 16 : 8;
+      ctx.globalAlpha = 1;
+      // punho da luva
+      ctx.shadowColor = '#ff5030';
+      ctx.shadowBlur = 10;
+      const g = ctx.createRadialGradient(gx - this.facing * 3, gy - 3, 2, gx, gy, 11);
+      g.addColorStop(0, '#ff7a60');
+      g.addColorStop(0.6, '#e83424');
+      g.addColorStop(1, '#a01808');
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(hx, hy, punching ? 8 : 6.5, 0, Math.PI * 2);
+      ctx.ellipse(gx, gy, 10, 8.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // polegar
+      ctx.beginPath();
+      ctx.ellipse(gx - this.facing * 7, gy + 4.5, 4.5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // pulso preto (manga do casaco)
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#241f24';
+      ctx.beginPath();
+      ctx.ellipse(gx - this.facing * 12, gy, 4, 6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     },

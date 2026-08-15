@@ -1,10 +1,12 @@
 # 🔥 Fagulho: Lendas do Bosque
 
 Um jogo de plataforma 2D em HTML5 inspirado no visual exuberante de **Rayman
-Legends** — mas com mundo, personagens e arte 100% originais, desenhados em
-canvas puro, sem um único asset externo.
+Legends** — mundo, chefão e inimigos desenhados em canvas puro, e o herói
+**recortado diretamente de uma foto**: o **Heitor**, de luvas de boxe
+vermelhas, pronto para socar tudo que se mexer no bosque. O sprite vem
+embutido em base64 (`assets.js`), então continua sem nenhum arquivo externo.
 
-**Fagulho** é uma fagulha viva que atravessa um bosque encantado ao
+Envolto numa aura de fagulha, Heitor atravessa um bosque encantado ao
 crepúsculo, coletando **lumis** (orbes douradas) até a clareira final, onde o
 espera o **Dragomilão** — uma bocarra gigante de dragão vermelho, de dentes
 tortos e olhos esbugalhados, que só pensa em comer.
@@ -27,8 +29,8 @@ python3 -m http.server 8000   # acesse http://localhost:8000
 |---|---|
 | ← → ou A D | correr |
 | ESPAÇO / Z / ↑ / W | pular (aperte de novo no ar: **pulo duplo**) |
-| segurar pulo no ar | **planar** (o topete vira hélice) |
-| X / K | **soco** com a mão-brasa |
+| segurar pulo no ar | **planar** (uma hélice de fogo surge sobre a cabeça) |
+| X / K | **soco** com a luva de boxe |
 
 ## O jogo
 
@@ -42,13 +44,17 @@ python3 -m http.server 8000   # acesse http://localhost:8000
   tonto. Na metade da vida, tudo acelera.
 - **Música procedural** (WebAudio): tema saltitante no bosque, tema tenso no
   chefão — nenhum arquivo de áudio no projeto.
+- **Herói de foto**: o sprite do Heitor mantém as animações do jogo por
+  transformação (inclina na corrida, estica no pulo, pisca ao levar dano) e
+  ganha uma luva de boxe voadora com rastro de fogo a cada soco.
 
 ## Arquitetura
 
 | arquivo | papel |
 |---|---|
 | `engine.js` | loop, input, câmera, colisão, HUD e estados de jogo |
-| `player.js` | física e desenho do Fagulho |
+| `assets.js` | sprite do Heitor recortado da foto, embutido em base64 |
+| `player.js` | física e desenho do herói |
 | `level.js` | mundo (7200×720), parallax, lumis, checkpoints |
 | `enemies.js` | os três inimigos e a máquina de estados do Dragomilão |
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |

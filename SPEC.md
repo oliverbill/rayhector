@@ -64,9 +64,12 @@ ser o último.
   input-buffer (~0.12s), **pulo duplo**, **planar** segurando jump no ar
   (queda lenta, após o duplo), soco (0.22s de hitbox à frente, cooldown 0.35s).
   Gravidade ~2200 px/s², pulo ~-720 px/s, velocidade máx ~340 px/s.
-- `draw(ctx, cam)` — desenha o Fagulho em canvas puro (formas + gradientes +
-  glow), animado por `FG.engine.time` (corrida bombeia, chama tremula, hélice
-  ao planar). Nada de sprites externos.
+- `draw(ctx, cam)` — desenha o herói: sprite do Heitor (`FG.assets.heitor`,
+  embutido em base64 no `assets.js`, carregado antes de todos), com aura de
+  fagulha, espelhado pelo `facing`, animado por transformação (inclina na
+  corrida, estica no pulo, hélice de fogo sobre a cabeça ao planar, pisca no
+  invuln) e uma luva de boxe desenhada em canvas que dispara no soco.
+  Fallback: chama simples enquanto a foto não decodificou.
 - `hurt(dmg, fromX)` — aplica dano se `invuln <= 0`, knockback na direção
   oposta a `fromX`, seta `invuln = 1.2`, chama `FG.audio.sfx('hurt')`.
   Se `hp <= 0` chama `FG.engine.setState('dead')`.
