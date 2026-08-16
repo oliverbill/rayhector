@@ -14,7 +14,7 @@ escalado por CSS para caber na janela.
 - **Inimigos** do bosque encantado: `espinhoco` (lagarta espinhosa que patrulha),
   `voadeira` (mariposa que voa em senoide), `sapeca` (sapo que pula em arcos).
 - **Três fases**, cada uma 7200x720 e terminando num chefão próprio:
-  `bosque` (Dragão de Três Cabeças) → `pantano` (O Lodão) → `vulcao` (O Coração
+  `bosque` (Dragão Escarlate) → `pantano` (O Lodão) → `vulcao` (O Coração
   de Magma). O dragão vem de um sprite embutido em `assets.js` (640x444); os
   outros dois são canvas puro.
 
@@ -218,18 +218,20 @@ os chefões não sabem em que fase vivem.
 - Referência medida, num bot que nunca desvia: ~30s de luta, 8 janelas, 8 socos,
   6 a 9 de dano levado, **zero** dentro da janela.
 
-As bocas do dragão **abrem** (`boss.gape`, 0..1): como o sprite as tem
-fechadas, abrir é uma composição de três camadas por cabeça — a goela escura
-pintada por cima da mandíbula fechada (que assim some), a mesma mandíbula
-girada em torno da dobradiça, e os dentes das duas arcadas. As dobradiças e o
-contorno das mandíbulas são constantes em px da imagem (`JAWS`). Escancara no
-telegraph do cuspe, no rugido e na intro.
+A boca do dragão **abre** (`boss.gape`, 0..1) por recorte, não por desenho: a
+arte vem em três camadas do mesmo quadro (`assets.js`) — o corpo com a boca
+vazada, a mandíbula com o interior da boca, e o remendo do focinho. A ordem
+corpo → mandíbula girada na dobradiça → focinho faz a mandíbula deslizar para
+TRÁS do focinho ao fechar, como animação de cutout. A referência veio de boca
+aberta, então `gape = 1` é a arte original e fechar é girar `JAW_FECHO` rad
+para cima. Escancara no telegraph do cuspe, no rugido e na intro.
 
-Só o dragão (`boss1.js`) usa sprite: `FG.assets.bossDragon`, desenhado com a
-mesma transformação que posiciona as hitboxes (`sprToWorld`/`sprBox`). Os
-pontos notáveis dele (bocas, ponto fraco, eixo da reverência, cascos de
-colisão) são constantes em px da imagem, no topo do arquivo. Barra de HP é o
-engine que desenha, lendo `boss.nome`.
+Só o dragão (`boss1.js`) usa sprite: `FG.assets.bossDragon/Jaw/Snout`
+(542x500, mesmo quadro), desenhados com a mesma transformação que posiciona
+as hitboxes (`sprToWorld`/`sprBox`). Os pontos notáveis (boca, dobradiça,
+ponto fraco, eixo da reverência, cascos de colisão) são constantes em px do
+quadro, no topo do arquivo. Barra de HP é o engine que desenha, lendo
+`boss.nome`.
 
 ### FG.audio (audio.js)
 

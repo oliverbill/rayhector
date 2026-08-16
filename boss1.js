@@ -1,5 +1,5 @@
 // Fagulho: Lendas do Bosque — boss1.js
-// Chefão da fase 1: o DRAGÃO DE TRÊS CABEÇAS. Saiu de enemies.js para o seu
+// Chefão da fase 1: o DRAGÃO ESCARLATE. Saiu de enemies.js para o seu
 // próprio arquivo quando o jogo ganhou três fases — o comportamento e o
 // balanceamento vieram inteiros, sem um número mexido.
 // A ÚNICA coisa que este arquivo faz no load é registar-se em FG.enemies
@@ -22,7 +22,7 @@ window.FG = window.FG || {};
   const rand = (a, b) => FG.enemies.fx.rand(a, b);
 
   // ==================================================================
-  // BOSS — DRAGÃO DE TRÊS CABEÇAS
+  // BOSS — DRAGÃO ESCARLATE
   // O sprite de assets.js ocupa a metade direita da arena, virado para a
   // esquerda (de onde o jogador chega). Máquina de estados com telegraphs,
   // 4 ataques ciclando e uma fase 2 mais nervosa a partir de hp <= 3.
@@ -30,55 +30,46 @@ window.FG = window.FG || {};
   // de dano, e é ela que faz a luta caber em oito socos.
   // ==================================================================
 
-  // ---------- geometria do sprite (px dentro da imagem de 640x444) ----------
-  // Tudo o que o boss precisa apontar — as duas bocas que cospem, o ponto
-  // fraco, o eixo da reverência — mora aqui em coordenadas da imagem;
-  // sprToWorld() converte para o mundo aplicando a MESMA transformação do
-  // desenho, para hitbox nenhuma sair de debaixo do dragão.
-  const SPR_W = 640, SPR_H = 444;
-  const REACH = 380;                     // do eixo do boss até o focinho da frente
-  const SPR_OX = -REACH;                 // canto esquerdo do sprite, no espaço local
+  // ---------- geometria do sprite (px dentro do quadro de 542x500) ----------
+  // Tudo o que o boss precisa apontar — a boca que cospe, o ponto fraco, o
+  // eixo da reverência, a dobradiça da mandíbula — mora aqui em coordenadas
+  // do quadro; sprToWorld() converte para o mundo aplicando a MESMA
+  // transformação do desenho, para hitbox nenhuma sair de debaixo do dragão.
+  const SPR_W = 542, SPR_H = 500;
+  const REACH = 380;                     // do eixo do boss até o focinho
+  const SPR_OX = -REACH;                 // canto esquerdo do quadro, no espaço local
   const SPR_OY = 150 - SPR_H;            // canto de cima: as patas pousam no chão
-  const BOW_PIVOT = { x: 500, y: 430 };  // pata traseira: eixo da reverência
-  // Reverência funda de propósito: é ela que traz a cabeça da frente para
-  // ~150px do chão, ao alcance de um pulo simples — inclusive de um pulo
-  // cortado. O que sobra do dragão abaixo do piso some no clip do desenho.
-  const BOW_MAX = 0.26;                  // radianos de reverência com slump = 1
+  const BOW_PIVOT = { x: 430, y: 480 };  // pata traseira: eixo da reverência
+  // Reverência funda de propósito: é ela que traz a cabeça para ~150px do
+  // chão, ao alcance de um pulo simples — inclusive de um pulo cortado. Este
+  // dragão é mais empinado que o antigo, então o mergulho é maior. O que
+  // sobra do corpo abaixo do piso some no clip do desenho.
+  const BOW_MAX = 0.45;                  // radianos de reverência com slump = 1
 
-  // As duas cabeças da frente — é daqui que saem as bolas de fogo.
-  const MOUTHS = [{ x: 52, y: 130 }, { x: 20, y: 220 }];
+  // A boca — é daqui que saem as bolas de fogo.
+  const MOUTHS = [{ x: 55, y: 190 }];
 
-  // ---------- mandíbulas que abrem ----------
-  // O sprite tem as bocas FECHADAS, então abrir é uma composição em três
-  // camadas, por cabeça: pinta-se o interior escuro por cima da mandíbula
-  // fechada do sprite (que assim some), gira-se uma cópia dessa mandíbula em
-  // torno da dobradiça, e serrilha-se as duas bordas. `jaw` é o contorno da
-  // mandíbula de baixo em px da imagem, começando na ponta do focinho e
-  // terminando na dobradiça — o mesmo polígono serve de tampa e de mandíbula.
-  const JAWS = [
-    { // cabeça de cima (a de trás)
-      hinge: { x: 118, y: 145 },
-      jaw: [{ x: 43, y: 135 }, { x: 46, y: 151 }, { x: 72, y: 158 }, { x: 104, y: 156 }],
-      lip: [{ x: 43, y: 135 }, { x: 80, y: 139 }, { x: 118, y: 145 }],  // linha de cima
-    },
-    { // cabeça da frente (a de baixo)
-      hinge: { x: 96, y: 237 },
-      jaw: [{ x: 7, y: 224 }, { x: 11, y: 241 }, { x: 42, y: 251 }, { x: 78, y: 249 }],
-      lip: [{ x: 7, y: 224 }, { x: 50, y: 230 }, { x: 96, y: 237 }],
-    },
-  ];
-  const GAPE_MAX = 0.46;   // radianos de abertura com gape = 1
-  // Um tiro por cabeça: a de cima faz o arco longo, a da frente o curto. Entre
-  // os dois pontos de queda sobra um vão largo, e o vão é a resposta do jogador.
+  // ---------- a mandíbula que abre ----------
+  // A arte vem em TRÊS camadas do mesmo quadro (assets.js): o corpo com a
+  // boca vazada, a mandíbula (com o interior da boca) e o remendo do focinho.
+  // A ordem de desenho corpo → mandíbula girada → focinho faz a mandíbula
+  // deslizar para TRÁS do focinho ao fechar, como animação de recorte — nada
+  // é desenhado à mão por cima da arte. A referência veio de boca ABERTA,
+  // então gape = 1 é a arte original e fechar é girar a mandíbula para cima.
+  const JAW_HINGE = { x: 115, y: 201 };  // canto da boca
+  const JAW_FECHO = 0.42;                // radianos até fechada (gape = 0)
+  // Duas bolas da mesma boca, com arcos diferentes: uma longa e uma curta.
+  // Entre os dois pontos de queda sobra um vão largo, e o vão é a resposta
+  // do jogador — os MESMOS arcos de sempre, a luta não mudou.
   const SHOTS = [
     { mouth: 0, vx: -430, vy: -420 },
-    { mouth: 1, vx: -250, vy: -160 },
+    { mouth: 0, vx: -250, vy: -160 },
   ];
-  // Ponto fraco: a cabeça da frente, que a reverência traz para a altura do soco.
-  const WEAK = { x: 8, y: 176, w: 108, h: 92 };
-  // Massas que machucam no contato: cabeças/pescoços e o corpanzil no chão.
-  const HEADS_HULL = { x: 0, y: 100, w: 240, h: 160 };
-  const BODY_HULL = { x: 150, y: 300, w: 440, h: 144 };
+  // Ponto fraco: a cabeça, que a reverência traz para a altura do soco.
+  const WEAK = { x: 15, y: 120, w: 150, h: 110 };
+  // Massas que machucam no contato: cabeça/pescoço e o corpanzil.
+  const HEADS_HULL = { x: 0, y: 60, w: 200, h: 180 };
+  const BODY_HULL = { x: 160, y: 260, w: 370, h: 240 };
 
   // Um ponto do sprite → mundo, já com a reverência e o encolhimento da morte.
   const _pt = { x: 0, y: 0 };
@@ -126,7 +117,7 @@ window.FG = window.FG || {};
   const boss = {
     // --- identidade (o engine lê o nome para a barra de vida) ---
     id: 'dragao',
-    nome: 'DRAGÃO DE TRÊS CABEÇAS',
+    nome: 'DRAGÃO ESCARLATE',
 
     // --- contrato lido pelo engine ---
     started: false,
@@ -141,7 +132,7 @@ window.FG = window.FG || {};
     groundY: 0,      // chão da arena
     hingeY: 0,       // altura de referência do sprite
     charge: 0,       // 0..1 — fogo acumulado nas bocas (telegraph do cuspe)
-    gape: 0,         // 0..1 — quanto as duas bocas estão escancaradas
+    gape: 0,         // 0..1 — quanto a boca está escancarada
     gapeAlvo: 0,     // para onde `gape` está indo neste frame
     gapeHold: 0,     // segura a boca aberta depois do disparo
     slump: 0,        // 0..1 — quanto ele abaixa as cabeças (janela de dano)
@@ -258,7 +249,7 @@ window.FG = window.FG || {};
         this.dieScale = Math.max(0.08, 1 - k * 0.9);    // encolhe
         this.charge = Math.max(0, 0.5 - k);             // o fogo das bocas apaga
         this.gape = Math.max(0, 0.7 - k * 0.7);        // as goelas fecham devagar
-        this.slump = Math.min(1, this.slump + dt * 2);  // as três cabeças tombam
+        this.slump = Math.min(1, this.slump + dt * 2);  // a cabeça tomba
         // faíscas douradas contínuas
         if (Math.random() < 0.6) {
           spawnParticle(this.x - rand(0, REACH * this.dieScale), this.hingeY + rand(-120, 60),
@@ -313,7 +304,7 @@ window.FG = window.FG || {};
         this.slump += (0 - this.slump) * Math.min(1, dt * 6);
         this.eyeGlow = 0;
         if (this.timer <= 0) {
-          // O cuspe abre o ciclo: é a assinatura do bicho de três cabeças.
+          // O cuspe abre o ciclo: é a assinatura do dragão.
           const attacks = ['cuspe', 'bocanhada', 'rugido', 'dentes'];
           this.state = attacks[this.attackIndex % 4];
           this.attackIndex++;
@@ -354,7 +345,7 @@ window.FG = window.FG || {};
           this.gapeAlvo = 0.55;
           if (this.timer <= 0) { this.phase = 2; this.timer = 0.6; }
         } else if (this.phase === 2) {
-          // investe pela arena com as três cabeças na frente
+          // investe pela arena de cabeça baixa, boca entreaberta
           const targetX = a.x + REACH + 60;
           this.x += (targetX - this.x) * Math.min(1, dt * 5);
           this.charge = Math.max(0, this.charge - dt * 1.6);
@@ -367,7 +358,7 @@ window.FG = window.FG || {};
 
       } else if (this.state === 'cuspe') {
         if (this.phase === 0) {
-          // telegraph: as duas cabeças da frente inflam e acendem
+          // telegraph: o peito infla e a boca acende
           this.phase = 1;
           this.timer = 0.85;
         } else if (this.phase === 1) {
@@ -421,7 +412,7 @@ window.FG = window.FG || {};
       } else if (this.state === 'dentes') {
         const a = FG.level.arena;
         if (this.phase === 0) {
-          // sacode as três cabeças e chove presa; sombras ovais avisam ~0.8s antes
+          // sacode a cabeça e chove presa; sombras ovais avisam ~0.8s antes
           const n = p2 ? 6 : 4;
           let spawned = 0;
           for (let i = 0; i < MAXTEETH && spawned < n; i++) {
@@ -602,8 +593,10 @@ window.FG = window.FG || {};
 
     const X = boss.x - cam.x + shX;
     const HY = boss.hingeY - cam.y + shY + breathe;
-    const img = FG.assets && FG.assets.bossDragon;
-    const ready = !!(img && img.complete && img.naturalWidth > 0);
+    const A = FG.assets || {};
+    const okB = !!(A.bossDragon && A.bossDragon.complete && A.bossDragon.naturalWidth > 0);
+    const okJ = !!(A.bossDragonJaw && A.bossDragonJaw.complete && A.bossDragonJaw.naturalWidth > 0);
+    const okS = !!(A.bossDragonSnout && A.bossDragonSnout.complete && A.bossDragonSnout.naturalWidth > 0);
 
     ctx.save();
     // Nada do dragão passa do chão: na reverência ele agacha, e o que sobraria
@@ -619,25 +612,23 @@ window.FG = window.FG || {};
     ctx.rotate(-boss.slump * BOW_MAX);
     ctx.translate(-(SPR_OX + BOW_PIVOT.x), -(SPR_OY + BOW_PIVOT.y));
 
-    if (ready) {
-      ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
-      // bocas abertas por cima do sprite (que as tem fechadas)
-      if (boss.gape > 0.02) drawGape(ctx, boss.gape, boss.charge, p2, t);
+    if (okB) {
+      drawDragonLayers(ctx, A, okJ, okS);
       // fase 2: o bicho esquenta por dentro
       if (p2 && !dying) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.10 + 0.05 * Math.sin(t * 6);
-        ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+        drawDragonLayers(ctx, A, okJ, okS);
         ctx.restore();
       }
-      // flash ao levar dano: a própria imagem por cima, somando luz — a
+      // flash ao levar dano: as próprias camadas por cima, somando luz — a
       // silhueta fica certa sem precisar de máscara nenhuma
       if (boss.flash > 0) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.85;
-        ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+        drawDragonLayers(ctx, A, okJ, okS);
         ctx.restore();
       }
     } else {
@@ -649,117 +640,38 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // Silhueta de emergência: só aparece se a imagem ainda não carregou (os
-  // primeiros frames, ou um ambiente sem DOM). A luta nunca acontece contra
-  // um vazio, e as duas cabeças continuam onde o cuspe sai.
-  function drawDragonFallback(ctx, p2) {
-    ctx.fillStyle = p2 ? '#1f7a3a' : '#186032';
-    ctx.beginPath();
-    ctx.ellipse(SPR_OX + 360, SPR_OY + 360, 250, 84, 0, 0, Math.PI * 2);
-    ctx.fill();
-    for (let i = 0; i < MOUTHS.length; i++) {
-      const m = MOUTHS[i];
-      ctx.beginPath();
-      ctx.ellipse(SPR_OX + m.x + 44, SPR_OY + m.y, 58, 34, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // ---------- as duas bocas abrindo ----------
-  // Três camadas por cabeça, nesta ordem: (1) a goela escura pintada por cima
-  // da mandíbula fechada do sprite, que assim desaparece; (2) a mesma
-  // mandíbula, girada para baixo em torno da dobradiça; (3) os dentes das duas
-  // bordas. Só o passo (1) é o que permite abrir uma boca que a imagem tem
-  // fechada — sem ele apareceriam duas mandíbulas, a velha e a nova.
-  function drawGape(ctx, gape, charge, p2, t) {
-    const ang = gape * GAPE_MAX;
-    for (let i = 0; i < JAWS.length; i++) {
-      const J = JAWS[i];
-      const hx = SPR_OX + J.hinge.x, hy = SPR_OY + J.hinge.y;
-
-      // (1) goela: o polígono da mandíbula fechada, em vermelho escuro, com o
-      // fundo aceso quando o fogo está carregando
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(hx, hy);
-      for (let k = 0; k < J.jaw.length; k++) ctx.lineTo(SPR_OX + J.jaw[k].x, SPR_OY + J.jaw[k].y);
-      ctx.closePath();
-      // um pouco além do contorno, para não sobrar franja verde do sprite
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#2a0806';
-      ctx.stroke();
-      const gg = ctx.createLinearGradient(hx, hy, SPR_OX + J.jaw[0].x, SPR_OY + J.jaw[0].y);
-      gg.addColorStop(0, charge > 0.1 ? '#c03008' : '#3a0c08');
-      gg.addColorStop(1, '#180404');
-      ctx.fillStyle = gg;
-      ctx.fill();
-      ctx.restore();
-
-      // (2) mandíbula de baixo, girada em torno da dobradiça
+  // As três camadas na ordem que faz a mandíbula deslizar para trás do
+  // focinho: corpo, mandíbula girada na dobradiça, focinho por cima. Se a
+  // mandíbula ou o remendo ainda não decodificaram, desenha só o corpo — a
+  // arte é de boca vazada, e um frame de boca aberta é melhor que um buraco.
+  function drawDragonLayers(ctx, A, okJ, okS) {
+    ctx.drawImage(A.bossDragon, SPR_OX, SPR_OY, SPR_W, SPR_H);
+    if (okJ) {
+      const hx = SPR_OX + JAW_HINGE.x, hy = SPR_OY + JAW_HINGE.y;
       ctx.save();
       ctx.translate(hx, hy);
-      ctx.rotate(ang);
+      ctx.rotate(JAW_FECHO * (1 - boss.gape));  // positivo: o queixo sobe e fecha
       ctx.translate(-hx, -hy);
-      ctx.beginPath();
-      ctx.moveTo(hx, hy);
-      for (let k = 0; k < J.jaw.length; k++) ctx.lineTo(SPR_OX + J.jaw[k].x, SPR_OY + J.jaw[k].y);
-      ctx.closePath();
-      const jg = ctx.createLinearGradient(0, SPR_OY + J.hinge.y - 14, 0, SPR_OY + J.hinge.y + 20);
-      jg.addColorStop(0, p2 ? '#2c8a45' : '#1f7a3a');
-      jg.addColorStop(1, '#0e4423');
-      ctx.fillStyle = jg;
-      ctx.fill();
-      ctx.strokeStyle = '#0b3a1d';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      // língua, e dentes de baixo na borda que acabou de girar
-      drawTongue(ctx, J, gape, t);
-      drawTeeth(ctx, J.jaw[0], J.hinge, -1);
+      ctx.drawImage(A.bossDragonJaw, SPR_OX, SPR_OY, SPR_W, SPR_H);
       ctx.restore();
-
-      // (3) dentes de cima, no lábio, que não gira
-      drawTeeth(ctx, J.lip[0], J.hinge, 1);
     }
+    if (okS) ctx.drawImage(A.bossDragonSnout, SPR_OX, SPR_OY, SPR_W, SPR_H);
   }
 
-  // Dentes ao longo da borda de A a B. `lado` = 1 aponta para baixo (arcada de
-  // cima), -1 aponta para cima (arcada de baixo).
-  function drawTeeth(ctx, A, B, lado) {
-    const ax = SPR_OX + A.x, ay = SPR_OY + A.y;
-    const bx = SPR_OX + B.x, by = SPR_OY + B.y;
-    const n = 6;
-    ctx.fillStyle = '#fff6e0';
-    for (let i = 0; i < n; i++) {
-      const u = (i + 0.5) / n;
-      const x = ax + (bx - ax) * u, y = ay + (by - ay) * u;
-      const h = (5 + (i % 2) * 3) * (1 - u * 0.35);   // menores lá no fundo
-      ctx.beginPath();
-      ctx.moveTo(x - 3.2, y);
-      ctx.lineTo(x + (i % 2 ? 1 : -1), y + lado * h);
-      ctx.lineTo(x + 3.2, y);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  // Língua rosada no fundo da boca, só quando ela está bem aberta.
-  function drawTongue(ctx, J, gape, t) {
-    if (gape < 0.45) return;
-    const ax = SPR_OX + J.jaw[0].x, ay = SPR_OY + J.jaw[0].y;
-    const bx = SPR_OX + J.hinge.x, by = SPR_OY + J.hinge.y;
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, (gape - 0.45) * 3);
-    ctx.fillStyle = '#c4485e';
+  // Silhueta de emergência: só aparece se a imagem ainda não carregou (os
+  // primeiros frames, ou um ambiente sem DOM). A luta nunca acontece contra
+  // um vazio, e a boca continua onde o cuspe sai.
+  function drawDragonFallback(ctx, p2) {
+    ctx.fillStyle = p2 ? '#c22a1a' : '#a02015';
     ctx.beginPath();
-    ctx.moveTo(bx - 4, by - 2);
-    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 9 + Math.sin(t * 9) * 2, ax + 12, ay + 5);
-    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 15, bx - 4, by + 5);
-    ctx.closePath();
+    ctx.ellipse(SPR_OX + 330, SPR_OY + 370, 210, 110, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+    ctx.beginPath();
+    ctx.ellipse(SPR_OX + 95, SPR_OY + 165, 90, 60, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // Fogo carregando nas duas bocas — o telegraph do cuspe, e o que deixa claro
+  // Fogo carregando na boca — o telegraph do cuspe, e o que deixa claro
   // de onde as bolas vão sair.
   function drawMouthFire(ctx, k, t) {
     ctx.save();

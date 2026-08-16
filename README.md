@@ -12,12 +12,14 @@ Envolto numa aura de fagulha, Heitor atravessa **três fases** coletando
 
 | # | fase | chefão |
 |---|---|---|
-| 1 | **O Bosque Crepuscular** — roxo e laranja, ao anoitecer | **Dragão de Três Cabeças** |
+| 1 | **O Bosque Crepuscular** — roxo e laranja, ao anoitecer | **Dragão Escarlate** |
 | 2 | **O Pântano Venenoso** — bruma ocre, bambus e lodo | **O Lodão** |
 | 3 | **A Encosta do Vulcão** — rocha preta e lava, a luz vindo de baixo | **O Coração de Magma** |
 
 As lumis atravessam as fases: o contador só zera em jogo novo. O dragão é o
-único que vem de um sprite (embutido em base64 no `assets.js`); os outros dois
+único que vem de arte bitmap — três camadas de recorte embutidas em base64 no
+`assets.js` (corpo, mandíbula e focinho), e a boca abre girando a mandíbula na
+dobradiça, que desliza para trás do focinho ao fechar. Os outros dois chefões
 são desenhados em canvas, como o resto do jogo.
 
 ## 🎮 Jogar agora
@@ -83,7 +85,7 @@ jogo.
   (mariposa em senoide), o *sapeca* (sapo que pula na sua direção) e o *peixe*
   voador, que fica bufando parado e dispara na horizontal quando você chega.
 - **Três chefões**, um por fase, todos com 8 de vida e 4 ataques telegrafados:
-  o **Dragão de Três Cabeças** (cuspe de fogo pelas duas cabeças, investida,
+  o **Dragão Escarlate** (duas bolas de fogo em arcos diferentes, investida,
   rugido rasteiro, chuva de presas), **O Lodão** (cusparada, lambada de língua,
   baque com ondas, chuva de bolhas) e **O Coração de Magma** (rolar, arremesso,
   jatos de lava, tremor com estalactites).
