@@ -32,7 +32,11 @@ if (!level) {
 // ---------- constantes do player (espelham player.js) ----------
 const ACCEL = 2400, FRICTION = 2000, MAX_VX = 340;
 const GRAVITY = 2200, JUMP_VY = -720, GLIDE_FALL = 90, MAX_FALL = 1100;
+// Planar tem crédito: 1s por ida ao ar, e só recarrega tocando o chão ou a
+// parede. Sem espelhar isso aqui, o teste daria por alcançável um vão que a
+// planagem só cobre se durar para sempre.
 const PW = 30, PH = 44;
+const GLIDE_TIME = 1.0;    // espelha player.js
 
 const solids = level.solids;
 
@@ -64,7 +68,7 @@ function moveAndCollide(e, dt) {
 function simulate(x0, y0, dir, vx0, delay2, glide) {
   const p = { x: x0 - PW / 2, y: y0 - PH, w: PW, h: PH, vx: vx0, vy: 0, onGround: true };
   const dt = 1 / 240;
-  let t = 0, jumps = 0;
+  let t = 0, jumps = 0, glideLeft = GLIDE_TIME;
   p.vy = JUMP_VY; jumps = 1; // pulo inicial
   while (t < 4) {
     t += dt;
@@ -75,7 +79,9 @@ function simulate(x0, y0, dir, vx0, delay2, glide) {
     // segundo pulo
     if (jumps === 1 && delay2 !== null && t >= delay2) { p.vy = JUMP_VY; jumps = 2; }
     p.vy += GRAVITY * dt;
-    const cap = (glide && jumps >= 2 && p.vy > 0) ? GLIDE_FALL : MAX_FALL;
+    const planando = glide && jumps >= 2 && p.vy > 0 && glideLeft > 0;
+    if (planando) glideLeft -= dt;
+    const cap = planando ? GLIDE_FALL : MAX_FALL;
     if (p.vy > cap) p.vy = cap;
     moveAndCollide(p, dt);
     if (p.onGround) {

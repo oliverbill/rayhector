@@ -47,6 +47,27 @@ window.FG = window.FG || {};
 
   // As duas cabeças da frente — é daqui que saem as bolas de fogo.
   const MOUTHS = [{ x: 52, y: 130 }, { x: 20, y: 220 }];
+
+  // ---------- mandíbulas que abrem ----------
+  // O sprite tem as bocas FECHADAS, então abrir é uma composição em três
+  // camadas, por cabeça: pinta-se o interior escuro por cima da mandíbula
+  // fechada do sprite (que assim some), gira-se uma cópia dessa mandíbula em
+  // torno da dobradiça, e serrilha-se as duas bordas. `jaw` é o contorno da
+  // mandíbula de baixo em px da imagem, começando na ponta do focinho e
+  // terminando na dobradiça — o mesmo polígono serve de tampa e de mandíbula.
+  const JAWS = [
+    { // cabeça de cima (a de trás)
+      hinge: { x: 118, y: 145 },
+      jaw: [{ x: 43, y: 135 }, { x: 46, y: 151 }, { x: 72, y: 158 }, { x: 104, y: 156 }],
+      lip: [{ x: 43, y: 135 }, { x: 80, y: 139 }, { x: 118, y: 145 }],  // linha de cima
+    },
+    { // cabeça da frente (a de baixo)
+      hinge: { x: 96, y: 237 },
+      jaw: [{ x: 7, y: 224 }, { x: 11, y: 241 }, { x: 42, y: 251 }, { x: 78, y: 249 }],
+      lip: [{ x: 7, y: 224 }, { x: 50, y: 230 }, { x: 96, y: 237 }],
+    },
+  ];
+  const GAPE_MAX = 0.46;   // radianos de abertura com gape = 1
   // Um tiro por cabeça: a de cima faz o arco longo, a da frente o curto. Entre
   // os dois pontos de queda sobra um vão largo, e o vão é a resposta do jogador.
   const SHOTS = [
@@ -120,6 +141,9 @@ window.FG = window.FG || {};
     groundY: 0,      // chão da arena
     hingeY: 0,       // altura de referência do sprite
     charge: 0,       // 0..1 — fogo acumulado nas bocas (telegraph do cuspe)
+    gape: 0,         // 0..1 — quanto as duas bocas estão escancaradas
+    gapeAlvo: 0,     // para onde `gape` está indo neste frame
+    gapeHold: 0,     // segura a boca aberta depois do disparo
     slump: 0,        // 0..1 — quanto ele abaixa as cabeças (janela de dano)
 
     // --- máquina de estados ---
@@ -174,6 +198,9 @@ window.FG = window.FG || {};
       this.flash = 0;
       this.eyeGlow = 0;
       this.charge = 0;
+      this.gape = 0;
+      this.gapeAlvo = 0;
+      this.gapeHold = 0;
       this.slump = 0;
       this.dieTimer = 0;
       this.dieScale = 1;
@@ -230,6 +257,7 @@ window.FG = window.FG || {};
         const k = this.dieTimer / 2.5;
         this.dieScale = Math.max(0.08, 1 - k * 0.9);    // encolhe
         this.charge = Math.max(0, 0.5 - k);             // o fogo das bocas apaga
+        this.gape = Math.max(0, 0.7 - k * 0.7);        // as goelas fecham devagar
         this.slump = Math.min(1, this.slump + dt * 2);  // as três cabeças tombam
         // faíscas douradas contínuas
         if (Math.random() < 0.6) {
@@ -251,6 +279,8 @@ window.FG = window.FG || {};
       if (this.state === 'intro') {
         this.timer -= dt;
         this.charge = 0.5 + Math.sin(FG.engine.time * 10) * 0.2; // rugindo, bocas acesas
+        this.gapeAlvo = 0.8 + Math.sin(FG.engine.time * 12) * 0.2;
+        this.gape += (this.gapeAlvo - this.gape) * Math.min(1, dt * 8); // o intro sai antes da máquina
         if (this.timer <= 0) {
           this.active = true;
           this.state = 'idle';
@@ -271,6 +301,9 @@ window.FG = window.FG || {};
       sprBox(WEAK, this.eyeBox);
 
       // ---------- máquina de estados ----------
+      // A boca é fechada por omissão: cada estado que precisa dela aberta
+      // levanta o alvo, e o que não mexe deixa a mandíbula voltar sozinha.
+      this.gapeAlvo = 0;
       this.timer -= dt;
 
       if (this.state === 'idle') {
@@ -318,6 +351,7 @@ window.FG = window.FG || {};
         } else if (this.phase === 1) {
           this.x += (this.homeX + 70 - this.x) * Math.min(1, dt * 3);
           this.charge = Math.min(0.6, this.charge + dt * 1.2);
+          this.gapeAlvo = 0.55;
           if (this.timer <= 0) { this.phase = 2; this.timer = 0.6; }
         } else if (this.phase === 2) {
           // investe pela arena com as três cabeças na frente
@@ -338,6 +372,7 @@ window.FG = window.FG || {};
           this.timer = 0.85;
         } else if (this.phase === 1) {
           this.charge = Math.min(1, this.charge + dt * 1.4);
+          this.gapeAlvo = this.charge;   // escancara na mesma medida em que carrega
           if (this.timer <= 0) {
             // uma bola de fogo por cabeça, cada uma com o seu arco
             for (let i = 0; i < SHOTS.length; i++) {
@@ -351,6 +386,8 @@ window.FG = window.FG || {};
               s.vy = SHOTS[i].vy;
             }
             FG.audio.sfx('bossSpit');
+            this.gape = 1;                 // no disparo, escancarada de vez
+            this.gapeHold = 0.32;          // e assim fica enquanto as bolas saem
             this.phase = 2;
             this.timer = 0.6;
           }
@@ -366,6 +403,7 @@ window.FG = window.FG || {};
           this.timer = 0.85;
         } else if (this.phase === 1) {
           this.charge = 0.5 + Math.sin(FG.engine.time * 30) * 0.12;
+          this.gapeAlvo = 0.85 + Math.sin(FG.engine.time * 26) * 0.15;
           if (this.timer <= 0) {
             FG.audio.sfx('bossRoar');
             shockwave.active = true;
@@ -412,6 +450,12 @@ window.FG = window.FG || {};
           }
         }
       }
+
+      // Abre depressa e fecha devagar: escancarar é o aviso, e um fecho
+      // lento deixa ver a bola de fogo saindo de dentro da goela.
+      if (this.gapeHold > 0) { this.gapeHold -= dt; this.gapeAlvo = 1; }
+      const kg = this.gapeAlvo > this.gape ? dt * 9 : dt * 3.5;
+      this.gape += (this.gapeAlvo - this.gape) * Math.min(1, kg);
 
       // ---------- contato com o dragão ----------
       // Encostar nas cabeças ou no corpanzil machuca. Assim que ele começa a
@@ -577,6 +621,8 @@ window.FG = window.FG || {};
 
     if (ready) {
       ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+      // bocas abertas por cima do sprite (que as tem fechadas)
+      if (boss.gape > 0.02) drawGape(ctx, boss.gape, boss.charge, p2, t);
       // fase 2: o bicho esquenta por dentro
       if (p2 && !dying) {
         ctx.save();
@@ -617,6 +663,100 @@ window.FG = window.FG || {};
       ctx.ellipse(SPR_OX + m.x + 44, SPR_OY + m.y, 58, 34, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // ---------- as duas bocas abrindo ----------
+  // Três camadas por cabeça, nesta ordem: (1) a goela escura pintada por cima
+  // da mandíbula fechada do sprite, que assim desaparece; (2) a mesma
+  // mandíbula, girada para baixo em torno da dobradiça; (3) os dentes das duas
+  // bordas. Só o passo (1) é o que permite abrir uma boca que a imagem tem
+  // fechada — sem ele apareceriam duas mandíbulas, a velha e a nova.
+  function drawGape(ctx, gape, charge, p2, t) {
+    const ang = gape * GAPE_MAX;
+    for (let i = 0; i < JAWS.length; i++) {
+      const J = JAWS[i];
+      const hx = SPR_OX + J.hinge.x, hy = SPR_OY + J.hinge.y;
+
+      // (1) goela: o polígono da mandíbula fechada, em vermelho escuro, com o
+      // fundo aceso quando o fogo está carregando
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      for (let k = 0; k < J.jaw.length; k++) ctx.lineTo(SPR_OX + J.jaw[k].x, SPR_OY + J.jaw[k].y);
+      ctx.closePath();
+      // um pouco além do contorno, para não sobrar franja verde do sprite
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#2a0806';
+      ctx.stroke();
+      const gg = ctx.createLinearGradient(hx, hy, SPR_OX + J.jaw[0].x, SPR_OY + J.jaw[0].y);
+      gg.addColorStop(0, charge > 0.1 ? '#c03008' : '#3a0c08');
+      gg.addColorStop(1, '#180404');
+      ctx.fillStyle = gg;
+      ctx.fill();
+      ctx.restore();
+
+      // (2) mandíbula de baixo, girada em torno da dobradiça
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.rotate(ang);
+      ctx.translate(-hx, -hy);
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      for (let k = 0; k < J.jaw.length; k++) ctx.lineTo(SPR_OX + J.jaw[k].x, SPR_OY + J.jaw[k].y);
+      ctx.closePath();
+      const jg = ctx.createLinearGradient(0, SPR_OY + J.hinge.y - 14, 0, SPR_OY + J.hinge.y + 20);
+      jg.addColorStop(0, p2 ? '#2c8a45' : '#1f7a3a');
+      jg.addColorStop(1, '#0e4423');
+      ctx.fillStyle = jg;
+      ctx.fill();
+      ctx.strokeStyle = '#0b3a1d';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // língua, e dentes de baixo na borda que acabou de girar
+      drawTongue(ctx, J, gape, t);
+      drawTeeth(ctx, J.jaw[0], J.hinge, -1);
+      ctx.restore();
+
+      // (3) dentes de cima, no lábio, que não gira
+      drawTeeth(ctx, J.lip[0], J.hinge, 1);
+    }
+  }
+
+  // Dentes ao longo da borda de A a B. `lado` = 1 aponta para baixo (arcada de
+  // cima), -1 aponta para cima (arcada de baixo).
+  function drawTeeth(ctx, A, B, lado) {
+    const ax = SPR_OX + A.x, ay = SPR_OY + A.y;
+    const bx = SPR_OX + B.x, by = SPR_OY + B.y;
+    const n = 6;
+    ctx.fillStyle = '#fff6e0';
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      const x = ax + (bx - ax) * u, y = ay + (by - ay) * u;
+      const h = (5 + (i % 2) * 3) * (1 - u * 0.35);   // menores lá no fundo
+      ctx.beginPath();
+      ctx.moveTo(x - 3.2, y);
+      ctx.lineTo(x + (i % 2 ? 1 : -1), y + lado * h);
+      ctx.lineTo(x + 3.2, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Língua rosada no fundo da boca, só quando ela está bem aberta.
+  function drawTongue(ctx, J, gape, t) {
+    if (gape < 0.45) return;
+    const ax = SPR_OX + J.jaw[0].x, ay = SPR_OY + J.jaw[0].y;
+    const bx = SPR_OX + J.hinge.x, by = SPR_OY + J.hinge.y;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (gape - 0.45) * 3);
+    ctx.fillStyle = '#c4485e';
+    ctx.beginPath();
+    ctx.moveTo(bx - 4, by - 2);
+    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 9 + Math.sin(t * 9) * 2, ax + 12, ay + 5);
+    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 15, bx - 4, by + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   // Fogo carregando nas duas bocas — o telegraph do cuspe, e o que deixa claro

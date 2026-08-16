@@ -75,6 +75,11 @@ ser o último.
   input-buffer (~0.12s), **pulo duplo**, **planar** segurando jump no ar
   (queda lenta, após o duplo), soco (0.22s de hitbox à frente, cooldown 0.35s).
   Gravidade ~2200 px/s², pulo ~-720 px/s, velocidade máx ~340 px/s.
+  Planar tem crédito de **1s por ida ao ar** (`GLIDE_TIME`), gasto só enquanto
+  plana e recarregado ao tocar o chão ou agarrar a parede — soltar e reapertar
+  o botão não renova nada. `tests/reach.js` espelha esse limite; se ele mudar
+  aqui, tem de mudar lá, senão o teste passa a dar por alcançável um vão que a
+  planagem só cobre se durar para sempre.
 - `draw(ctx, cam)` — desenha o herói como boneco articulado no estereótipo
   criança de desenho: cabeça GRANDE (foto real, `FG.assets.heitorHead`,
   embutida em base64 no `assets.js`, carregado antes de todos), tronco curto
@@ -212,6 +217,13 @@ os chefões não sabem em que fase vivem.
   fase ou fim de jogo — quem traduz é o engine.
 - Referência medida, num bot que nunca desvia: ~30s de luta, 8 janelas, 8 socos,
   6 a 9 de dano levado, **zero** dentro da janela.
+
+As bocas do dragão **abrem** (`boss.gape`, 0..1): como o sprite as tem
+fechadas, abrir é uma composição de três camadas por cabeça — a goela escura
+pintada por cima da mandíbula fechada (que assim some), a mesma mandíbula
+girada em torno da dobradiça, e os dentes das duas arcadas. As dobradiças e o
+contorno das mandíbulas são constantes em px da imagem (`JAWS`). Escancara no
+telegraph do cuspe, no rugido e na intro.
 
 Só o dragão (`boss1.js`) usa sprite: `FG.assets.bossDragon`, desenhado com a
 mesma transformação que posiciona as hitboxes (`sprToWorld`/`sprBox`). Os

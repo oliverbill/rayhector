@@ -11,6 +11,7 @@ window.FG = window.FG || {};
   const COYOTE = 0.1;        // tempo de coyote após sair da borda
   const BUFFER = 0.12;       // buffer de input do pulo
   const GLIDE_FALL = 90;     // queda máxima planando (px/s)
+  const GLIDE_TIME = 1.0;    // segundos de planagem por ida ao ar (recarrega no chão)
   const MAX_FALL = 1100;     // queda terminal normal
   const ATTACK_TIME = 0.22;  // duração da hitbox do soco
   const ATTACK_CD = 0.35;    // cooldown entre socos
@@ -41,6 +42,7 @@ window.FG = window.FG || {};
   let jumpsUsed = 0;         // 0 no chão, 1 após 1º pulo, 2 após duplo
   let jumpCut = false;       // já cortou o pulo ao soltar o botão?
   let gliding = false;       // planando neste frame?
+  let glideLeft = GLIDE_TIME; // crédito de planagem que ainda resta
   let attackTimer = 0;       // tempo restante da hitbox ativa
   let attackCooldown = 0;    // tempo até poder socar de novo
   let sparkAccum = 0;        // acumulador de emissão de faíscas
@@ -180,6 +182,7 @@ window.FG = window.FG || {};
       if (clinging) {
         this.facing = lastWallDir;    // olha para a parede em que se apoia
         jumpsUsed = 0;                // encostar devolve o pulo: dá para escalar
+        glideLeft = GLIDE_TIME;       // e devolve o planar, pela mesma razão
         if (!wasClinging) FG.audio.sfx('wallgrab');
       }
       // espelhados para inspeção externa (testes/diagnóstico)
@@ -232,10 +235,16 @@ window.FG = window.FG || {};
         jumpCut = true;
       }
 
-      // planar: segurando jump, caindo, depois do pulo duplo
-      const wantGlide = input.jump && !this.onGround && !clinging && jumpsUsed >= 2 && this.vy > 0;
+      // planar: segurando jump, caindo, depois do pulo duplo — e por no MÁXIMO
+      // GLIDE_TIME de voo. O crédito é gasto enquanto plana e só volta ao tocar
+      // o chão ou agarrar a parede: sem isso, soltar e reapertar o botão daria
+      // planagem infinita e todo vão do jogo viraria travessia de graça.
+      const wantGlide = input.jump && !this.onGround && !clinging &&
+        jumpsUsed >= 2 && this.vy > 0 && glideLeft > 0;
       if (wantGlide && !gliding) FG.audio.sfx('glide');
       gliding = wantGlide;
+      if (gliding) glideLeft = Math.max(0, glideLeft - dt);
+      this.glideLeft = glideLeft;   // espelhado para os testes e para o desenho
 
       // gravidade (limitada pelo planar ou pelo atrito na parede)
       this.vy += GRAVITY * dt;
@@ -262,7 +271,7 @@ window.FG = window.FG || {};
 
       // física + colisão (o engine seta onGround)
       FG.engine.moveAndCollide(this, dt);
-      if (this.onGround) { jumpsUsed = 0; jumpCut = false; gliding = false; }
+      if (this.onGround) { jumpsUsed = 0; jumpCut = false; gliding = false; glideLeft = GLIDE_TIME; }
 
       // invulnerabilidade pós-dano
       if (this.invuln > 0) this.invuln -= dt;
@@ -354,7 +363,7 @@ window.FG = window.FG || {};
       this.hang = null;         // nunca renascer ainda pendurado num cipó
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
-      gliding = false; attackTimer = 0; attackCooldown = 0;
+      gliding = false; glideLeft = GLIDE_TIME; attackTimer = 0; attackCooldown = 0;
       wallLock = 0; wallCoyote = 0; lastWallDir = 0; clinging = false; scrapeAccum = 0;
       this.wallDir = 0;
       for (let i = 0; i < SPARKS; i++) sparks[i].life = 0;

@@ -57,6 +57,10 @@ jogo.
   crepúsculo (cogumelos gigantes, raios de luz, vagalumes), o pântano na bruma
   ocre (bambuzal, lodo, taboa) e a encosta do vulcão (rocha preta, rio de lava,
   brasa subindo — e a luz vindo de baixo, ao contrário das outras duas).
+- **Planar tem crédito**: segurando o pulo depois do duplo, o Heitor plana por
+  no máximo **1 segundo**, e o crédito só volta ao tocar o chão ou agarrar a
+  parede. Sem isso, soltar e reapertar o botão daria planagem infinita e todo
+  vão do jogo viraria travessia de graça.
 - **Escalada de penhasco**: encostando na parede em queda, o Heitor se apoia
   nela e escorrega devagar; saltando dali sobe ~90px por vez. É assim que se
   vence a chaminé do desfiladeiro — uma parede de 400px, em cinco saltos.
