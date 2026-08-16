@@ -1,7 +1,9 @@
 // Fagulho: Lendas do Bosque — enemies.js
 // FG.enemies: os três bichos do bosque (espinhoco, voadeira, sapeca) e o
-// chefão Dragomilão. Canvas puro, zero assets. Nenhuma referência a outros
-// módulos no load — só dentro de funções chamadas em runtime.
+// chefão Dragão de Três Cabeças. Os bichos comuns são canvas puro; o dragão é
+// o sprite de assets.js, animado por transformação e com fogo procedural nas
+// bocas. Nenhuma referência a outros módulos no load — só dentro de funções
+// chamadas em runtime.
 window.FG = window.FG || {};
 
 (function () {
@@ -312,10 +314,68 @@ window.FG = window.FG || {};
   }
 
   // ==================================================================
-  // BOSS — DRAGOMILÃO
-  // Bocarra gigante que domina a metade direita da arena. Máquina de
-  // estados com telegraphs, 4 ataques ciclando, fase 2 a partir de hp<=6.
+  // BOSS — DRAGÃO DE TRÊS CABEÇAS
+  // O sprite de assets.js ocupa a metade direita da arena, virado para a
+  // esquerda (de onde o jogador chega). Máquina de estados com telegraphs,
+  // 4 ataques ciclando e uma fase 2 mais nervosa a partir de hp <= 3.
+  // Depois de CADA ataque ele fica ofegante e abaixa as cabeças: é a janela
+  // de dano, e é ela que faz a luta caber em oito socos.
   // ==================================================================
+
+  // ---------- geometria do sprite (px dentro da imagem de 640x444) ----------
+  // Tudo o que o boss precisa apontar — as duas bocas que cospem, o ponto
+  // fraco, o eixo da reverência — mora aqui em coordenadas da imagem;
+  // sprToWorld() converte para o mundo aplicando a MESMA transformação do
+  // desenho, para hitbox nenhuma sair de debaixo do dragão.
+  const SPR_W = 640, SPR_H = 444;
+  const REACH = 380;                     // do eixo do boss até o focinho da frente
+  const SPR_OX = -REACH;                 // canto esquerdo do sprite, no espaço local
+  const SPR_OY = 150 - SPR_H;            // canto de cima: as patas pousam no chão
+  const BOW_PIVOT = { x: 500, y: 430 };  // pata traseira: eixo da reverência
+  // Reverência funda de propósito: é ela que traz a cabeça da frente para
+  // ~150px do chão, ao alcance de um pulo simples — inclusive de um pulo
+  // cortado. O que sobra do dragão abaixo do piso some no clip do desenho.
+  const BOW_MAX = 0.26;                  // radianos de reverência com slump = 1
+
+  // As duas cabeças da frente — é daqui que saem as bolas de fogo.
+  const MOUTHS = [{ x: 52, y: 130 }, { x: 20, y: 220 }];
+  // Um tiro por cabeça: a de cima faz o arco longo, a da frente o curto. Entre
+  // os dois pontos de queda sobra um vão largo, e o vão é a resposta do jogador.
+  const SHOTS = [
+    { mouth: 0, vx: -430, vy: -420 },
+    { mouth: 1, vx: -250, vy: -160 },
+  ];
+  // Ponto fraco: a cabeça da frente, que a reverência traz para a altura do soco.
+  const WEAK = { x: 8, y: 176, w: 108, h: 92 };
+  // Massas que machucam no contato: cabeças/pescoços e o corpanzil no chão.
+  const HEADS_HULL = { x: 0, y: 100, w: 240, h: 160 };
+  const BODY_HULL = { x: 150, y: 300, w: 440, h: 144 };
+
+  // Um ponto do sprite → mundo, já com a reverência e o encolhimento da morte.
+  const _pt = { x: 0, y: 0 };
+  function sprToWorld(sx, sy, out) {
+    out = out || _pt;
+    const ang = -boss.slump * BOW_MAX;   // negativo: o focinho desce, a cauda sobe
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const px = SPR_OX + BOW_PIVOT.x, py = SPR_OY + BOW_PIVOT.y;
+    const dx = SPR_OX + sx - px, dy = SPR_OY + sy - py;
+    const sc = boss.dieScale;
+    out.x = boss.x + (px + dx * c - dy * s) * sc;
+    out.y = boss.hingeY + (py + dx * s + dy * c) * sc;
+    return out;
+  }
+
+  // Retângulo do sprite → caixa alinhada aos eixos. A reverência é pequena
+  // (<= BOW_MAX rad), então transformar o centro já põe a caixa no lugar.
+  function sprBox(r, box) {
+    const p = sprToWorld(r.x + r.w / 2, r.y + r.h / 2, _pt);
+    const sc = boss.dieScale;
+    box.w = r.w * sc;
+    box.h = r.h * sc;
+    box.x = p.x - box.w / 2;
+    box.y = p.y - box.h / 2;
+    return box;
+  }
 
   // Pools do boss (projéteis de fogo, poças, dentes) — tudo reuso.
   const MAXSPIT = 6;
@@ -332,41 +392,40 @@ window.FG = window.FG || {};
     teeth.push({ active: false, state: 'shadow', x: 0, y: 0, w: 26, h: 46, vy: 0, timer: 0, groundY: 0 });
   }
 
-  const shockwave = { active: false, x: 0, y: 0, w: 64, h: 34, vx: -330 };
+  const shockwave = { active: false, x: 0, y: 0, w: 64, h: 34, vx: -270 };
 
   const boss = {
     // --- contrato lido pelo engine ---
     started: false,
     active: false,
     dead: false,
-    hp: 12,
-    maxHp: 12,
+    hp: 8,
+    maxHp: 8,
 
     // --- geometria (resolvida em runtime, no start/reset) ---
-    homeX: 0,        // dobradiça da mandíbula (lado direito da arena)
-    x: 0,            // posição atual da dobradiça
+    homeX: 0,        // posto do dragão (lado direito da arena)
+    x: 0,            // posição atual
     groundY: 0,      // chão da arena
-    hingeY: 0,       // altura da dobradiça
-    jawLen: 380,     // alcance das mandíbulas para a esquerda
-    open: 0.25,      // abertura da boca (0..1)
-    slump: 0,        // quanto a cabeça desaba (janela de dano)
+    hingeY: 0,       // altura de referência do sprite
+    charge: 0,       // 0..1 — fogo acumulado nas bocas (telegraph do cuspe)
+    slump: 0,        // 0..1 — quanto ele abaixa as cabeças (janela de dano)
 
     // --- máquina de estados ---
-    state: 'dormant', // dormant|intro|idle|bocanhada|cuspe|rugido|dentes|dying
+    state: 'dormant', // dormant|intro|idle|bocanhada|cuspe|rugido|dentes|exposto|dying
     phase: 0,         // sub-fase dentro do ataque
     timer: 0,
     attackIndex: 0,   // cicla os 4 ataques
     stunHit: false,   // já apanhou nesta janela?
     flash: 0,         // flash branco ao levar dano
-    eyeGlow: 0,       // brilho do olho na janela de dano
+    eyeGlow: 0,       // brilho do ponto fraco na janela de dano
     dieTimer: 0,
     dieScale: 1,
-    tongueOut: 1,     // 1 = língua de fora; 0 = engolida (morte)
     victoryFired: false,
 
     // caixas de colisão calculadas por frame
-    mouthBox: { x: 0, y: 0, w: 0, h: 0 },
-    eyeBox: { x: 0, y: 0, w: 74, h: 74 },
+    headBox: { x: 0, y: 0, w: 0, h: 0 },
+    bodyBox: { x: 0, y: 0, w: 0, h: 0 },
+    eyeBox: { x: 0, y: 0, w: 0, h: 0 },
 
     start() {
       // Rugido de intro + música do boss; 1.2s de intro antes de atacar.
@@ -384,6 +443,8 @@ window.FG = window.FG || {};
       this.groundY = groundYAt(a.x + a.w * 0.75, 300);
       this.homeX = a.x + a.w - 130;
       this.x = this.homeX;
+      // hingeY é a origem local do sprite: o pé do dragão fica 150 abaixo dela
+      // (ver SPR_OY), que é exatamente o chão da arena.
       this.hingeY = this.groundY - 150;
     },
 
@@ -400,11 +461,10 @@ window.FG = window.FG || {};
       this.stunHit = false;
       this.flash = 0;
       this.eyeGlow = 0;
-      this.open = 0.25;
+      this.charge = 0;
       this.slump = 0;
       this.dieTimer = 0;
       this.dieScale = 1;
-      this.tongueOut = 1;
       this.victoryFired = false;
       for (let i = 0; i < MAXSPIT; i++) spits[i].active = false;
       for (let i = 0; i < MAXPOOL; i++) pools[i].active = false;
@@ -412,9 +472,18 @@ window.FG = window.FG || {};
       shockwave.active = false;
     },
 
-    isPhase2() { return this.hp <= 6; },
+    isPhase2() { return this.hp <= 3; },
 
-    // Dano na janela do olho
+    // Fim de ataque: ofegante, cabeças abaixadas, ponto fraco ao alcance do
+    // soco. Vem depois de TODOS os ataques — é o que dá ritmo à luta.
+    expose(dur) {
+      this.state = 'exposto';
+      this.timer = dur;
+      this.phase = 0;
+      this.stunHit = false;
+    },
+
+    // Dano no ponto fraco
     takeHit() {
       this.hp--;
       this.flash = 0.25;
@@ -428,9 +497,9 @@ window.FG = window.FG || {};
         this.dieTimer = 0;
         this.timer = 0;
       } else {
-        // Recua da janela de dano
+        // Levanta as cabeças e volta para o posto
         this.state = 'idle';
-        this.timer = this.isPhase2() ? 0.7 : 1.1;
+        this.timer = this.isPhase2() ? 1.0 : 1.4;
         this.slump = 0;
       }
     },
@@ -444,12 +513,12 @@ window.FG = window.FG || {};
       if (this.state === 'dying') {
         this.dieTimer += dt;
         const k = this.dieTimer / 2.5;
-        this.tongueOut = Math.max(0, 1 - k * 2.2);      // engole a língua
         this.dieScale = Math.max(0.08, 1 - k * 0.9);    // encolhe
-        this.open = 0.4 + Math.sin(this.dieTimer * 26) * 0.15; // engasga
+        this.charge = Math.max(0, 0.5 - k);             // o fogo das bocas apaga
+        this.slump = Math.min(1, this.slump + dt * 2);  // as três cabeças tombam
         // faíscas douradas contínuas
         if (Math.random() < 0.6) {
-          spawnParticle(this.x - rand(0, this.jawLen * this.dieScale), this.hingeY + rand(-120, 60),
+          spawnParticle(this.x - rand(0, REACH * this.dieScale), this.hingeY + rand(-120, 60),
             rand(-120, 120), rand(-260, -60), 0.8, 4 + Math.random() * 4, '#ffd870', 300);
         }
         if (this.dieTimer >= 2.5 && !this.victoryFired) {
@@ -466,147 +535,141 @@ window.FG = window.FG || {};
       // ---------- intro ----------
       if (this.state === 'intro') {
         this.timer -= dt;
-        this.open = 0.6 + Math.sin(FG.engine.time * 10) * 0.1; // rugindo
+        this.charge = 0.5 + Math.sin(FG.engine.time * 10) * 0.2; // rugindo, bocas acesas
         if (this.timer <= 0) {
           this.active = true;
           this.state = 'idle';
-          this.timer = 0.8;
-          this.open = 0.25;
+          this.timer = 1.0;
+          this.charge = 0;
         }
         return;
       }
 
       const p2 = this.isPhase2();
-      const speedMul = p2 ? 0.65 : 1; // fase 2: intervalos menores
+      const speedMul = p2 ? 0.85 : 1; // fase 2: intervalos um pouco menores
 
       // ---------- caixas vivas ----------
-      // Boca: da ponta das mandíbulas até a dobradiça
-      const gap = 30 + this.open * 130;
-      this.mouthBox.x = this.x - this.jawLen;
-      this.mouthBox.y = this.hingeY - gap / 2 + this.slump * 60;
-      this.mouthBox.w = this.jawLen - 40;
-      this.mouthBox.h = gap + 70;
-      // Olho fraco (alvo na janela de dano): acima da dobradiça, desaba no slump
-      this.eyeBox.x = this.x - 190;
-      this.eyeBox.y = this.hingeY - 150 + this.slump * 110;
+      // Cabeças/pescoços e corpanzil: as duas massas que machucam no contato.
+      sprBox(HEADS_HULL, this.headBox);
+      sprBox(BODY_HULL, this.bodyBox);
+      // Ponto fraco: a cabeça da frente, que a reverência traz para baixo.
+      sprBox(WEAK, this.eyeBox);
 
       // ---------- máquina de estados ----------
       this.timer -= dt;
 
       if (this.state === 'idle') {
-        // respiração + volta para casa
-        this.open += (0.25 - this.open) * Math.min(1, dt * 6);
+        // levanta as cabeças, apaga o fogo e volta para o posto
+        this.charge += (0 - this.charge) * Math.min(1, dt * 5);
         this.x += (this.homeX - this.x) * Math.min(1, dt * 4);
         this.slump += (0 - this.slump) * Math.min(1, dt * 6);
         this.eyeGlow = 0;
         if (this.timer <= 0) {
-          const attacks = ['bocanhada', 'cuspe', 'rugido', 'dentes'];
+          // O cuspe abre o ciclo: é a assinatura do bicho de três cabeças.
+          const attacks = ['cuspe', 'bocanhada', 'rugido', 'dentes'];
           this.state = attacks[this.attackIndex % 4];
           this.attackIndex++;
           this.phase = 0;
           this.timer = 0;
         }
 
+      } else if (this.state === 'exposto') {
+        // ofegante: abaixa as cabeças e acende o alvo até levar o soco
+        this.slump = Math.min(1, this.slump + dt * 5);
+        this.charge += (0 - this.charge) * Math.min(1, dt * 6);
+        this.x += (this.homeX - this.x) * Math.min(1, dt * 3);
+        this.eyeGlow = 0.6 + 0.4 * Math.sin(FG.engine.time * 12);
+        // soco na cabeça da frente
+        if (!this.stunHit && p.attackBox && p.attackBox.active && ov(p.attackBox, this.eyeBox)) {
+          this.takeHit();
+        }
+        // pisão na cabeça da frente (quica)
+        else if (!this.stunHit && p.vy > 0 && ov(p, this.eyeBox)) {
+          p.vy = -420;
+          this.takeHit();
+        }
+        if (this.timer <= 0 && this.state === 'exposto') {
+          this.state = 'idle';
+          this.timer = 1.1 * speedMul;
+          this.eyeGlow = 0;
+        }
+
       } else if (this.state === 'bocanhada') {
         const a = FG.level.arena;
         if (this.phase === 0) {
-          // telegraph ~0.8s: recua e abre a mandíbula devagar
+          // telegraph longo: recua, arma o corpo e acende as bocas
           this.phase = 1;
-          this.timer = 0.8 * speedMul + 0.8 * (1 - speedMul) * 0.5; // um pouco mais curto na fase 2
+          this.timer = 1.0;
         } else if (this.phase === 1) {
           this.x += (this.homeX + 70 - this.x) * Math.min(1, dt * 3);
-          this.open = Math.min(1, this.open + dt * 1.2);
-          if (this.timer <= 0) { this.phase = 2; this.timer = 0.55; }
+          this.charge = Math.min(0.6, this.charge + dt * 1.2);
+          if (this.timer <= 0) { this.phase = 2; this.timer = 0.6; }
         } else if (this.phase === 2) {
-          // avança rápido pela arena fechando a boca
-          const targetX = a.x + this.jawLen + 60;
-          this.x += (targetX - this.x) * Math.min(1, dt * 7);
-          this.open = Math.max(0.05, this.open - dt * 2.2);
-          if (this.timer <= 0) { this.phase = 3; this.timer = 0.6; }
+          // investe pela arena com as três cabeças na frente
+          const targetX = a.x + REACH + 60;
+          this.x += (targetX - this.x) * Math.min(1, dt * 5);
+          this.charge = Math.max(0, this.charge - dt * 1.6);
+          if (this.timer <= 0) { this.phase = 3; this.timer = 0.5; }
         } else if (this.phase === 3) {
-          // volta para casa
+          // volta para o posto e chega ofegante
           this.x += (this.homeX - this.x) * Math.min(1, dt * 4);
-          this.open += (0.2 - this.open) * Math.min(1, dt * 5);
-          if (this.timer <= 0) {
-            // fica "tonto": olho exposto e brilhante — janela de dano
-            this.phase = 4;
-            this.timer = 2.0;
-            this.stunHit = false;
-          }
-        } else if (this.phase === 4) {
-          this.slump = Math.min(1, this.slump + dt * 5);
-          this.eyeGlow = 0.6 + 0.4 * Math.sin(FG.engine.time * 12);
-          // soco no olho
-          if (!this.stunHit && p.attackBox && p.attackBox.active && ov(p.attackBox, this.eyeBox)) {
-            this.takeHit();
-          }
-          // pisão no olho (quica)
-          else if (!this.stunHit && p.vy > 0 && ov(p, this.eyeBox)) {
-            p.vy = -420;
-            this.takeHit();
-          }
-          if (this.timer <= 0 && this.state === 'bocanhada') {
-            this.state = 'idle';
-            this.timer = 1.2 * speedMul;
-            this.slump = 0;
-            this.eyeGlow = 0;
-          }
+          if (this.timer <= 0) this.expose(2.6 * speedMul);
         }
 
       } else if (this.state === 'cuspe') {
         if (this.phase === 0) {
-          // telegraph: abre a boca e infla
+          // telegraph: as duas cabeças da frente inflam e acendem
           this.phase = 1;
-          this.timer = 0.55;
+          this.timer = 0.85;
         } else if (this.phase === 1) {
-          this.open = Math.min(0.9, this.open + dt * 1.6);
+          this.charge = Math.min(1, this.charge + dt * 1.4);
           if (this.timer <= 0) {
-            // 3 projéteis em arco (alturas/distâncias diferentes)
-            const mx = this.x - this.jawLen * 0.5;
-            const my = this.hingeY - 30;
-            for (let i = 0; i < 3; i++) {
+            // uma bola de fogo por cabeça, cada uma com o seu arco
+            for (let i = 0; i < SHOTS.length; i++) {
               const s = this.acquireSpit();
               if (!s) break;
+              const m = MOUTHS[SHOTS[i].mouth];
+              const o = sprToWorld(m.x, m.y, _pt);
               s.active = true;
-              s.x = mx; s.y = my; s.px = mx; s.py = my;
-              s.vx = -(260 + i * 110 + rand(-20, 20));
-              s.vy = -(380 + i * 60);
+              s.x = o.x; s.y = o.y; s.px = o.x; s.py = o.y;
+              s.vx = SHOTS[i].vx + rand(-15, 15);
+              s.vy = SHOTS[i].vy;
             }
             FG.audio.sfx('bossSpit');
-            this.phase = 2;
-            this.timer = 0.8;
-          }
-        } else if (this.phase === 2) {
-          this.open += (0.25 - this.open) * Math.min(1, dt * 4);
-          if (this.timer <= 0) { this.state = 'idle'; this.timer = 1.4 * speedMul; }
-        }
-
-      } else if (this.state === 'rugido') {
-        if (this.phase === 0) {
-          // telegraph: enche o peito, boca tremendo
-          this.phase = 1;
-          this.timer = 0.7;
-        } else if (this.phase === 1) {
-          this.open = 0.5 + Math.sin(FG.engine.time * 30) * 0.08;
-          if (this.timer <= 0) {
-            FG.audio.sfx('bossRoar');
-            shockwave.active = true;
-            shockwave.x = this.x - this.jawLen;
-            shockwave.y = this.groundY - shockwave.h;
-            shockwave.vx = p2 ? -400 : -330;
             this.phase = 2;
             this.timer = 0.6;
           }
         } else if (this.phase === 2) {
-          this.open += (0.25 - this.open) * Math.min(1, dt * 4);
-          if (this.timer <= 0) { this.state = 'idle'; this.timer = 1.3 * speedMul; }
+          this.charge = Math.max(0, this.charge - dt * 2.5);
+          if (this.timer <= 0) this.expose(2.6 * speedMul);
+        }
+
+      } else if (this.state === 'rugido') {
+        if (this.phase === 0) {
+          // telegraph: enche o peito, as três gargantas brilham
+          this.phase = 1;
+          this.timer = 0.85;
+        } else if (this.phase === 1) {
+          this.charge = 0.5 + Math.sin(FG.engine.time * 30) * 0.12;
+          if (this.timer <= 0) {
+            FG.audio.sfx('bossRoar');
+            shockwave.active = true;
+            shockwave.x = this.x - REACH;
+            shockwave.y = this.groundY - shockwave.h;
+            shockwave.vx = p2 ? -320 : -270; // devagar o bastante para pular
+            this.phase = 2;
+            this.timer = 0.6;
+          }
+        } else if (this.phase === 2) {
+          this.charge = Math.max(0, this.charge - dt * 2);
+          if (this.timer <= 0) this.expose(2.6 * speedMul);
         }
 
       } else if (this.state === 'dentes') {
         const a = FG.level.arena;
         if (this.phase === 0) {
-          // agenda os dentes: sombras ovais telegrafam ~0.7s antes
-          const n = p2 ? 8 : 5;
+          // sacode as três cabeças e chove presa; sombras ovais avisam ~0.8s antes
+          const n = p2 ? 6 : 4;
           let spawned = 0;
           for (let i = 0; i < MAXTEETH && spawned < n; i++) {
             const t0 = teeth[i];
@@ -614,32 +677,33 @@ window.FG = window.FG || {};
             t0.active = true;
             t0.state = 'shadow';
             // espalha pela metade esquerda/central da arena (onde o player luta)
-            t0.x = a.x + 40 + (spawned / n) * (a.w - this.jawLen - 120) + rand(-30, 30);
+            t0.x = a.x + 40 + (spawned / n) * (a.w - REACH - 120) + rand(-30, 30);
             t0.groundY = groundYAt(t0.x + t0.w / 2, 300);
             t0.y = t0.groundY - 560;
             t0.vy = 0;
-            t0.timer = 0.7 + spawned * (p2 ? 0.12 : 0.22); // caem em sequência
+            t0.timer = 0.8 + spawned * (p2 ? 0.24 : 0.34); // caem em sequência
             spawned++;
           }
           this.phase = 1;
-          this.timer = (p2 ? 2.2 : 2.6);
-          this.open = 0.55;
+          this.timer = 0.8 + n * (p2 ? 0.24 : 0.34) + 0.6;
+          this.charge = 0.35;
         } else if (this.phase === 1) {
-          // treme enquanto chove dente
+          // treme enquanto chove presa
           this.x = this.homeX + Math.sin(FG.engine.time * 40) * 3;
+          this.charge = Math.max(0, this.charge - dt * 0.5);
           if (this.timer <= 0) {
             this.x = this.homeX;
-            this.state = 'idle';
-            this.timer = 1.2 * speedMul;
+            this.expose(2.6 * speedMul);
           }
         }
       }
 
-      // ---------- contato da bocarra ----------
-      // Encostar na boca machuca — exceto na janela de dano (boss tonto),
-      // quando a boca inteira fica inofensiva para o player alcançar o olho.
-      if (this.slump <= 0.5 && ov(p, this.mouthBox)) {
-        p.hurt(1, this.x - this.jawLen / 2);
+      // ---------- contato com o dragão ----------
+      // Encostar nas cabeças ou no corpanzil machuca. Assim que ele começa a
+      // reverência (slump), tudo fica inofensivo: é justamente aí que o
+      // jogador precisa chegar perto para socar a cabeça da frente.
+      if (this.slump <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
+        p.hurt(1, this.x - REACH / 2);
       }
     },
 
@@ -669,14 +733,14 @@ window.FG = window.FG || {};
       const gy = groundYAt(s.x, 300);
       if (s.y >= gy - 8) {
         s.active = false;
-        // acende a poça de fogo (~1.5s)
+        // acende a poça de fogo (~1.2s: dá para esperar apagar)
         for (let k = 0; k < MAXPOOL; k++) {
           const q = pools[k];
           if (q.active) continue;
           q.active = true;
           q.x = s.x - q.w / 2;
           q.y = gy - q.h;
-          q.t = 1.5;
+          q.t = 1.2;
           break;
         }
       } else if (ov(p, { x: s.x - 10, y: s.y - 10, w: 20, h: 20 })) {
@@ -739,6 +803,9 @@ window.FG = window.FG || {};
   }
 
   // ---------- desenho do boss ----------
+  // O dragão é o sprite de assets.js; o que anima é a transformação (posto,
+  // investida, reverência, tremor, encolhimento da morte) mais os efeitos
+  // procedurais por cima: fogo nas bocas e o alvo brilhando no ponto fraco.
   function drawBoss(ctx, cam) {
     // culling: boss vive na arena; só desenha se ela está perto da câmera
     const a = FG.level.arena;
@@ -756,181 +823,113 @@ window.FG = window.FG || {};
     if (dying) { shX = rand(-5, 5); shY = rand(-5, 5); }
     else if (p2 && boss.active) { shX = rand(-1.6, 1.6); shY = rand(-1.2, 1.2); }
 
-    const X = boss.x - cam.x + shX;
-    const HY = boss.hingeY - cam.y + shY + boss.slump * 60;
-    const open = boss.open;
-    const jawLen = boss.jawLen;
+    // parado, respira: sobe e desce de leve
+    const breathe = (boss.active || dying) ? 0 : Math.sin(t * 1.6) * 3;
 
-    // paleta (fase 2 fica vermelho-vivo)
-    const bodyDark = p2 ? '#a01212' : '#7a1414';
-    const bodyMid = p2 ? '#e82818' : '#c22a1a';
-    const bodyHot = p2 ? '#ff5030' : '#e84a28';
+    const X = boss.x - cam.x + shX;
+    const HY = boss.hingeY - cam.y + shY + breathe;
+    const img = FG.assets && FG.assets.bossDragon;
+    const ready = !!(img && img.complete && img.naturalWidth > 0);
 
     ctx.save();
+    // Nada do dragão passa do chão: na reverência ele agacha, e o que sobraria
+    // por baixo da linha do piso fica escondido em vez de flutuar.
+    ctx.beginPath();
+    ctx.rect(-200, -1000, VIEW_W + 400, (boss.groundY - cam.y) + 1000);
+    ctx.clip();
+
     ctx.translate(X, HY);
     ctx.scale(sc, sc);
+    // reverência: gira em torno da pata traseira, o focinho desce
+    ctx.translate(SPR_OX + BOW_PIVOT.x, SPR_OY + BOW_PIVOT.y);
+    ctx.rotate(-boss.slump * BOW_MAX);
+    ctx.translate(-(SPR_OX + BOW_PIVOT.x), -(SPR_OY + BOW_PIVOT.y));
 
-    // ---------- corpo/plumagem atrás da dobradiça ----------
-    // camadas de escamas/penas vermelhas subindo para a direita
-    for (let layer = 3; layer >= 0; layer--) {
-      const lx = 40 + layer * 46, ly = -40 - layer * 52;
-      const g = ctx.createRadialGradient(lx, ly, 10, lx, ly, 150 - layer * 12);
-      g.addColorStop(0, layer % 2 ? bodyMid : bodyHot);
-      g.addColorStop(1, bodyDark);
-      ctx.fillStyle = g;
-      for (let k = 0; k < 5; k++) {
-        const a2 = Math.PI * 0.6 + k * 0.32 + Math.sin(t * 1.5 + layer + k) * 0.04;
-        ctx.beginPath();
-        ctx.ellipse(lx + Math.cos(a2) * 40, ly + Math.sin(a2) * 40, 62, 30, a2, 0, Math.PI * 2);
-        ctx.fill();
+    if (ready) {
+      ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+      // fase 2: o bicho esquenta por dentro
+      if (p2 && !dying) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.10 + 0.05 * Math.sin(t * 6);
+        ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+        ctx.restore();
       }
+      // flash ao levar dano: a própria imagem por cima, somando luz — a
+      // silhueta fica certa sem precisar de máscara nenhuma
+      if (boss.flash > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.85;
+        ctx.drawImage(img, SPR_OX, SPR_OY, SPR_W, SPR_H);
+        ctx.restore();
+      }
+    } else {
+      drawDragonFallback(ctx, p2);
     }
-    // massa central do pescoço
-    const ng = ctx.createLinearGradient(0, -240, 0, 140);
-    ng.addColorStop(0, bodyHot);
-    ng.addColorStop(0.5, bodyMid);
-    ng.addColorStop(1, bodyDark);
-    ctx.fillStyle = ng;
-    ctx.beginPath();
-    ctx.moveTo(-60, 140);
-    ctx.quadraticCurveTo(-90, -80, -20, -210);
-    ctx.quadraticCurveTo(80, -300, 210, -220);
-    ctx.lineTo(240, 160);
-    ctx.closePath();
-    ctx.fill();
 
-    // ---------- mandíbulas ----------
-    // respiração idle: a boca pulsa levinho
-    const breathe = boss.active || dying ? 0 : Math.sin(t * 1.8) * 0.04;
-    const gapUp = (open + breathe) * 0.55;   // rotação da mandíbula de cima
-    const gapDn = (open + breathe) * 0.38;   // rotação da de baixo
-
-    // mandíbula de baixo
-    ctx.save();
-    ctx.rotate(gapDn);
-    drawJaw(ctx, jawLen, 66, false, bodyMid, bodyDark, boss.tongueOut, t);
-    ctx.restore();
-
-    // mandíbula de cima
-    ctx.save();
-    ctx.rotate(-gapUp);
-    drawJaw(ctx, jawLen, 84, true, bodyHot, bodyDark, 0, t);
-
-    // narina fumegante na ponta de cima
-    ctx.fillStyle = 'rgba(40,8,8,0.8)';
-    ctx.beginPath();
-    ctx.ellipse(-jawLen + 60, -46, 9, 6, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // ---------- olhos esbugalhados ----------
-    // olho de trás (sempre normal) e olho da frente (o alvo, cresce na janela)
-    drawEye(ctx, -60, -170 - gapUp * 60, 30, 0, t);
-    const weak = boss.eyeGlow > 0;
-    const wr = weak ? 40 + Math.sin(t * 10) * 4 : 30;
-    drawEye(ctx, -150, -150 - gapUp * 50, wr, boss.eyeGlow, t);
-
-    // sobrancelhas bravas
-    ctx.strokeStyle = bodyDark;
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-190, -196); ctx.lineTo(-116, -178);
-    ctx.moveTo(-96, -206); ctx.lineTo(-28, -196);
-    ctx.stroke();
-
-    // flash branco ao levar dano
-    if (boss.flash > 0) {
-      ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.7;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(-jawLen - 30, -320, jawLen + 320, 500);
-    }
+    if (boss.charge > 0.02) drawMouthFire(ctx, boss.charge, t);
+    if (boss.eyeGlow > 0) drawWeakGlow(ctx, boss.eyeGlow, t);
     ctx.restore();
   }
 
-  // Uma mandíbula: cunha serrilhada apontando para a esquerda a partir da
-  // dobradiça (origem local). upper=true desenha para cima.
-  function drawJaw(ctx, len, thick, upper, cMid, cDark, tongue, t) {
-    const dir = upper ? -1 : 1;
-    const g = ctx.createLinearGradient(-len, 0, 0, 0);
-    g.addColorStop(0, cMid);
-    g.addColorStop(1, cDark);
-    ctx.fillStyle = g;
+  // Silhueta de emergência: só aparece se a imagem ainda não carregou (os
+  // primeiros frames, ou um ambiente sem DOM). A luta nunca acontece contra
+  // um vazio, e as duas cabeças continuam onde o cuspe sai.
+  function drawDragonFallback(ctx, p2) {
+    ctx.fillStyle = p2 ? '#1f7a3a' : '#186032';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(-len * 0.5, dir * thick * 1.25, -len, dir * thick * 0.35);
-    ctx.quadraticCurveTo(-len - 26, dir * 6, -len + 10, 0);
-    ctx.closePath();
+    ctx.ellipse(SPR_OX + 360, SPR_OY + 360, 250, 84, 0, 0, Math.PI * 2);
     ctx.fill();
-    // lábio
-    ctx.strokeStyle = cDark;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(-len + 8, 0);
-    ctx.lineTo(0, 0);
-    ctx.stroke();
-    // língua rosada (só na mandíbula de baixo, se ainda não engolida)
-    if (!upper && tongue > 0.02) {
-      ctx.save();
-      ctx.fillStyle = '#ff86a8';
+    for (let i = 0; i < MOUTHS.length; i++) {
+      const m = MOUTHS[i];
       ctx.beginPath();
-      const tl = len * 0.62 * tongue;
-      ctx.moveTo(-14, 4);
-      ctx.quadraticCurveTo(-tl * 0.5, -14 * tongue + Math.sin(t * 3) * 3, -tl, 6);
-      ctx.quadraticCurveTo(-tl * 0.5, 22, -14, 16);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#d85880';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-16, 10);
-      ctx.quadraticCurveTo(-tl * 0.55, 2, -tl + 8, 6);
-      ctx.stroke();
-      ctx.restore();
-    }
-    // dentes tortos serrilhados na borda da boca
-    ctx.fillStyle = '#fff6e0';
-    const n = 7;
-    for (let i = 0; i < n; i++) {
-      const tx = -len + 30 + i * ((len - 60) / (n - 1));
-      const th = (14 + ((i * 37) % 12)) * (upper ? 1.25 : 1);
-      ctx.beginPath();
-      ctx.moveTo(tx - 9, 0);
-      ctx.lineTo(tx + ((i % 2) ? 3 : -3), dir * -th); // torto: alterna a inclinação
-      ctx.lineTo(tx + 9, 0);
-      ctx.closePath();
+      ctx.ellipse(SPR_OX + m.x + 44, SPR_OY + m.y, 58, 34, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // Olho esbugalhado amarelo de pupila pequena; glow>0 = janela de dano
-  function drawEye(ctx, ex, ey, r, glow, t) {
+  // Fogo carregando nas duas bocas — o telegraph do cuspe, e o que deixa claro
+  // de onde as bolas vão sair.
+  function drawMouthFire(ctx, k, t) {
     ctx.save();
-    if (glow > 0) {
-      ctx.shadowColor = '#ffe860';
-      ctx.shadowBlur = 26 * glow;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < MOUTHS.length; i++) {
+      const mx = SPR_OX + MOUTHS[i].x, my = SPR_OY + MOUTHS[i].y;
+      const r = (10 + 28 * k) * (0.9 + 0.1 * Math.sin(t * 20 + i * 2));
+      const g = ctx.createRadialGradient(mx, my, 1, mx, my, r);
+      g.addColorStop(0, 'rgba(255,248,200,0.95)');
+      g.addColorStop(0.45, 'rgba(255,150,40,0.8)');
+      g.addColorStop(1, 'rgba(255,60,10,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(mx, my, r, 0, Math.PI * 2);
+      ctx.fill();
     }
-    const g = ctx.createRadialGradient(ex - r * 0.25, ey - r * 0.25, r * 0.1, ex, ey, r);
-    g.addColorStop(0, '#fffbe0');
-    g.addColorStop(0.55, glow > 0 ? '#ffe860' : '#ffd840');
-    g.addColorStop(1, '#c89010');
+    ctx.restore();
+  }
+
+  // Alvo pulsando na cabeça da frente durante a janela de dano.
+  function drawWeakGlow(ctx, glow, t) {
+    const cx = SPR_OX + WEAK.x + WEAK.w / 2, cy = SPR_OY + WEAK.y + WEAK.h / 2;
+    const r = WEAK.w * 0.62 + Math.sin(t * 12) * 5;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+    g.addColorStop(0, 'rgba(255,240,140,' + (0.55 * glow).toFixed(3) + ')');
+    g.addColorStop(1, 'rgba(255,200,40,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(ex, ey, r, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
-    // pupila pequena (treme quando o olho está exposto)
-    const px = glow > 0 ? Math.sin(t * 22) * 3 : -r * 0.15;
-    ctx.fillStyle = '#1a0808';
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 14);
+    ctx.strokeStyle = '#fff2a0';
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(ex + px, ey + r * 0.1, r * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    // brilhinho
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.beginPath();
-    ctx.arc(ex - r * 0.3, ey - r * 0.35, r * 0.14, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(cx, cy, WEAK.w * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 

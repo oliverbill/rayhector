@@ -39,7 +39,7 @@ window.FG = window.FG || {};
   //                   fenda de 80px entre a agulha de pedra e o desfiladeiro
   //  (5) x 5060..5420 DESFILADEIRO: duas paredes frente a frente, descida
   //                   controlada agarrando (fenda de 140px, 390px de queda)
-  //  (6) x 5420..7200 reta final e a clareira plana do Dragomilão
+  //  (6) x 5420..7200 reta final e a clareira plana do dragão-chefe
   //
   // As duas escaladas: a chaminé do gorge (única saída de lá, 400px) e a
   // fenda do pântano (415px, única saída de quem cai do arquipélago).
@@ -96,7 +96,7 @@ window.FG = window.FG || {};
     S(5150, 620, 760, 100, 'g'),      // [25] fundo do desfiladeiro + reta final
     S(5290, 210, 130, 340, 'c'),      // [26] parede direita (arco de 70px, crista de espinhos)
 
-    // ---- (6) reta final e clareira do Dragomilão ----
+    // ---- (6) reta final e clareira do dragão-chefe ----
     S(5560, 530, 130, 26, 'g'),       // [27] passa por cima dos espinhos
     S(5750, 480, 110, 22, 'g'),       // [28] bônus
     S(5910, 724, 120, 40, 'h'),       // [29] piso oculto da poça pré-clareira

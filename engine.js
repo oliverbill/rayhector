@@ -303,7 +303,7 @@ window.FG = window.FG || {};
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd0d0';
       ctx.font = 'bold 14px "Trebuchet MS", sans-serif';
-      ctx.fillText('DRAGOMILÃO', VIEW_W / 2, by - 10);
+      ctx.fillText('DRAGÃO DE TRÊS CABEÇAS', VIEW_W / 2, by - 10);
       ctx.restore();
     }
   }
@@ -406,7 +406,7 @@ window.FG = window.FG || {};
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = '26px "Trebuchet MS", sans-serif';
-    ctx.fillText('o Dragomilão engoliu o próprio apetite', VIEW_W / 2, 270);
+    ctx.fillText('as três cabeças apagaram de uma vez', VIEW_W / 2, 270);
     ctx.fillStyle = '#ffd870';
     ctx.fillText('lumis coletadas: ' + engine.lumis, VIEW_W / 2, 320);
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';

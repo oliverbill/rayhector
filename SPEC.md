@@ -13,9 +13,10 @@ escalado por CSS para caber na janela.
 - **Lumis** — orbes douradas flutuantes que se coletam (equivalente aos lums).
 - **Inimigos** do bosque encantado: `espinhoco` (lagarta espinhosa que patrulha),
   `voadeira` (mariposa que voa em senoide), `sapeca` (sapo que pula em arcos).
-- **Chefão: Dragomilão** — bocarra gigante de dragão vermelho que domina a arena
-  final (como a capa que inspirou o jogo): mandíbula enorme, dentes tortos,
-  olhos esbugalhados, penas/escamas vermelhas.
+- **Chefão: Dragão de Três Cabeças** — dragão verde de asa alaranjada que
+  domina a metade direita da arena final, virado para a esquerda. Vem de um
+  sprite embutido em `assets.js` (640x444); o que anima é a transformação e o
+  fogo procedural nas bocas.
 
 ## Arquivos e quem os escreve
 
@@ -159,23 +160,30 @@ mesmo padrão do resto (gradientes, glow), 100% canvas.
   player quica (`FG.player.vy = -420`).
 - `draw(ctx, cam)` — canvas puro, mesmo estilo pintado, com culling.
 - `boss` — objeto:
-  - `started, active, hp, maxHp (=12)`
+  - `started, active, hp, maxHp (=8)`
   - `start()` — intro (rugido, `FG.audio.sfx('bossRoar')`, música
     `FG.audio.music('boss')`), depois `active = true`
   - `reset()` — volta ao estado inicial (não iniciado)
-  - máquina de estados INÉDITA, mínimo 4 ataques ciclando com telegraph:
-    1. **Bocanhada** — a bocarra avança da direita e fecha; telegraph: recua e
-       abre devagar. Depois fica 2s com o **olho** exposto (janela de dano —
-       soco ou pulo no olho tira 1).
-    2. **Cuspe de fogo** — 3 projéteis em arco que deixam poça breve no chão.
+  - máquina de estados, 4 ataques ciclando com telegraph:
+    1. **Cuspe de fogo** — uma bola por cabeça da frente, saindo das bocas do
+       sprite: a de cima faz o arco longo, a da frente o curto, e entre os dois
+       pontos de queda sobra um vão largo. Cada bola deixa poça breve no chão.
+    2. **Investida** — o dragão avança da direita com as cabeças na frente;
+       telegraph: recua e acende as bocas.
     3. **Rugido** — onda de choque rasteira que atravessa a arena (pular).
-    4. **Chuva de dentes** — dentes caem do alto em posições telegrafadas por
-       sombras (a partir de hp <= 6, fica mais denso).
-  - `hp <= 0` → morte cinematográfica (treme, engole a própria língua, some em
+    4. **Chuva de presas** — caem do alto em posições telegrafadas por sombras
+       (a partir de hp <= 3, fica mais denso).
+  - `expose(dur)` → estado `exposto`, que vem depois de **todos** os ataques: o
+    dragão faz uma reverência (`slump` 0→1), a cabeça da frente desce à altura
+    de um pulo simples e acende. Soco ou pulo nela tira 1 (`eyeBox`). Enquanto
+    `slump > 0.15` nada nele machuca no contato.
+  - `hp <= 0` → morte cinematográfica (treme, as cabeças tombam, encolhe em
     partículas douradas), `FG.audio.sfx('victory')`, `FG.engine.setState('victory')`.
-  - `draw` — a bocarra ocupa a metade direita da arena: mandíbulas serrilhadas,
-    língua, olhos esbugalhados (um é o ponto fraco e brilha na janela de dano),
-    plumagem vermelha. Barra de HP é o engine que desenha.
+  - `draw` — `FG.assets.bossDragon` desenhado com a mesma transformação que
+    posiciona as hitboxes (`sprToWorld`/`sprBox`), mais o fogo nas bocas e o
+    alvo pulsando no ponto fraco. Os pontos notáveis do sprite (bocas, ponto
+    fraco, eixo da reverência, cascos de colisão) são constantes no topo do
+    bloco do boss, em px da imagem. Barra de HP é o engine que desenha.
 
 ### FG.audio (audio.js)
 
