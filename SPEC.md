@@ -13,10 +13,10 @@ escalado por CSS para caber na janela.
 - **Lumis** — orbes douradas flutuantes que se coletam (equivalente aos lums).
 - **Inimigos** do bosque encantado: `espinhoco` (lagarta espinhosa que patrulha),
   `voadeira` (mariposa que voa em senoide), `sapeca` (sapo que pula em arcos).
-- **Chefão: Dragão de Três Cabeças** — dragão verde de asa alaranjada que
-  domina a metade direita da arena final, virado para a esquerda. Vem de um
-  sprite embutido em `assets.js` (640x444); o que anima é a transformação e o
-  fogo procedural nas bocas.
+- **Três fases**, cada uma 7200x720 e terminando num chefão próprio:
+  `bosque` (Dragão de Três Cabeças) → `pantano` (O Lodão) → `vulcao` (O Coração
+  de Magma). O dragão vem de um sprite embutido em `assets.js` (640x444); os
+  outros dois são canvas puro.
 
 ## Arquivos e quem os escreve
 
@@ -27,7 +27,10 @@ escalado por CSS para caber na janela.
 | `engine.js`  | loop, input, câmera, colisão, estados de jogo, HUD, menu/vitória (JÁ ESCRITO — ler antes de codar) |
 | `player.js`  | `FG.player` |
 | `level.js`   | `FG.level` |
-| `enemies.js` | `FG.enemies` (inclui o boss) |
+| `levelkit.js` | `FG.levelkit` — ferramentas comuns às fases |
+| `level2.js` `level3.js` | fases 2 e 3; empurram em `FG.levels` como o `level.js` |
+| `enemies.js` | `FG.enemies` — bichos comuns, registro de chefões e `fx` |
+| `boss1/2/3.js` | um chefão por arquivo; registram-se via `FG.enemies.registerBoss` |
 | `audio.js`   | `FG.audio` (WebAudio procedural, zero assets) |
 
 Namespace global único: `window.FG = window.FG || {}`. Cada arquivo só adiciona
@@ -149,6 +152,26 @@ Regras: todo perigo dá 1 de dano via `FG.player.hurt(1, xOrigem)`. Nada de
 alocar por frame (pools). Culling de ~1 tela em todo desenho. Visual pintado no
 mesmo padrão do resto (gradientes, glow), 100% canvas.
 
+### FG.levels e FG.level (level*.js + engine)
+
+`FG.levels` é um array preenchido no **load**, na ordem do `index.html`: cada
+`level*.js` faz `FG.levels.push({...})` e nunca escreve em `FG.level`. Quem
+publica a fase corrente é o engine, no `loadLevel(i)` — que também recaptura a
+base de sólidos (ela é **por fase**), chama `FG.level.reset()`, `FG.obstacles
+.reset()` e `FG.enemies.reset()`, e recoloca a câmera sem lerp.
+
+Superfície de uma fase: `id, nome, W, H, playerStart, solids, hazards,
+checkpoints, enemyDefs, obstacleDefs, ninhos?, bossId, bossTriggerX, arena,
+reset(), update(dt), drawBack/drawSolids/drawFront(ctx, cam)`.
+
+`reset()` é a fase quem implementa e o engine quem chama — reacende lumis e
+ninhos. Nenhuma fase pode reacender sozinha olhando `FG.engine.lumis`: o
+contador **não** zera entre fases, só em jogo novo.
+
+Chefão derrotado com fase na fila vira o estado `'fase'` (tela de FASE
+COMPLETA) em vez de `'victory'`. A decisão mora no `setState` do engine, porque
+os chefões não sabem em que fase vivem.
+
 ### FG.enemies (enemies.js)
 
 - `list` — array de inimigos vivos
@@ -159,31 +182,42 @@ mesmo padrão do resto (gradientes, glow), 100% canvas.
   `FG.audio.sfx('hitEnemy')`); pulo em cima (vy>0 vindo de cima) → morre e
   player quica (`FG.player.vy = -420`).
 - `draw(ctx, cam)` — canvas puro, mesmo estilo pintado, com culling.
-- `boss` — objeto:
-  - `started, active, hp, maxHp (=8)`
-  - `start()` — intro (rugido, `FG.audio.sfx('bossRoar')`, música
-    `FG.audio.music('boss')`), depois `active = true`
-  - `reset()` — volta ao estado inicial (não iniciado)
-  - máquina de estados, 4 ataques ciclando com telegraph:
-    1. **Cuspe de fogo** — uma bola por cabeça da frente, saindo das bocas do
-       sprite: a de cima faz o arco longo, a da frente o curto, e entre os dois
-       pontos de queda sobra um vão largo. Cada bola deixa poça breve no chão.
-    2. **Investida** — o dragão avança da direita com as cabeças na frente;
-       telegraph: recua e acende as bocas.
-    3. **Rugido** — onda de choque rasteira que atravessa a arena (pular).
-    4. **Chuva de presas** — caem do alto em posições telegrafadas por sombras
-       (a partir de hp <= 3, fica mais denso).
-  - `expose(dur)` → estado `exposto`, que vem depois de **todos** os ataques: o
-    dragão faz uma reverência (`slump` 0→1), a cabeça da frente desce à altura
-    de um pulo simples e acende. Soco ou pulo nela tira 1 (`eyeBox`). Enquanto
-    `slump > 0.15` nada nele machuca no contato.
-  - `hp <= 0` → morte cinematográfica (treme, as cabeças tombam, encolhe em
-    partículas douradas), `FG.audio.sfx('victory')`, `FG.engine.setState('victory')`.
-  - `draw` — `FG.assets.bossDragon` desenhado com a mesma transformação que
-    posiciona as hitboxes (`sprToWorld`/`sprBox`), mais o fogo nas bocas e o
-    alvo pulsando no ponto fraco. Os pontos notáveis do sprite (bocas, ponto
-    fraco, eixo da reverência, cascos de colisão) são constantes no topo do
-    bloco do boss, em px da imagem. Barra de HP é o engine que desenha.
+- `registerBoss(id, boss)` — cada `bossN.js` se registra no load. `reset()`
+  reseta **todos** os registrados (o chefão da fase anterior pode ter deixado
+  projétil no ar, e a pool só se apaga pelo `reset()` do dono) e publica em
+  `FG.enemies.boss` o que a fase pediu por `bossId`. Id desconhecido cai no
+  primeiro registrado — ficar sem chefão trancaria o jogador na arena.
+- `fx` — `{spawnParticle, goldBurst, groundYAt, rand, VIEW_W}`, consumido pelos
+  `bossN.js` **em runtime**. As pools de partícula moram no `enemies.js`.
+- `boss` — o chefão da fase corrente. Superfície:
+  `id, nome, started, active, dead, hp, maxHp (=8), start(), reset(),
+  update(dt), draw(ctx, cam), takeHit()`.
+
+#### A forma comum dos três chefões
+
+É o que faz a luta ser justa, e vale para todos:
+
+- 8 de vida; fase 2 a partir de 3 (intervalos ×0.85).
+- 4 ataques ciclando, telegraph de **0.85s ou mais** em cada um.
+- Depois de **cada** ataque, o estado `exposto` (~2.6s): o ponto fraco acende e
+  desce a **~150px do chão** — ao alcance de um pulo simples, inclusive de um
+  pulo cortado. O dragão faz reverência, o Lodão incha e afunda a papada, o
+  golem ajoelha.
+- Durante a janela **nada machuca no contato** — nem o corpo, nem os restos do
+  ataque anterior (pedra no ar, jato, poça). Sem isso, quem corre para socar
+  apanha do ataque que já esquivou.
+- Dano: soco (`p.attackBox`) ou pisão (`p.vy > 0`, quica com `p.vy = -420`).
+- `hp <= 0` → morte cinematográfica de ~2.5s, `FG.audio.sfx('victory')` e
+  `FG.engine.setState('victory')`. O chefão **não** sabe se aquilo é fim de
+  fase ou fim de jogo — quem traduz é o engine.
+- Referência medida, num bot que nunca desvia: ~30s de luta, 8 janelas, 8 socos,
+  6 a 9 de dano levado, **zero** dentro da janela.
+
+Só o dragão (`boss1.js`) usa sprite: `FG.assets.bossDragon`, desenhado com a
+mesma transformação que posiciona as hitboxes (`sprToWorld`/`sprBox`). Os
+pontos notáveis dele (bocas, ponto fraco, eixo da reverência, cascos de
+colisão) são constantes em px da imagem, no topo do arquivo. Barra de HP é o
+engine que desenha, lendo `boss.nome`.
 
 ### FG.audio (audio.js)
 

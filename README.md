@@ -7,13 +7,18 @@ no `assets.js`) e o corpo é um boneco desenhado e animado em canvas, no
 estereótipo criança de desenho — cabeçudo, tronco curto e **braços e pernas
 compridos e finos**, com luvas de boxe vermelhas.
 
-Envolto numa aura de fagulha, Heitor atravessa um bosque encantado ao
-crepúsculo, coletando **lumis** (orbes douradas) até a clareira final, onde o
-espera o **Dragão de Três Cabeças** — um bicho verde de asa alaranjada, do
-tamanho de meia arena, que **cospe bolas de fogo pelas duas cabeças da
-frente**. O sprite dele também vem embutido em base64 no `assets.js`; o que
-anima é a transformação (investida, reverência, tremor) e o fogo procedural
-que acende nas bocas.
+Envolto numa aura de fagulha, Heitor atravessa **três fases** coletando
+**lumis** (orbes douradas), e cada uma termina num chefão próprio:
+
+| # | fase | chefão |
+|---|---|---|
+| 1 | **O Bosque Crepuscular** — roxo e laranja, ao anoitecer | **Dragão de Três Cabeças** |
+| 2 | **O Pântano Venenoso** — bruma ocre, bambus e lodo | **O Lodão** |
+| 3 | **A Encosta do Vulcão** — rocha preta e lava, a luz vindo de baixo | **O Coração de Magma** |
+
+As lumis atravessam as fases: o contador só zera em jogo novo. O dragão é o
+único que vem de um sprite (embutido em base64 no `assets.js`); os outros dois
+são desenhados em canvas, como o resto do jogo.
 
 ## 🎮 Jogar agora
 
@@ -48,8 +53,10 @@ jogo.
 
 ## O jogo
 
-- **Bosque encantado** com parallax em três camadas, cogumelos gigantes,
-  raios de luz e vagalumes — tudo pintado em canvas.
+- **Três mundos** com parallax próprio, todos pintados em canvas: o bosque ao
+  crepúsculo (cogumelos gigantes, raios de luz, vagalumes), o pântano na bruma
+  ocre (bambuzal, lodo, taboa) e a encosta do vulcão (rocha preta, rio de lava,
+  brasa subindo — e a luz vindo de baixo, ao contrário das outras duas).
 - **Escalada de penhasco**: encostando na parede em queda, o Heitor se apoia
   nela e escorrega devagar; saltando dali sobe ~90px por vez. É assim que se
   vence a chaminé do desfiladeiro — uma parede de 400px, em cinco saltos.
@@ -60,15 +67,27 @@ jogo.
   saliências que desmoronam quando pisadas e voltam depois, colunas de ar
   quente que empurram para cima, pêndulos de bola de ferro em corrente — onde
   a corrente é sólida e dá para pousar — e rolos de espinhos em trilhos.
-- **~100 lumis** para coletar, 3 checkpoints (lanternas que acendem ao passar).
+- **Cipós em arco** pendurados entre dois postes: você os agarra no ar, anda
+  ao longo deles com as setas e solta com ESPAÇO, ganhando impulso. No vulcão
+  são correntes de ferro sobre a caldeira. É o elemento que mais muda o jogo.
+- **Troncos que afundam** enquanto você pisa neles e voltam quando você sai,
+  **discos de âmbar** que flutuam sobre a lava e **chuva de brasa** em rajadas
+  telegrafadas por sombras no chão.
+- **Lumis** para coletar em todas as fases — o contador atravessa as fases e só
+  zera em jogo novo — mais **ninhos com casulo**, que valem 5 de uma vez.
 - **Inimigos**: o *espinhoco* (lagarta espinhosa — não pise!), a *voadeira*
-  (mariposa em senoide) e o *sapeca* (sapo que pula na sua direção).
-- **Chefão Dragão de Três Cabeças** (8 de vida) com 4 ataques telegrafados:
-  cuspe de fogo pelas duas cabeças, investida, rugido rasteiro e chuva de
-  presas. Depois de **cada** ataque ele fica ofegante e abaixa as cabeças: a
-  da frente acende e desce à altura de um pulo simples — é a janela de dano,
-  e é ela que dá o ritmo da luta. A partir de 3 de vida ele esquenta e
-  acelera um pouco.
+  (mariposa em senoide), o *sapeca* (sapo que pula na sua direção) e o *peixe*
+  voador, que fica bufando parado e dispara na horizontal quando você chega.
+- **Três chefões**, um por fase, todos com 8 de vida e 4 ataques telegrafados:
+  o **Dragão de Três Cabeças** (cuspe de fogo pelas duas cabeças, investida,
+  rugido rasteiro, chuva de presas), **O Lodão** (cusparada, lambada de língua,
+  baque com ondas, chuva de bolhas) e **O Coração de Magma** (rolar, arremesso,
+  jatos de lava, tremor com estalactites).
+  Os três seguem a mesma regra, que é o que faz a luta ser justa: depois de
+  **cada** ataque o bicho fica ofegante e abaixa o ponto fraco à altura de um
+  pulo simples — é a janela de dano, e é ela que dá o ritmo. Nada machuca no
+  contato enquanto a janela está aberta, nem os restos do ataque anterior. A
+  partir de 3 de vida todos esquentam e aceleram um pouco.
 - **Música procedural** (WebAudio): tema saltitante no bosque, tema tenso no
   chefão — nenhum arquivo de áudio no projeto.
 - **Boneco articulado**: pernas com passada larga na corrida, braços em
@@ -84,9 +103,11 @@ jogo.
 | `engine.js` | loop, input, câmera, colisão, HUD e estados de jogo |
 | `assets.js` | sprites em base64: a foto recortada do Heitor e o dragão |
 | `player.js` | física e desenho do herói |
-| `level.js` | mundo (7200×720), parallax, lumis, checkpoints |
-| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos |
-| `enemies.js` | os três inimigos e a máquina de estados do dragão-chefe |
+| `levelkit.js` | ferramentas comuns às fases: sólido, RNG, lumis, offscreen, culling |
+| `level.js` `level2.js` `level3.js` | as três fases (7200×720 cada), com parallax e pintura próprios |
+| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos e chuva de brasa** |
+| `enemies.js` | os quatro inimigos comuns e o registro de chefões |
+| `boss1.js` `boss2.js` `boss3.js` | um chefão por arquivo, cada um com a sua máquina de estados |
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
 
 Contratos entre os módulos em `SPEC.md`.
@@ -96,6 +117,7 @@ Contratos entre os módulos em `SPEC.md`.
 ```bash
 node tests/smoke.js    # joga o jogo inteiro sem navegador (menu → chefão → vitória)
 node tests/reach.js    # simula a física do pulo e prova que dá para alcançar tudo
+node tests/reach.js 1  # a mesma prova para a fase 2 (0 = bosque, 1 = pântano, 2 = vulcão)
 node tests/parede.js   # monta um penhasco de 500px e prova que dá para escalá-lo
 node tests/mapa.js > mapa.svg   # desenha o nível inteiro num esquema
 ```
@@ -105,3 +127,10 @@ achismo: reproduz a física do `player.js` sobre a geometria do `level.js`,
 percorre o nível em busca larga e reporta o que for inalcançável, o que só é
 alcançável com timing perfeito, e o maior degrau vertical que cada plataforma
 cobra (referência: pulo simples sobe ~118px, duplo ~236px).
+
+Ele tem um ponto cego que vale conhecer: enxerga cada plataforma **na posição de
+repouso**. Onde o chão se mexe — o tronco que afunda 70px, o disco que oscila —
+a conta tem de ser feita à mão, a partir do **pior caso**. Foi assim que se
+achou um salto do pântano que não fechava nem com pulo duplo depois do tronco
+afundar, e um par de discos do vulcão que só fechava com os dois no mesmo
+ponto da oscilação.
