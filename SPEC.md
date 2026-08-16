@@ -21,7 +21,8 @@ escalado por CSS para caber na janela.
 
 | arquivo      | conteúdo |
 |--------------|----------|
-| `index.html` | shell, carrega scripts na ordem: audio.js, level.js, player.js, enemies.js, engine.js |
+| `index.html` | shell, carrega na ordem: assets.js, audio.js, level.js, obstacles.js, player.js, enemies.js, engine.js |
+| `obstacles.js` | `FG.obstacles` — perigos e plataformas dinâmicas do cenário |
 | `engine.js`  | loop, input, câmera, colisão, estados de jogo, HUD, menu/vitória (JÁ ESCRITO — ler antes de codar) |
 | `player.js`  | `FG.player` |
 | `level.js`   | `FG.level` |
@@ -57,8 +58,14 @@ ser o último.
 ### FG.player (player.js)
 
 - Campos: `x, y, w, h, vx, vy, hp, maxHp (=6, meio coração = 1), facing (±1),
-  onGround, attackBox` (`{x,y,w,h,active}` — ativo só durante o golpe),
-  `invuln` (segundos restantes de invulnerabilidade pós-dano).
+  onGround, wallDir` (parede colada: +1 direita, −1 esquerda, 0 livre — o engine
+  preenche em `moveAndCollide`), `attackBox` (`{x,y,w,h,active}` — ativo só
+  durante o golpe), `invuln` (segundos de invulnerabilidade pós-dano).
+- **Escalada de penhasco**: no ar, caindo, empurrando contra a parede, o player
+  se agarra — a queda cai para 130 px/s e o pulo é devolvido. Saltar agarrado
+  dá impulso para cima e para longe (com 0.15s sem poder voltar a colar), então
+  dá para subir uma parede alta alternando agarrar → saltar. Vale planar de
+  novo depois de soltar.
 - `update(dt)` — lê `FG.input`, física via `FG.engine.moveAndCollide`.
   Movimento: correr (aceleração + atrito), pulo com coyote-time (~0.1s) e
   input-buffer (~0.12s), **pulo duplo**, **planar** segurando jump no ar
@@ -91,6 +98,10 @@ ser o último.
   encosta, some com brilho, `FG.engine.addLumi()` + `FG.audio.sfx('lumi')`.
 - `enemyDefs` — array `{type:'espinhoco'|'voadeira'|'sapeca', x, y, range?}`
   (~12 inimigos espalhados)
+- `obstacleDefs` — array com os obstáculos dinâmicos (ver `FG.obstacles`).
+- **Sem cogumelos-plataforma**: eram repetitivos demais. O relevo agora se faz
+  de penhascos escaláveis (paredes altas), patamares em vários níveis, bocas de
+  caverna, saliências estreitas e ilhas flutuantes de pedra.
 - `bossTriggerX` — x que dispara o boss (perto do fim)
 - `arena` — `{x, w}` limites da arena do boss (o engine tranca a câmera/player)
 - `goal` — nada: vencer = matar o boss.
@@ -105,6 +116,37 @@ ser o último.
 - Layout: ~7200px com ritmo: tutorial → plataformas sobre poço venenoso →
   subida vertical → descida com voadeiras → clareira do boss no fim.
   Culling: só desenhar o que está a até ~1 tela da câmera.
+
+### FG.obstacles (obstacles.js)
+
+Perigos e plataformas dinâmicas — é o que dá ritmo ao nível (o terreno parado
+só faz o chão). O engine chama `reset()`, `update(dt)` e os dois `draw`.
+
+- `reset()` — repovoa tudo a partir de `FG.level.obstacleDefs`.
+- `update(dt)` — move as peças e resolve efeito sobre `FG.player`.
+- `drawBehind(ctx, cam)` / `drawFront(ctx, cam)` — antes e depois do player.
+- `movers` — array de plataformas móveis vivas. **O engine injeta essas
+  plataformas em `FG.level.solids` enquanto existem**, então a colisão sai de
+  graça; o obstáculo só atualiza `x/y` e **arrasta o player junto** quando ele
+  está apoiado (compara `player.onGround` e a posição do frame anterior).
+
+Tipos em `FG.level.obstacleDefs` (`{type, x, y, ...}`):
+
+1. `plataforma` — plataforma que vai e volta. `{x, y, w, dx, dy, period, phase}`
+   (movimento senoidal entre `(x,y)` e `(x+dx, y+dy)`). Sólida, carrega o player.
+2. `desmorona` — saliência que cai quando pisada. `{x, y, w}`: treme 0.45s ao
+   receber peso, cai, some, e **volta 3s depois** no lugar. Sólida enquanto viva.
+3. `sopro` — coluna de ar quente ascendente. `{x, y, w, h}`: dentro dela o
+   player ganha aceleração para cima (a queda vira subida lenta) e planar dentro
+   dela sobe de verdade. Não é sólida; é o que permite ganhar altura sem plataforma.
+4. `pendulo` — corrente com bola de ferro balançando. `{x, y, len, arc, period}`:
+   a bola machuca (1 de dano) e a **corrente é sólida** — dá para pousar nela.
+5. `espinhorolo` — rolo de espinhos que corre num trilho. `{x, y, w, range, speed}`:
+   machuca ao encostar, obriga a pular ou a subir na parede.
+
+Regras: todo perigo dá 1 de dano via `FG.player.hurt(1, xOrigem)`. Nada de
+alocar por frame (pools). Culling de ~1 tela em todo desenho. Visual pintado no
+mesmo padrão do resto (gradientes, glow), 100% canvas.
 
 ### FG.enemies (enemies.js)
 

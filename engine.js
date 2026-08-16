@@ -49,14 +49,17 @@ window.FG = window.FG || {};
   }
 
   // Integra posição e resolve contra FG.level.solids, eixo a eixo.
+  // Além de e.onGround, publica e.wallDir: +1 se travou numa parede à direita,
+  // -1 se à esquerda, 0 se livre — é o que sustenta a escalada de penhasco.
   function moveAndCollide(e, dt) {
     const solids = FG.level.solids;
+    e.wallDir = 0;
     e.x += e.vx * dt;
     for (let i = 0; i < solids.length; i++) {
       const s = solids[i];
       if (!rectsOverlap(e, s)) continue;
-      if (e.vx > 0) e.x = s.x - e.w;
-      else if (e.vx < 0) e.x = s.x + s.w;
+      if (e.vx > 0) { e.x = s.x - e.w; e.wallDir = 1; }
+      else if (e.vx < 0) { e.x = s.x + s.w; e.wallDir = -1; }
       e.vx = 0;
     }
     e.onGround = false;
@@ -96,11 +99,35 @@ window.FG = window.FG || {};
   let arenaLocked = false;
   let playStart = 0;   // engine.time em que a partida começou (fade do tooltip)
 
+  // ---------- sólidos vivos = geometria fixa + plataformas móveis ----------
+  // FG.level.solids passa a ser um array mantido aqui: a base imutável do nível
+  // mais o que FG.obstacles estiver movendo neste frame. Assim a colisão de
+  // plataforma móvel sai de graça para player e inimigos.
+  let baseSolids = null;
+  const liveSolids = [];
+
+  function syncSolids() {
+    if (!baseSolids) return;
+    liveSolids.length = 0;
+    for (let i = 0; i < baseSolids.length; i++) liveSolids.push(baseSolids[i]);
+    const movers = FG.obstacles && FG.obstacles.movers;
+    if (movers) for (let i = 0; i < movers.length; i++) liveSolids.push(movers[i]);
+    FG.level.solids = liveSolids;
+  }
+
+  function captureBaseSolids() {
+    if (baseSolids) return;
+    baseSolids = FG.level.solids.slice();   // uma vez só, antes de qualquer troca
+  }
+
   function startGame() {
     playStart = engine.time;
     engine.lumis = 0;
+    captureBaseSolids();
     engine.checkpoint = { x: FG.level.playerStart.x, y: FG.level.playerStart.y };
     FG.player.respawn(FG.level.playerStart.x, FG.level.playerStart.y);
+    if (FG.obstacles) FG.obstacles.reset();
+    syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
     engine.setState('playing');
@@ -110,6 +137,8 @@ window.FG = window.FG || {};
 
   function respawnFromCheckpoint() {
     FG.player.respawn(engine.checkpoint.x, engine.checkpoint.y);
+    if (FG.obstacles) FG.obstacles.reset();
+    syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
     engine.setState('playing');
@@ -125,6 +154,10 @@ window.FG = window.FG || {};
     if (engine.state === 'playing') {
       const p = FG.player;
       FG.level.update(dt);
+      // obstáculos primeiro: movem as plataformas e arrastam quem está em cima;
+      // syncSolids deixa a colisão do frame já com as peças na posição nova
+      if (FG.obstacles) FG.obstacles.update(dt);
+      syncSolids();
       p.update(dt);
       FG.enemies.update(dt);
 
@@ -190,8 +223,10 @@ window.FG = window.FG || {};
 
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
+    if (FG.obstacles) FG.obstacles.drawBehind(ctx, cam);
     FG.enemies.draw(ctx, cam);
     FG.player.draw(ctx, cam);
+    if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     drawHUD();
 
@@ -281,9 +316,11 @@ window.FG = window.FG || {};
     { key: 'ESPAÇO', desc: 'pular' },
     { key: 'ESPAÇO ×2', desc: 'pulo duplo' },
     { key: 'segurar ESPAÇO', desc: 'planar' },
+    { key: '→ na parede', desc: 'agarrar' },
+    { key: 'ESPAÇO na parede', desc: 'escalar' },
     { key: 'X', desc: 'socar' },
   ];
-  const TIP = { x: VIEW_W - 214, y: 58, w: 194, rowH: 21, padY: 12 };
+  const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
     const h = TIP.padY * 2 + CONTROLS.length * TIP.rowH;

@@ -15,6 +15,12 @@ window.FG = window.FG || {};
   const ATTACK_TIME = 0.22;  // duração da hitbox do soco
   const ATTACK_CD = 0.35;    // cooldown entre socos
   const KNOCKBACK = 260;     // empurrão horizontal ao levar dano
+  // parede: agarrar de leve e saltar para escalar penhascos
+  const WALL_SLIDE = 130;    // queda máxima agarrado na parede (px/s)
+  const WALL_JUMP_VY = -690; // impulso vertical do salto de parede
+  const WALL_JUMP_VX = 240;  // empurrão para longe da parede (baixo: dá para voltar a colar)
+  const WALL_LOCK = 0.12;    // tempo sem poder voltar a colar na parede
+  const WALL_COYOTE = 0.1;   // tolerância após desencostar
 
   // ---------- pool de faíscas (sem alocação por frame) ----------
   const SPARKS = 28;
@@ -38,6 +44,11 @@ window.FG = window.FG || {};
   let attackTimer = 0;       // tempo restante da hitbox ativa
   let attackCooldown = 0;    // tempo até poder socar de novo
   let sparkAccum = 0;        // acumulador de emissão de faíscas
+  let wallLock = 0;          // trava de input horizontal logo após saltar da parede
+  let wallCoyote = 0;        // tempo restante para ainda contar como "na parede"
+  let lastWallDir = 0;       // lado da última parede tocada (+1 direita, -1 esquerda)
+  let clinging = false;      // agarrado na parede neste frame?
+  let scrapeAccum = 0;       // acumulador de faíscas do atrito na parede
 
   // ---------- helpers de desenho do boneco (coordenadas locais, +x = frente) ----------
   // membro "mangueira de borracha": curva do ponto A ao B, sem cotovelo/joelho,
@@ -107,6 +118,7 @@ window.FG = window.FG || {};
     hp: 6, maxHp: 6,
     facing: 1,
     onGround: false,
+    wallDir: 0,               // preenchido pelo engine: parede à direita (+1) / esquerda (-1)
     attackBox: { x: 0, y: 0, w: 34, h: 30, active: false },
     invuln: 0,
 
@@ -114,8 +126,18 @@ window.FG = window.FG || {};
     update(dt) {
       const input = FG.input;
 
-      // corrida: aceleração com input, atrito sem
-      const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      // ---------- parede: quem está encostado e de que lado ----------
+      // wallDir vem do moveAndCollide do frame anterior (1 frame de latência).
+      if (this.wallDir && !this.onGround) { lastWallDir = this.wallDir; wallCoyote = WALL_COYOTE; }
+      else if (wallCoyote > 0) wallCoyote -= dt;
+      if (this.onGround) { wallCoyote = 0; lastWallDir = 0; }
+      if (wallLock > 0) wallLock -= dt;
+
+      // corrida: aceleração com input, atrito sem.
+      // Durante o wallLock, o input de volta para a parede é ignorado — senão
+      // o salto de parede morre colado nela e não se sobe penhasco nenhum.
+      let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      if (wallLock > 0 && dir === lastWallDir) dir = 0;
       if (dir !== 0) {
         this.vx += dir * ACCEL * dt;
         this.facing = dir;
@@ -127,14 +149,49 @@ window.FG = window.FG || {};
       if (this.vx > MAX_VX) this.vx = MAX_VX;
       if (this.vx < -MAX_VX) this.vx = -MAX_VX;
 
+      // agarrar: no ar, caindo, com parede do lado e empurrando contra ela
+      const pushingWall = lastWallDir !== 0 && wallCoyote > 0 &&
+        ((lastWallDir > 0 && input.right) || (lastWallDir < 0 && input.left));
+      const wasClinging = clinging;
+      clinging = !this.onGround && this.vy > 0 && pushingWall && wallLock <= 0;
+      if (clinging) {
+        this.facing = lastWallDir;    // olha para a parede em que se apoia
+        jumpsUsed = 0;                // encostar devolve o pulo: dá para escalar
+        if (!wasClinging) FG.audio.sfx('wallgrab');
+      }
+      // espelhados para inspeção externa (testes/diagnóstico)
+      this.clinging = clinging;
+      this.jumpsUsed = jumpsUsed;
+      this.wallCoyote = wallCoyote;
+
       // timers de pulo
       coyoteTimer = this.onGround ? 0 : coyoteTimer + dt;
       if (input.jumpPressed) jumpBuffer = BUFFER;
       else if (jumpBuffer > 0) jumpBuffer -= dt;
 
-      // pulo (com coyote + buffer) e pulo duplo
+      // Salto de parede tem precedência sobre o pulo duplo, e vale sempre que
+      // houver contato recente com a parede empurrando contra ela — não só
+      // agarrado. Sem isso, apertar pulo um instante antes de reencostar gasta
+      // o pulo do ar e a escalada despenca.
+      const podeSaltarParede = !this.onGround && wallLock <= 0 &&
+        lastWallDir !== 0 && wallCoyote > 0 && (clinging || pushingWall);
+
+      // pulo: salto de parede, depois chão/coyote, depois duplo
       if (jumpBuffer > 0) {
-        if (jumpsUsed === 0 && (this.onGround || coyoteTimer <= COYOTE)) {
+        if (podeSaltarParede) {
+          this.vy = WALL_JUMP_VY;
+          this.vx = -lastWallDir * WALL_JUMP_VX;
+          this.facing = -lastWallDir;
+          wallLock = WALL_LOCK;
+          clinging = false;
+          jumpsUsed = 1;              // ainda sobra o pulo duplo no ar
+          jumpBuffer = 0;
+          // altura FIXA: escalar é tocar o botão em sequência, e o corte de
+          // pulo transformaria cada salto num pulinho de 20px
+          jumpCut = true;
+          FG.audio.sfx('walljump');
+          this.spawnBurst(7);
+        } else if (jumpsUsed === 0 && (this.onGround || coyoteTimer <= COYOTE)) {
           this.vy = JUMP_VY;
           jumpsUsed = 1; jumpBuffer = 0; jumpCut = false;
           FG.audio.sfx('jump');
@@ -153,14 +210,30 @@ window.FG = window.FG || {};
       }
 
       // planar: segurando jump, caindo, depois do pulo duplo
-      const wantGlide = input.jump && !this.onGround && jumpsUsed >= 2 && this.vy > 0;
+      const wantGlide = input.jump && !this.onGround && !clinging && jumpsUsed >= 2 && this.vy > 0;
       if (wantGlide && !gliding) FG.audio.sfx('glide');
       gliding = wantGlide;
 
-      // gravidade (limitada pelo planar)
+      // gravidade (limitada pelo planar ou pelo atrito na parede)
       this.vy += GRAVITY * dt;
-      const cap = gliding ? GLIDE_FALL : MAX_FALL;
+      const cap = clinging ? WALL_SLIDE : (gliding ? GLIDE_FALL : MAX_FALL);
       if (this.vy > cap) this.vy = cap;
+
+      // faíscas do atrito ao escorregar na parede
+      if (clinging) {
+        scrapeAccum += dt * 22;
+        while (scrapeAccum >= 1) {
+          scrapeAccum -= 1;
+          emitSpark(
+            this.x + (lastWallDir > 0 ? this.w : 0),
+            this.y + this.h * (0.3 + Math.random() * 0.6),
+            -lastWallDir * (30 + Math.random() * 60),
+            -20 - Math.random() * 60,
+            0.3 + Math.random() * 0.25,
+            1.5 + Math.random()
+          );
+        }
+      } else scrapeAccum = 0;
 
       // soco
       if (attackCooldown > 0) attackCooldown -= dt;
@@ -246,6 +319,8 @@ window.FG = window.FG || {};
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; attackTimer = 0; attackCooldown = 0;
+      wallLock = 0; wallCoyote = 0; lastWallDir = 0; clinging = false; scrapeAccum = 0;
+      this.wallDir = 0;
       for (let i = 0; i < SPARKS; i++) sparks[i].life = 0;
     },
 
@@ -277,7 +352,8 @@ window.FG = window.FG || {};
       // esticar/achatar conforme o estado
       let sx = 1, sy = 1;
       if (!this.onGround) {
-        if (gliding) { sx = 1.08; sy = 0.94; }                   // aberto, flutuando
+        if (clinging) { sx = 0.94; sy = 1.06; }                  // colado na parede
+        else if (gliding) { sx = 1.08; sy = 0.94; }              // aberto, flutuando
         else if (this.vy < 0) { sx = 0.9; sy = 1.12; }           // subindo: estica
         else { sx = 0.96; sy = 1.04; }                           // caindo
       } else if (running) {
@@ -312,7 +388,10 @@ window.FG = window.FG || {};
       // ---- pés: posição por estado ----
       let f1x, f1y, f2x, f2y;                                    // 1 = perna da frente, 2 = de trás
       if (!this.onGround) {
-        if (gliding) {                                           // balançam pendurados
+        if (clinging) {                                          // pés apoiados na parede
+          f1x = 8; f1y = -14;
+          f2x = 6; f2y = -2;
+        } else if (gliding) {                                    // balançam pendurados
           f1x = 4 + Math.sin(t * 3) * 2; f1y = -5;
           f2x = -3 - Math.sin(t * 3) * 2; f2y = -3;
         } else if (this.vy < 0) { f1x = 5; f1y = -9; f2x = -4; f2y = -3; }  // subindo: encolhe
@@ -382,6 +461,10 @@ window.FG = window.FG || {};
           y: (box.y + box.h / 2) - (this.y + this.h),
         };
         gB = { x: 2, y: -28 };                                   // a outra protege o queixo
+      } else if (clinging) {
+        // uma luva firma em cima na parede, a outra escora embaixo
+        gF = { x: 11, y: -46 };
+        gB = { x: 9, y: -24 };
       } else if (gliding) {
         gF = { x: 15, y: -34 + Math.sin(t * 3) * 2 };            // abertos como asas
         gB = { x: -14, y: -34 - Math.sin(t * 3) * 2 };

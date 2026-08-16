@@ -68,7 +68,7 @@ Object.defineProperty(ImageStub.prototype, 'src', { set() {} });
 // No browser, `FG` e `window.FG` são o mesmo global; aqui pré-criamos o objeto
 // e o passamos também como parâmetro `FG` para os bare references funcionarem.
 global.window.FG = {};
-const order = ['assets.js', 'audio.js', 'level.js', 'player.js', 'enemies.js', 'engine.js'];
+const order = ['assets.js', 'audio.js', 'level.js', 'obstacles.js', 'player.js', 'enemies.js', 'engine.js'];
 for (const f of order) {
   const src = fs.readFileSync(path.join(DIR, f), 'utf8');
   const fn = new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', 'Image', src);
@@ -118,6 +118,8 @@ key('ArrowRight', false);
 frames(30);
 console.log('pós-passeio: x=%s hp=%s lumis=%s estado=%s',
   Math.round(FG.player.x), FG.player.hp, FG.engine.lumis, FG.engine.state);
+
+// (a escalada de parede tem teste próprio, com cenário controlado: tests/parede.js)
 
 // ---------- cenário 3: teleporta perto do boss e luta ----------
 if (FG.engine.state === 'dead') frames(120); // deixa respawnar

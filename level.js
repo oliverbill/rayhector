@@ -1,6 +1,6 @@
 // Fagulho: Lendas do Bosque — level.js
-// FG.level: geometria do mundo, lumis, checkpoints, inimigos (defs) e todo o
-// visual pintado do bosque encantado (céu, parallax, plataformas orgânicas).
+// FG.level: geometria do mundo, lumis, checkpoints, inimigos e obstáculos
+// (defs) e todo o visual pintado do bosque crepuscular.
 // Nada aqui referencia FG.player/FG.engine/FG.audio no load — só em runtime.
 window.FG = window.FG || {};
 
@@ -24,113 +24,179 @@ window.FG = window.FG || {};
 
   // ---------------------------------------------------------------
   // GEOMETRIA — sólidos
-  // k: 'g' = terra/musgo, 'm' = cogumelo, 'r' = pedra, 'h' = piso oculto
-  // (piso oculto: fundo das poças venenosas, não é desenhado)
-  // Ritmo: tutorial → poça venenosa → escada de cogumelos → descida →
-  // reta final → clareira do Dragomilão. Tudo alcançável com pulo duplo.
+  // k: 'g' = terra/musgo, 'r' = pedra, 'c' = penhasco (parede de rocha
+  //    empilhada, escalável), 'i' = ilha flutuante, 'h' = piso oculto
+  //    (fundo das poças venenosas, não é desenhado).
+  //
+  // RITMO EM 6 TRECHOS
+  //  (1) x 0..1180    tutorial plano, degraus suaves, sem perigo
+  //  (2) x 1180..2450 mesas em vários níveis + saliências estreitas
+  //  (3) x 2450..3700 gorge, maciço de pedra com arco de caverna na base e a
+  //                   CHAMINÉ ESCALÁVEL (fenda de 70px em 3100..3170, 400px
+  //                   de parede vertical) até o platô superior
+  //  (4) x 3700..5060 travessia de ilhas flutuantes sobre o abismo; quem cai
+  //                   vai parar no pântano e volta pela SEGUNDA CHAMINÉ, a
+  //                   fenda de 80px entre a agulha de pedra e o desfiladeiro
+  //  (5) x 5060..5420 DESFILADEIRO: duas paredes frente a frente, descida
+  //                   controlada agarrando (fenda de 140px, 390px de queda)
+  //  (6) x 5420..7200 reta final e a clareira plana do Dragomilão
+  //
+  // As duas escaladas: a chaminé do gorge (única saída de lá, 400px) e a
+  // fenda do pântano (415px, única saída de quem cai do arquipélago).
+  // Nada de beco sem saída: de todo lugar onde se cai dá para voltar.
+  //
+  // Alturas: pulo simples sobe ~118px, duplo ~236px, e uma parede vertical
+  // contínua sobe indefinidamente agarrando (~120px por salto de parede).
   // ---------------------------------------------------------------
   function S(x, y, w, h, k) { return { x: x, y: y, w: w, h: h, k: k || 'g' }; }
 
   var solids = [
-    // (1) tutorial — chão plano, degraus suaves, sem inimigos
-    S(0, 620, 1180, 100, 'g'),
-    S(160, 588, 70, 32, 'r'),
-    S(300, 572, 100, 48, 'r'),
-    S(540, 528, 150, 28, 'g'),
-    S(700, 452, 110, 24, 'g'),
-    S(880, 500, 140, 26, 'g'),
-    S(920, 380, 110, 22, 'g'),      // bônus alto (ensina o pulo duplo)
-    S(1060, 552, 100, 26, 'g'),
-    // fosso A — poça pequena (piso oculto no fundo)
-    S(1180, 724, 140, 40, 'h'),
-    // chão do primeiro checkpoint
-    S(1320, 620, 560, 100, 'g'),
-    // (2) poça venenosa grande com plataformas flutuantes
-    S(1880, 724, 960, 40, 'h'),
-    S(1950, 560, 130, 26, 'g'),
-    S(2160, 514, 125, 24, 'g'),
-    S(2370, 556, 130, 26, 'g'),
-    S(2580, 510, 125, 24, 'g'),
-    S(2740, 564, 90, 26, 'g'),
-    S(2300, 424, 120, 22, 'g'),     // bônus alto sobre a poça (94px acima do vizinho)
-    // chão entre a poça e a escada
-    S(2840, 620, 560, 100, 'g'),
-    S(2870, 580, 60, 40, 'r'),
-    S(3080, 540, 110, 26, 'g'),
-    // (3) escada de cogumelos gigantes
-    S(3300, 545, 150, 24, 'm'),
-    S(3500, 470, 140, 24, 'm'),
-    S(3660, 490, 220, 36, 'g'),     // patamar do checkpoint 2
-    S(3440, 380, 100, 22, 'm'),     // bônus da escada
-    S(3760, 430, 100, 22, 'm'),
-    S(3920, 410, 140, 24, 'm'),
-    S(4090, 330, 130, 24, 'm'),
-    S(4180, 280, 300, 40, 'g'),     // cume
-    S(4280, 170, 120, 22, 'm'),     // bônus do cume
-    // (4) descida longa com plataformas espaçadas
-    S(4540, 360, 130, 26, 'g'),
-    S(4700, 260, 110, 22, 'm'),     // bônus da descida
-    S(4740, 430, 130, 26, 'g'),
-    S(4950, 500, 130, 26, 'g'),
-    S(5060, 400, 100, 22, 'm'),     // bônus da descida
-    S(5160, 560, 140, 26, 'g'),
-    S(5240, 500, 90, 22, 'g'),      // caminho alternativo
-    // (5) reta final
-    S(5330, 620, 580, 100, 'g'),
-    S(5560, 530, 130, 26, 'g'),     // passa por cima dos espinhos
-    // poça pré-clareira
-    S(5910, 724, 120, 40, 'h'),
-    // clareira do Dragomilão — plana
-    S(6030, 620, 1170, 100, 'g'),
+    // ---- (1) tutorial — chão plano e degraus curtos, nada de perigo ----
+    S(0, 620, 1180, 100, 'g'),        // [0] chão inicial
+    S(250, 588, 90, 32, 'r'),         // [1] +32
+    S(420, 552, 110, 68, 'r'),        // [2] +36
+    S(620, 508, 130, 26, 'g'),        // [3] +44
+    S(810, 448, 120, 24, 'g'),        // [4] +60
+    S(980, 396, 110, 22, 'g'),        // [5] +52
+    S(1070, 300, 100, 20, 'g'),       // [6] bônus alto (+96)
+
+    // ---- fosso A: poça venenosa com piso oculto no fundo ----
+    S(1180, 724, 170, 40, 'h'),       // [7]
+
+    // ---- (2) mesas de alturas variadas e saliências estreitas ----
+    S(1350, 620, 300, 100, 'g'),      // [8] mesa base (checkpoint 1)
+    S(1650, 556, 250, 164, 'g'),      // [9] mesa média (+64)
+    S(1960, 500, 90, 20, 'r'),        // [10] saliência estreita (+56)
+    S(2110, 452, 90, 20, 'r'),        // [11] saliência estreita (+48)
+    S(2250, 496, 200, 224, 'g'),      // [12] mesa alta, desce para o gorge
+
+    // ---- (3) gorge + maciço de pedra com a CHAMINÉ ESCALÁVEL ----
+    // O chão do gorge passa por baixo do arco do pilar (70px) e morre dentro
+    // da fenda de 70px entre o pilar e o penhasco. Dali só se sai por cima:
+    // agarrar, saltar de face em face e ganhar ~120px a cada salto, de 620
+    // até 220 — 400px de parede vertical contínua.
+    S(2450, 620, 720, 100, 'g'),      // [13] chão do gorge 2450..3170
+    S(3020, 250, 80, 300, 'c'),       // [14] pilar (arco de 70px por baixo)
+    S(3170, 220, 130, 500, 'c'),      // [15] penhasco (face esquerda = chaminé)
+    S(3300, 220, 400, 500, 'c'),      // [16] maciço/platô superior (checkpoint 2)
+
+    // ---- (4) ilhas flutuantes de pedra sobre o abismo ----
+    S(3700, 620, 1280, 100, 'g'),     // [17] fundo do abismo (pântano) 3700..4980
+    S(3890, 290, 150, 110, 'i'),      // [18] ilha 1
+    S(4330, 350, 130, 110, 'i'),      // [19] ilha 2
+    S(4640, 130, 110, 50, 'i'),       // [20] ilha-mirante (o sopro abre o caminho)
+    S(4740, 300, 140, 110, 'i'),      // [21] ilha 3
+
+    // ---- (5) desfiladeiro: duas paredes frente a frente, fenda de 140px ----
+    // Quem cai no pântano volta escalando a parede esquerda (390px, do chão
+    // ao topo); quem vem das ilhas desce a fenda agarrado, controlando a queda.
+    S(4900, 250, 80, 300, 'c'),       // [22] agulha de pedra (arco de 70px por baixo)
+    S(4980, 620, 80, 100, 'g'),       // [23] chão da fenda do pântano 4980..5060
+    S(5060, 205, 90, 515, 'c'),       // [24] parede esquerda (do chão ao topo, 515px)
+    S(5150, 620, 760, 100, 'g'),      // [25] fundo do desfiladeiro + reta final
+    S(5290, 210, 130, 340, 'c'),      // [26] parede direita (arco de 70px, crista de espinhos)
+
+    // ---- (6) reta final e clareira do Dragomilão ----
+    S(5560, 530, 130, 26, 'g'),       // [27] passa por cima dos espinhos
+    S(5750, 480, 110, 22, 'g'),       // [28] bônus
+    S(5910, 724, 120, 40, 'h'),       // [29] piso oculto da poça pré-clareira
+    S(6030, 620, 1170, 100, 'g'),     // [30] clareira plana do chefão
   ];
 
   // ---------------------------------------------------------------
   // HAZARDS — t: 's' = espinhos, 'p' = poça venenosa
-  // As poças ficam no fundo dos buracos maiores, sobre o piso oculto.
   // ---------------------------------------------------------------
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(1560, 596, 90, 24, 's'),
-    Hz(2940, 596, 100, 24, 's'),
-    Hz(4300, 256, 70, 24, 's'),     // espinhos no cume
-    Hz(5620, 596, 90, 24, 's'),
-    Hz(1180, 700, 140, 24, 'p'),
-    Hz(1880, 698, 960, 26, 'p'),
-    Hz(5910, 700, 120, 24, 'p'),
+    Hz(1180, 698, 170, 26, 'p'),   // poça do fosso A
+    Hz(1780, 532, 100, 24, 's'),   // espinhos na mesa média
+    Hz(2280, 472, 90, 24, 's'),    // espinhos na mesa alta
+    Hz(2820, 596, 110, 24, 's'),   // espinhos no fundo do gorge
+    Hz(3760, 596, 1120, 26, 'p'),  // pântano no fundo do abismo: cair custa caro
+    Hz(5200, 596, 90, 24, 's'),    // fundo do desfiladeiro (metade direita)
+    Hz(5290, 186, 130, 24, 's'),   // crista da parede direita: não dá para cortar caminho
+    Hz(5620, 596, 120, 24, 's'),   // reta final
+    Hz(5910, 698, 120, 26, 'p'),   // poça pré-clareira
   ];
 
   // 3 lanternas-checkpoint (acendem quando ativadas)
   var checkpoints = [
-    { x: 1800, y: 620 },
-    { x: 3700, y: 490 },   // no patamar da escada de cogumelos
-    { x: 5400, y: 620 },
+    { x: 1470, y: 620 },   // mesa base do trecho 2
+    { x: 3340, y: 220 },   // platô superior — prêmio de escalar a chaminé
+    { x: 5440, y: 620 },   // saída do desfiladeiro, já na reta final
   ];
 
   // ---------------------------------------------------------------
   // INIMIGOS — nenhum antes de x=900 (tutorial limpo)
   // ---------------------------------------------------------------
   var enemyDefs = [
-    { type: 'voadeira',  x: 1250, y: 520, range: 100 },
-    { type: 'espinhoco', x: 1420, y: 590, range: 70 },
-    { type: 'sapeca',    x: 1700, y: 590, range: 60 },
-    { type: 'voadeira',  x: 2120, y: 440, range: 150 },
-    { type: 'voadeira',  x: 2520, y: 420, range: 150 },
-    { type: 'espinhoco', x: 3230, y: 590, range: 90 },
-    { type: 'voadeira',  x: 3700, y: 300, range: 160 },
-    { type: 'voadeira',  x: 4620, y: 280, range: 170 },
-    { type: 'voadeira',  x: 4900, y: 400, range: 170 },
-    { type: 'sapeca',    x: 5500, y: 590, range: 90 },
-    { type: 'espinhoco', x: 5790, y: 590, range: 80 },
-    { type: 'sapeca',    x: 6120, y: 590, range: 50 },
+    { type: 'voadeira',  x: 1255, y: 520, range: 120 },
+    { type: 'espinhoco', x: 1450, y: 590, range: 100 },
+    { type: 'sapeca',    x: 1720, y: 520, range: 70 },
+    { type: 'voadeira',  x: 2050, y: 390, range: 140 },
+    { type: 'espinhoco', x: 2380, y: 462, range: 80 },
+    { type: 'sapeca',    x: 2650, y: 584, range: 90 },   // chão do gorge
+    { type: 'voadeira',  x: 3600, y: 140, range: 130 },  // sobre o platô
+    { type: 'voadeira',  x: 3960, y: 230, range: 150 },  // ilhas
+    { type: 'voadeira',  x: 4400, y: 270, range: 170 },
+    { type: 'espinhoco', x: 4790, y: 270, range: 90 },   // ilha 3
+    { type: 'voadeira',  x: 5150, y: 400, range: 110 },  // dentro do desfiladeiro
+    { type: 'espinhoco', x: 5500, y: 590, range: 50 },
+    { type: 'sapeca',    x: 6120, y: 584, range: 60 },
   ];
 
   // ---------------------------------------------------------------
-  // LUMIS — linhas e arcos que ensinam o caminho (~95)
+  // OBSTÁCULOS DINÂMICOS (FG.obstacles lê daqui) — nenhum antes de x=900
+  // Convenções de coordenada usadas aqui:
+  //   plataforma  {x,y,w,dx,dy,period,phase} — (x,y) = canto superior
+  //               esquerdo no repouso; vai até (x+dx, y+dy) e volta.
+  //   desmorona   {x,y,w} — (x,y) = canto superior esquerdo da saliência.
+  //   sopro       {x,y,w,h} — retângulo da coluna de ar (y = topo).
+  //   pendulo     {x,y,len,arc,period} — (x,y) = ponto de fixação da corrente.
+  //   espinhorolo {x,y,w,range,speed} — y = TOPO do rolo (a base fica em y+w).
+  // ---------------------------------------------------------------
+  var obstacleDefs = [
+    // (2) mesas: rolo curto, saliência que cai, coluna sobre o vão e a bola
+    { type: 'espinhorolo', x: 1670, y: 512, w: 44, range: 90, speed: 110 },
+    { type: 'desmorona',   x: 1870, y: 512, w: 80 },
+    { type: 'sopro',       x: 2054, y: 392, w: 52, h: 130 },
+    { type: 'pendulo',     x: 2350, y: 290, len: 175, arc: 0.9, period: 2.6 },
+
+    // (3) gorge: rolo no corredor, coluna quente que faz flutuar por cima do
+    // espinheiro e a bola de ferro no vão antes da chaminé.
+    // NADA de sopro dentro da chaminé: a subida ali é agarrando, e só.
+    { type: 'espinhorolo', x: 2700, y: 576, w: 44, range: 260, speed: 140 },
+    { type: 'sopro',       x: 2800, y: 452, w: 130, h: 144 },
+    { type: 'pendulo',     x: 2900, y: 250, len: 230, arc: 0.85, period: 3.0 },
+
+    // (4) platô e ilhas: rolo de espinhos no corredor do platô, degrau que cai
+    // ao sair dele, plataforma móvel entre as ilhas 1 e 2, bola sobre o vazio
+    // e a coluna que abre a ilha-mirante
+    { type: 'espinhorolo', x: 3420, y: 176, w: 44, range: 240, speed: 150 },
+    { type: 'desmorona',   x: 3730, y: 250, w: 110 },
+    { type: 'plataforma',  x: 4080, y: 330, w: 110, dx: 170, dy: -30, period: 4.2, phase: 0 },
+    { type: 'pendulo',     x: 4530, y: 190, len: 165, arc: 0.7, period: 2.8 },
+    { type: 'sopro',       x: 4560, y: 180, w: 80, h: 230 },
+    { type: 'desmorona',   x: 4650, y: 240, w: 90 },
+
+    // (5) desfiladeiro: elevador na fenda, para quem não quiser descer agarrado
+    { type: 'plataforma',  x: 5170, y: 300, w: 100, dx: 0, dy: 240, period: 4.4, phase: 0 },
+
+    // (6) reta final: a bola varre a saliência que cai sobre a poça
+    { type: 'pendulo',     x: 5970, y: 430, len: 140, arc: 0.8, period: 2.4 },
+    { type: 'desmorona',   x: 5930, y: 600, w: 110 },
+  ];
+
+  // ---------------------------------------------------------------
+  // LUMIS — linhas, arcos e COLUNAS (as colunas ensinam a escalar)
   // ---------------------------------------------------------------
   var lumis = [];
   function lumiLine(x, y, n, dx) {
     for (var i = 0; i < n; i++) lumis.push({ x: x + i * dx, y: y, ph: lumis.length * 0.7, taken: false });
+  }
+  function lumiCol(x, y, n, dy) {
+    for (var i = 0; i < n; i++) lumis.push({ x: x, y: y + i * dy, ph: lumis.length * 0.7, taken: false });
   }
   function lumiArc(cx, apexY, n, span, sag) {
     for (var i = 0; i < n; i++) {
@@ -138,43 +204,43 @@ window.FG = window.FG || {};
       lumis.push({ x: cx + t * span, y: apexY + sag * 4 * t * t, ph: lumis.length * 0.7, taken: false });
     }
   }
-  // tutorial
-  lumiLine(150, 578, 6, 58);
-  lumiArc(615, 462, 5, 200, 46);
-  lumiLine(712, 410, 4, 30);
-  lumiLine(892, 456, 4, 36);
-  lumiLine(932, 336, 3, 36);
-  // fosso A e espinhos 1
-  lumiArc(1250, 540, 5, 160, 50);
-  lumiArc(1605, 538, 4, 140, 40);
-  // poça grande
-  lumiArc(2035, 468, 4, 160, 40);
-  lumiArc(2330, 462, 4, 170, 40);
-  lumiArc(2650, 460, 4, 170, 40);
-  lumiLine(2315, 380, 4, 32);
-  // espinhos 2
-  lumiArc(2985, 530, 4, 150, 40);
-  // escada de cogumelos (um par por chapéu)
-  lumiLine(3340, 500, 2, 60);
-  lumiLine(3535, 425, 2, 60);
-  lumiLine(3720, 445, 2, 70);
-  lumiLine(3955, 365, 2, 60);
-  lumiLine(4120, 285, 2, 60);
-  lumiLine(3452, 336, 3, 32);
-  // cume
-  lumiLine(4205, 232, 5, 54);
-  lumiLine(4292, 126, 3, 42);
-  // descida
-  lumiArc(4705, 330, 4, 150, 36);
-  lumiArc(4910, 400, 4, 150, 36);
-  lumiArc(5120, 468, 4, 150, 36);
-  lumiLine(4712, 216, 3, 36);
-  lumiLine(5072, 356, 3, 32);
-  // reta final e clareira
-  lumiLine(5380, 578, 4, 52);
-  lumiLine(5582, 486, 3, 40);
-  lumiArc(5970, 548, 5, 140, 44);
-  lumiLine(6070, 572, 3, 56);
+  // (1) tutorial
+  lumiLine(150, 578, 4, 62);
+  lumiArc(555, 460, 5, 180, 30);
+  lumiLine(830, 404, 3, 34);
+  lumiLine(1000, 352, 3, 34);
+  lumiLine(1085, 256, 2, 36);
+  // (2) mesas e saliências
+  lumiArc(1265, 540, 4, 150, 46);
+  lumiLine(1690, 512, 3, 44);
+  lumiArc(1900, 452, 3, 110, 32);
+  lumiArc(2080, 408, 3, 120, 36);
+  lumiCol(2082, 470, 3, -46);          // dentro da coluna de ar do vão
+  lumiLine(2300, 452, 3, 44);          // sobre a mesa alta
+  // (3) gorge e chaminé escalável
+  lumiArc(2530, 552, 3, 120, 34);
+  lumiArc(2640, 540, 3, 130, 38);
+  lumiArc(2900, 552, 3, 140, 38);
+  lumiCol(3135, 496, 6, -52);          // CHAMINÉ: a escada de lumis ensina a subir agarrado
+  lumiLine(3350, 160, 4, 62);          // platô (por cima do rolo de espinhos)
+  // (4) ilhas
+  lumiArc(3800, 236, 3, 140, 38);
+  lumiArc(4180, 296, 4, 200, 46);
+  lumiArc(4600, 262, 3, 180, 42);
+  lumiCol(4600, 350, 4, -50);          // coluna que abre a ilha-mirante
+  lumiLine(4670, 88, 2, 44);
+  lumiLine(4780, 258, 3, 42);
+  // (5) desfiladeiro
+  lumiCol(5020, 556, 4, -62);          // FENDA DO PÂNTANO: a segunda escalada
+  lumiCol(5215, 270, 5, 56);           // descida do desfiladeiro: colar e escorregar
+  lumiLine(5185, 200, 2, 50);
+  lumiArc(5220, 556, 3, 100, 34);
+  // (6) reta final e clareira
+  lumiLine(5460, 578, 3, 52);
+  lumiLine(5590, 488, 3, 42);
+  lumiLine(5780, 438, 2, 40);
+  lumiArc(5970, 546, 4, 140, 42);
+  lumiLine(6090, 570, 2, 60);
 
   // ---------------------------------------------------------------
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo, sem GC)
@@ -196,28 +262,24 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // DECORAÇÃO por sólido (pré-computada: nada de random por frame)
+  // DECORAÇÃO por sólido (pré-computada: nada de random por frame).
+  // Penhascos ('c') e ilhas ('i') não guardam dados: eles viram um
+  // offscreen inteiro no primeiro draw (custo zero por frame).
   // ---------------------------------------------------------------
-  var mushCols = ['#c94f38', '#d8783a', '#b8503f', '#c86a2e'];
   var decor = [];
   (function () {
     var r = makeRand(20260815);
     for (var i = 0; i < solids.length; i++) {
-      var s = solids[i], d = { tufts: [], spots: [], dots: [], col: null };
-      if (s.k === 'm') {
-        d.col = mushCols[i % mushCols.length];
-        var nd = 3 + Math.floor(r() * 3);
-        for (var j = 0; j < nd; j++) {
-          d.dots.push({ dx: 10 + r() * (s.w - 20), dy: -4 - r() * 14, rad: 2.5 + r() * 3.5 });
-        }
-      } else if (s.k === 'g') {
+      var s = solids[i];
+      var d = { tufts: [], spots: [], spr: null, ox: 0, oy: 0 };
+      if (s.k === 'g') {
         var nt = Math.max(3, Math.floor(s.w / 55));
-        for (var j2 = 0; j2 < nt; j2++) {
+        for (var j = 0; j < nt; j++) {
           d.tufts.push({ dx: r() * s.w, len: 7 + r() * 9, lean: r() * 2 - 1 });
         }
         if (s.h > 34) {
           var ns = 1 + Math.floor(s.w / 120);
-          for (var j3 = 0; j3 < ns; j3++) {
+          for (var j2 = 0; j2 < ns; j2++) {
             d.spots.push({ dx: 12 + r() * (s.w - 24), dy: 24 + r() * (s.h - 34), rad: 4 + r() * 7 });
           }
         }
@@ -230,12 +292,14 @@ window.FG = window.FG || {};
   })();
 
   // ---------------------------------------------------------------
-  // OFFSCREENS — céu, sol, camadas de parallax, vinheta, sprite da lumi
-  // Construídos uma única vez, no primeiro draw.
+  // OFFSCREENS — céu, sol, camadas de parallax, névoa, vinheta, lumi
+  // e um sprite por penhasco/ilha. Construídos uma única vez.
   // ---------------------------------------------------------------
   var built = false;
-  var skySpr, sunSpr, raysL, farL, midL, nearL, frontL, vig, lumiSpr;
+  var skySpr, sunSpr, raysL, farL, midL, mistL, nearL, frontL, vig, lumiSpr;
   var LAYER_H = 680;
+  var ROCK_PAD = 16;        // folga para o musgo/capim transbordar a rocha
+  var ISLE_TIP = 76;        // ponta de pedra pendurada sob a ilha
 
   function makeCanvas(w, h) {
     var c = document.createElement('canvas');
@@ -303,6 +367,7 @@ window.FG = window.FG || {};
 
     farL = makeCanvas(2400, LAYER_H); paintFar(farL.getContext('2d'));
     midL = makeCanvas(2400, LAYER_H); paintMid(midL.getContext('2d'));
+    mistL = makeCanvas(1600, LAYER_H); paintMist(mistL.getContext('2d'));
     nearL = makeCanvas(2400, LAYER_H); paintNear(nearL.getContext('2d'));
     frontL = makeCanvas(1800, LAYER_H); paintFront(frontL.getContext('2d'));
 
@@ -327,17 +392,281 @@ window.FG = window.FG || {};
       g.fillStyle = gr;
       g.fillRect(0, 0, 36, 36);
     })(lumiSpr.getContext('2d'));
+
+    // um offscreen por penhasco e por ilha (desenho caro, feito uma vez)
+    for (var i = 0; i < solids.length; i++) {
+      var s = solids[i], c;
+      if (s.k === 'c') {
+        c = makeCanvas(s.w + ROCK_PAD * 2, s.h + ROCK_PAD * 2);
+        paintCliff(c.getContext('2d'), s.w, s.h, 9001 + i * 137);
+        decor[i].spr = c; decor[i].ox = -ROCK_PAD; decor[i].oy = -ROCK_PAD;
+      } else if (s.k === 'i') {
+        c = makeCanvas(s.w + ROCK_PAD * 2, s.h + ROCK_PAD + ISLE_TIP);
+        paintIsland(c.getContext('2d'), s.w, s.h, 4201 + i * 211);
+        decor[i].spr = c; decor[i].ox = -ROCK_PAD; decor[i].oy = -ROCK_PAD;
+      }
+    }
   }
 
-  // --- camada distante: morros e árvores retorcidas em silhueta roxa ---
+  // ---------------------------------------------------------------
+  // PENHASCO — rocha empilhada em camadas, bocas de caverna escuras ao
+  // fundo, face direita na sombra e topo com musgo claro (como nos prints).
+  // ---------------------------------------------------------------
+  function paintCliff(g, w, h, seed) {
+    var r = makeRand(seed);
+    var P = ROCK_PAD;
+
+    g.save();
+    g.beginPath(); g.rect(P, P, w, h); g.clip();
+
+    // corpo em gradiente crepúsculo
+    var gr = g.createLinearGradient(0, P, 0, P + h);
+    gr.addColorStop(0, '#6d5568');
+    gr.addColorStop(0.4, '#4a3a50');
+    gr.addColorStop(1, '#231a2b');
+    g.fillStyle = gr;
+    g.fillRect(P, P, w, h);
+
+    // bocas de caverna: manchas escuras ao fundo, antes das pedras
+    if (w >= 100 && h >= 140) {
+      var nc = 1 + Math.floor(r() * 2);
+      for (var ci = 0; ci < nc; ci++) {
+        var mx = P + 26 + r() * Math.max(1, w - 52);
+        var my = P + h * (0.3 + r() * 0.45);
+        var mw = 18 + r() * 26, mh = 24 + r() * 32;
+        var mg = g.createRadialGradient(mx, my - mh * 0.2, 2, mx, my, mh);
+        mg.addColorStop(0, 'rgba(5,2,10,0.95)');
+        mg.addColorStop(0.6, 'rgba(13,7,20,0.78)');
+        mg.addColorStop(1, 'rgba(20,12,30,0)');
+        g.fillStyle = mg;
+        g.beginPath();
+        g.ellipse(mx, my, mw, mh, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+
+    // camadas de pedras arredondadas empilhadas, de baixo para cima
+    var band = 38 + r() * 12;
+    var row = 0;
+    for (var y = P + h; y > P - band; y -= band, row++) {
+      var off = (row % 2) * band * 0.5;
+      var tone = 0.10 + 0.09 * ((row % 3) / 2);
+      for (var x = P - band + off; x < P + w + band; x += band * 0.9) {
+        var rr = band * (0.5 + r() * 0.18);
+        var px = x + rr, py = y - rr * 0.7;
+        g.fillStyle = 'rgba(126,104,126,' + tone.toFixed(3) + ')';
+        g.beginPath();
+        g.ellipse(px, py, rr, rr * 0.72, 0, 0, Math.PI * 2);
+        g.fill();
+        g.lineWidth = 2;
+        g.strokeStyle = 'rgba(255,192,124,0.16)';   // aresta batida pelo sol
+        g.beginPath();
+        g.ellipse(px, py, rr - 1, rr * 0.72 - 1, 0, Math.PI * 1.05, Math.PI * 1.78);
+        g.stroke();
+        g.strokeStyle = 'rgba(9,4,15,0.34)';        // sombra por baixo
+        g.beginPath();
+        g.ellipse(px, py, rr - 1, rr * 0.72 - 1, 0, Math.PI * 0.14, Math.PI * 0.86);
+        g.stroke();
+      }
+    }
+
+    // rachaduras verticais: a parede pede para ser agarrada
+    g.strokeStyle = 'rgba(12,6,18,0.35)';
+    g.lineWidth = 2.5;
+    g.lineCap = 'round';
+    var ncr = 1 + Math.floor(w / 70);
+    for (var k = 0; k < ncr; k++) {
+      var cx0 = P + 10 + r() * Math.max(1, w - 20);
+      var cy0 = P + r() * h * 0.5, cl = 40 + r() * (h * 0.5);
+      g.beginPath();
+      g.moveTo(cx0, cy0);
+      g.quadraticCurveTo(cx0 + (r() * 2 - 1) * 14, cy0 + cl * 0.5, cx0 + (r() * 2 - 1) * 20, cy0 + cl);
+      g.stroke();
+    }
+
+    // luz na face esquerda, sombra na direita (o sol vem do alto-esquerda)
+    var sg = g.createLinearGradient(P, 0, P + w, 0);
+    sg.addColorStop(0, 'rgba(255,180,110,0.11)');
+    sg.addColorStop(0.45, 'rgba(0,0,0,0)');
+    sg.addColorStop(1, 'rgba(12,6,20,0.45)');
+    g.fillStyle = sg;
+    g.fillRect(P, P, w, h);
+
+    // base afundando na sombra da caverna
+    var bh = Math.min(110, h * 0.45);
+    var bg = g.createLinearGradient(0, P + h - bh, 0, P + h);
+    bg.addColorStop(0, 'rgba(10,5,18,0)');
+    bg.addColorStop(1, 'rgba(10,5,18,0.62)');
+    g.fillStyle = bg;
+    g.fillRect(P, P + h - bh, w, bh);
+    g.restore();
+
+    // topo: musgo transbordando as bordas + fio claro de luz
+    g.fillStyle = '#3f7a2e';
+    g.fillRect(P - 3, P - 2, w + 6, 13);
+    g.fillStyle = '#6fb84a';
+    g.fillRect(P - 3, P - 2, w + 6, 7);
+    g.fillStyle = 'rgba(255,238,196,0.6)';
+    g.fillRect(P - 3, P - 3, w + 6, 3);
+    // gotas de musgo escorrendo nas quinas
+    g.fillStyle = '#3f7a2e';
+    g.beginPath(); g.arc(P - 1, P + 16, 4, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(P + w + 1, P + 19, 4.5, 0, Math.PI * 2); g.fill();
+    // tufos de capim no topo
+    g.strokeStyle = '#7cc850';
+    g.lineWidth = 2;
+    g.lineCap = 'round';
+    var nt = Math.max(3, Math.floor(w / 44));
+    for (var ti = 0; ti < nt; ti++) {
+      var bx = P + r() * w, len = 7 + r() * 10, lean = r() * 2 - 1;
+      g.beginPath();
+      g.moveTo(bx, P);
+      g.quadraticCurveTo(bx + lean * 4, P - len * 0.7, bx + lean * 8, P - len);
+      g.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // ILHA FLUTUANTE — pedra com base pontuda e topo de grama
+  // ---------------------------------------------------------------
+  function paintIsland(g, w, h, seed) {
+    var r = makeRand(seed);
+    var P = ROCK_PAD;
+    var tip = ISLE_TIP * (0.62 + r() * 0.34);
+    var cx = P + w / 2;
+
+    g.save();
+    // silhueta: topo reto (é a superfície de colisão), laterais afunilando
+    g.beginPath();
+    g.moveTo(P, P);
+    g.lineTo(P + w, P);
+    g.lineTo(P + w - 5, P + h * 0.55);
+    g.quadraticCurveTo(P + w * 0.8, P + h + tip * 0.32, cx + 7, P + h + tip);
+    g.lineTo(cx - 7, P + h + tip);
+    g.quadraticCurveTo(P + w * 0.2, P + h + tip * 0.32, P + 5, P + h * 0.55);
+    g.closePath();
+    g.save();
+    g.clip();
+
+    var gr = g.createLinearGradient(0, P, 0, P + h + tip);
+    gr.addColorStop(0, '#6d5568');
+    gr.addColorStop(0.42, '#463848');
+    gr.addColorStop(1, '#1c1424');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, P * 2 + w, P + h + tip + 8);
+
+    // estratos horizontais de rocha
+    for (var y = P + 16; y < P + h + tip; y += 20 + r() * 12) {
+      g.strokeStyle = 'rgba(12,6,18,0.3)';
+      g.lineWidth = 2 + r() * 2;
+      g.beginPath();
+      g.moveTo(P - 4, y);
+      g.quadraticCurveTo(cx, y + (r() * 2 - 1) * 7, P + w + 4, y + (r() * 2 - 1) * 5);
+      g.stroke();
+      g.strokeStyle = 'rgba(255,186,120,0.10)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(P - 4, y - 3);
+      g.quadraticCurveTo(cx, y - 3 + (r() * 2 - 1) * 7, P + w + 4, y - 3 + (r() * 2 - 1) * 5);
+      g.stroke();
+    }
+    // pedras arredondadas soltas na barriga da ilha
+    for (var b = 0; b < 4; b++) {
+      var bx = P + 8 + r() * Math.max(1, w - 16), by = P + h * (0.3 + r() * 0.6), br = 8 + r() * 12;
+      g.fillStyle = 'rgba(126,104,126,0.16)';
+      g.beginPath(); g.ellipse(bx, by, br, br * 0.75, 0, 0, Math.PI * 2); g.fill();
+    }
+    // sombra na face direita
+    var sg = g.createLinearGradient(P, 0, P + w, 0);
+    sg.addColorStop(0, 'rgba(255,180,110,0.10)');
+    sg.addColorStop(0.5, 'rgba(0,0,0,0)');
+    sg.addColorStop(1, 'rgba(12,6,20,0.42)');
+    g.fillStyle = sg;
+    g.fillRect(P, P, w, h + tip);
+    g.restore();
+    g.restore();
+
+    // topo com grama transbordando
+    g.fillStyle = '#3f7a2e';
+    g.fillRect(P - 4, P - 2, w + 8, 15);
+    g.fillStyle = '#6fb84a';
+    g.fillRect(P - 4, P - 2, w + 8, 8);
+    g.fillStyle = 'rgba(255,238,196,0.55)';
+    g.fillRect(P - 4, P - 3, w + 8, 3);
+    // grama pendurada nas quinas
+    g.fillStyle = '#3f7a2e';
+    g.beginPath(); g.arc(P - 2, P + 18, 5, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(P + w + 2, P + 21, 5.5, 0, Math.PI * 2); g.fill();
+    // tufos e raízes penduradas
+    g.strokeStyle = '#7cc850';
+    g.lineWidth = 2;
+    g.lineCap = 'round';
+    var nt = Math.max(3, Math.floor(w / 40));
+    for (var ti = 0; ti < nt; ti++) {
+      var tx = P + r() * w, len = 8 + r() * 11, lean = r() * 2 - 1;
+      g.beginPath();
+      g.moveTo(tx, P);
+      g.quadraticCurveTo(tx + lean * 4, P - len * 0.7, tx + lean * 8, P - len);
+      g.stroke();
+    }
+    g.strokeStyle = 'rgba(74,120,58,0.7)';
+    g.lineWidth = 1.8;
+    for (var v = 0; v < 4; v++) {
+      var vx = P + 8 + r() * Math.max(1, w - 16), vl = 18 + r() * 34;
+      g.beginPath();
+      g.moveTo(vx, P + 12);
+      g.quadraticCurveTo(vx + (r() * 2 - 1) * 8, P + 12 + vl * 0.6, vx + (r() * 2 - 1) * 10, P + 12 + vl);
+      g.stroke();
+    }
+  }
+
+  // --- camada distante: penhascos em silhueta, morros e árvores retorcidas ---
   function paintFar(g) {
     var r = makeRand(101);
     var base = LAYER_H;
-    // dois cordões de morros
+
+    // paredões de pedra ao fundo, com bocas de caverna escuras
+    for (var c = 0; c < 5; c++) {
+      var cw = 180 + r() * 190;
+      var cx = c * 480 + r() * 120;
+      var ch = 250 + r() * 170;
+      var top = base - 40 - ch;
+      g.fillStyle = 'rgba(58,30,78,0.8)';
+      g.beginPath();
+      g.moveTo(cx, base);
+      g.lineTo(cx + 12, top + 26);
+      g.quadraticCurveTo(cx + cw * 0.35, top - 14, cx + cw * 0.62, top + 10);
+      g.quadraticCurveTo(cx + cw * 0.85, top + 24, cx + cw, top + 60);
+      g.lineTo(cx + cw, base);
+      g.closePath();
+      g.fill();
+      // camadas horizontais de rocha
+      g.strokeStyle = 'rgba(30,14,44,0.55)';
+      g.lineWidth = 3;
+      for (var ly = top + 60; ly < base - 30; ly += 34 + r() * 22) {
+        g.beginPath();
+        g.moveTo(cx + 6, ly);
+        g.quadraticCurveTo(cx + cw * 0.5, ly + (r() * 2 - 1) * 10, cx + cw - 6, ly + (r() * 2 - 1) * 8);
+        g.stroke();
+      }
+      // boca de caverna
+      var kx = cx + cw * (0.3 + r() * 0.4), ky = base - 60 - r() * 90;
+      var kg = g.createRadialGradient(kx, ky, 3, kx, ky, 60);
+      kg.addColorStop(0, 'rgba(6,2,12,0.9)');
+      kg.addColorStop(0.6, 'rgba(12,5,20,0.6)');
+      kg.addColorStop(1, 'rgba(12,5,20,0)');
+      g.fillStyle = kg;
+      g.beginPath();
+      g.ellipse(kx, ky, 34, 46, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // dois cordões de morros por cima dos paredões
     g.fillStyle = 'rgba(52,26,74,0.85)';
     hillBand(g, r, base - 210, 90, 5);
     g.fillStyle = 'rgba(38,17,58,0.95)';
     hillBand(g, r, base - 130, 70, 6);
+
     // árvores retorcidas
     g.strokeStyle = '#221034';
     g.fillStyle = '#221034';
@@ -352,7 +681,6 @@ window.FG = window.FG || {};
       g.moveTo(tx, ty);
       g.bezierCurveTo(tx + sway * 0.3, ty - th * 0.4, tx + sway, ty - th * 0.7, tx + sway * 0.7, ty - th);
       g.stroke();
-      // galhos tortos
       for (var b = 0; b < 3; b++) {
         var bt = 0.45 + b * 0.2;
         var bx = tx + sway * bt * 0.8, by = ty - th * bt;
@@ -363,8 +691,7 @@ window.FG = window.FG || {};
         g.quadraticCurveTo(bx + dir * 40, by - 18, bx + dir * (55 + r() * 30), by - 40 - r() * 25);
         g.stroke();
       }
-      // copa em blobs
-      for (var c = 0; c < 3; c++) {
+      for (var cc = 0; cc < 3; cc++) {
         g.beginPath();
         g.arc(tx + sway * 0.7 + (r() * 2 - 1) * 34, ty - th - r() * 26, 24 + r() * 22, 0, Math.PI * 2);
         g.fill();
@@ -392,18 +719,48 @@ window.FG = window.FG || {};
     g.fill();
   }
 
-  // --- camada média: cogumelos gigantes e troncos ---
+  // --- camada média: torres de pedra e cogumelos gigantes (só decoração) ---
   function paintMid(g) {
     var r = makeRand(202);
     var base = LAYER_H;
     g.fillStyle = 'rgba(49,32,62,0.9)';
     g.fillRect(0, base - 56, 2400, 56);
+
+    // torres de pedra em camadas, com fenda escura no meio
+    for (var s = 0; s < 4; s++) {
+      var sx = 200 + s * 620 + r() * 110;
+      var sw = 90 + r() * 70, sh = 210 + r() * 150;
+      g.fillStyle = '#3c2a4c';
+      g.beginPath();
+      g.moveTo(sx, base);
+      g.lineTo(sx + 8, base - sh + 20);
+      g.quadraticCurveTo(sx + sw * 0.5, base - sh - 16, sx + sw - 8, base - sh + 24);
+      g.lineTo(sx + sw, base);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(22,12,34,0.6)';
+      g.lineWidth = 3;
+      for (var ly = base - sh + 46; ly < base - 20; ly += 30 + r() * 18) {
+        g.beginPath();
+        g.moveTo(sx + 5, ly);
+        g.quadraticCurveTo(sx + sw * 0.5, ly + (r() * 2 - 1) * 8, sx + sw - 5, ly + (r() * 2 - 1) * 6);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(255,170,95,0.16)';    // aresta com o sol batendo
+      g.fillRect(sx + 6, base - sh + 22, 5, sh - 30);
+      // fenda / boca de caverna
+      g.fillStyle = 'rgba(8,3,14,0.75)';
+      g.beginPath();
+      g.ellipse(sx + sw * 0.5, base - sh * 0.42, 13 + r() * 8, 26 + r() * 16, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // cogumelos gigantes — DECORAÇÃO de fundo, nunca plataforma
     for (var i = 0; i < 7; i++) {
       var mx = 120 + i * 335 + r() * 100;
       var mh = 190 + r() * 140;
       var capW = 110 + r() * 70, capH = 46 + r() * 26;
       var top = base - mh;
-      // talo
       g.fillStyle = '#41284e';
       g.beginPath();
       g.moveTo(mx - 16, base);
@@ -412,19 +769,16 @@ window.FG = window.FG || {};
       g.quadraticCurveTo(mx + 10, top + capH, mx + 20, base);
       g.closePath();
       g.fill();
-      // chapéu
       g.fillStyle = '#54305e';
       g.beginPath();
       g.ellipse(mx, top + capH, capW, capH, 0, Math.PI, Math.PI * 2);
       g.closePath();
       g.fill();
-      // luz de contorno do crepúsculo
       g.strokeStyle = 'rgba(255,165,90,0.35)';
       g.lineWidth = 3;
       g.beginPath();
       g.ellipse(mx, top + capH, capW - 2, capH - 2, 0, Math.PI * 1.05, Math.PI * 1.6);
       g.stroke();
-      // pintas
       g.fillStyle = 'rgba(220,190,230,0.28)';
       for (var d = 0; d < 4; d++) {
         g.beginPath();
@@ -446,13 +800,36 @@ window.FG = window.FG || {};
     }
   }
 
+  // --- névoa entre os níveis: duas faixas quentes que separam os patamares ---
+  function paintMist(g) {
+    var r = makeRand(505);
+    var base = LAYER_H;
+    var bands = [base - 380, base - 170];
+    for (var i = 0; i < bands.length; i++) {
+      var by = bands[i], bh = 90 + i * 40;
+      var gr = g.createLinearGradient(0, by - bh * 0.5, 0, by + bh * 0.5);
+      gr.addColorStop(0, 'rgba(226,150,110,0)');
+      gr.addColorStop(0.5, 'rgba(226,150,110,' + (0.16 + i * 0.06).toFixed(2) + ')');
+      gr.addColorStop(1, 'rgba(226,150,110,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, by - bh * 0.5, 1600, bh);
+      // bolsões mais densos, para a faixa não parecer uma régua
+      g.fillStyle = 'rgba(240,170,125,0.10)';
+      for (var k = 0; k < 9; k++) {
+        var px = r() * 1600, pw = 90 + r() * 190, ph = 20 + r() * 34;
+        g.beginPath();
+        g.ellipse(px, by + (r() * 2 - 1) * 22, pw, ph, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+
   // --- camada próxima: arbustos e samambaias ---
   function paintNear(g) {
     var r = makeRand(303);
     var base = LAYER_H;
     g.fillStyle = '#132917';
     g.fillRect(0, base - 82, 2400, 82);
-    // arbustos em blobs
     g.fillStyle = '#16301c';
     for (var i = 0; i < 16; i++) {
       var bx = i * 150 + r() * 80, by = base - 70 - r() * 30;
@@ -462,7 +839,6 @@ window.FG = window.FG || {};
         g.fill();
       }
     }
-    // samambaias: frondes em arco
     g.strokeStyle = '#20421f';
     g.lineCap = 'round';
     for (var f = 0; f < 14; f++) {
@@ -478,7 +854,6 @@ window.FG = window.FG || {};
         g.stroke();
       }
     }
-    // fios de capim iluminados
     g.strokeStyle = 'rgba(70,120,60,0.8)';
     g.lineWidth = 2;
     for (var s2 = 0; s2 < 40; s2++) {
@@ -494,7 +869,6 @@ window.FG = window.FG || {};
   function paintFront(g) {
     var r = makeRand(404);
     var base = LAYER_H;
-    // folhas grandes pontudas na borda inferior
     g.fillStyle = '#0a140c';
     for (var i = 0; i < 22; i++) {
       var lx = i * 85 + r() * 50, lh = 70 + r() * 110;
@@ -508,7 +882,6 @@ window.FG = window.FG || {};
     }
     g.fillStyle = '#0d1a10';
     g.fillRect(0, base - 34, 1800, 34);
-    // galhos pendentes no topo (aparecem quando a câmera está embaixo)
     g.strokeStyle = '#0b150d';
     g.fillStyle = '#0b150d';
     g.lineCap = 'round';
@@ -584,7 +957,7 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // DRAW BACK — céu, sol, 3 camadas de parallax, raios, vagalumes
+  // DRAW BACK — céu, sol, camadas de parallax, névoa, raios, vagalumes
   // ---------------------------------------------------------------
   function drawBack(ctx, cam) {
     buildAll();
@@ -622,11 +995,17 @@ window.FG = window.FG || {};
     }
     ctx.restore();
 
+    // névoa separando os patamares (respira devagar)
+    ctx.save();
+    ctx.globalAlpha = 0.72 + 0.14 * Math.sin(t * 0.35);
+    drawLayer(ctx, mistL, 0.6, cam);
+    ctx.restore();
+
     drawLayer(ctx, nearL, 0.7, cam);
   }
 
   // ---------------------------------------------------------------
-  // DRAW SOLIDS — poças, plataformas orgânicas, espinhos, lanternas,
+  // DRAW SOLIDS — poças, terreno, penhascos, ilhas, espinhos, lanternas,
   // lumis e faíscas (tudo com culling de ~1 tela)
   // ---------------------------------------------------------------
   function drawSolids(ctx, cam) {
@@ -649,7 +1028,8 @@ window.FG = window.FG || {};
       var s = solids[i];
       if (s.k === 'h' || s.x > x1 || s.x + s.w < x0) continue;
       var d = decor[i];
-      if (s.k === 'm') drawMush(ctx, s, d);
+      if (s.k === 'c') drawCliff(ctx, s, d);
+      else if (s.k === 'i') drawIsland(ctx, s, d);
       else if (s.k === 'r') drawRock(ctx, s, d);
       else drawTerrain(ctx, s, d);
     }
@@ -693,17 +1073,19 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- penhasco e ilha: o desenho pesado já foi assado em offscreen no
+  // buildAll (paintCliff/paintIsland), aqui é um blit e nada mais ---
+  function drawCliff(ctx, s, d) { ctx.drawImage(d.spr, s.x + d.ox, s.y + d.oy); }
+  function drawIsland(ctx, s, d) { ctx.drawImage(d.spr, s.x + d.ox, s.y + d.oy); }
+
   // --- plataforma de terra com topo de musgo ---
   function drawTerrain(ctx, s, d) {
-    // corpo terra/raiz
     ctx.fillStyle = '#4a2e1c';
     ctx.fillRect(s.x, s.y, s.w, s.h);
-    // sombra na base
     if (s.h > 20) {
       ctx.fillStyle = 'rgba(20,10,6,0.35)';
       ctx.fillRect(s.x, s.y + s.h - 10, s.w, 10);
     }
-    // manchas de raiz
     ctx.fillStyle = 'rgba(30,16,10,0.5)';
     for (var i = 0; i < d.spots.length; i++) {
       var sp = d.spots[i];
@@ -711,18 +1093,15 @@ window.FG = window.FG || {};
       ctx.ellipse(s.x + sp.dx, s.y + sp.dy, sp.rad * 1.6, sp.rad, 0.3, 0, Math.PI * 2);
       ctx.fill();
     }
-    // camadas de musgo transbordando nas bordas
     ctx.fillStyle = '#3f7a2e';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 14);
     ctx.fillStyle = '#6fb84a';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 7);
     ctx.fillStyle = 'rgba(255,220,140,0.3)';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 2);
-    // gotas de musgo escorrendo nas quinas
     ctx.fillStyle = '#3f7a2e';
     ctx.beginPath(); ctx.arc(s.x - 1, s.y + 15, 4, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(s.x + s.w + 1, s.y + 17, 4.5, 0, Math.PI * 2); ctx.fill();
-    // tufos de capim
     ctx.strokeStyle = '#7cc850';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
@@ -733,47 +1112,6 @@ window.FG = window.FG || {};
       ctx.moveTo(bx, by);
       ctx.quadraticCurveTo(bx + tf.lean * 4, by - tf.len * 0.7, bx + tf.lean * 8, by - tf.len);
       ctx.stroke();
-    }
-  }
-
-  // --- cogumelo-plataforma: chapéu redondo + talo ---
-  function drawMush(ctx, s, d) {
-    var cx = s.x + s.w / 2;
-    // talo desce abaixo do chapéu
-    ctx.fillStyle = '#e2d2ac';
-    ctx.beginPath();
-    ctx.moveTo(cx - s.w * 0.16, s.y + s.h - 2);
-    ctx.quadraticCurveTo(cx - s.w * 0.12, s.y + s.h + 46, cx - s.w * 0.2, s.y + s.h + 88);
-    ctx.lineTo(cx + s.w * 0.2, s.y + s.h + 88);
-    ctx.quadraticCurveTo(cx + s.w * 0.12, s.y + s.h + 46, cx + s.w * 0.16, s.y + s.h - 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(90,60,40,0.25)';
-    ctx.fillRect(cx + s.w * 0.02, s.y + s.h + 2, s.w * 0.13, 84);
-    // chapéu (domo)
-    ctx.fillStyle = d.col;
-    ctx.beginPath();
-    ctx.ellipse(cx, s.y + s.h, s.w / 2 + 8, s.h + 10, 0, Math.PI, Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
-    // lamelas embaixo do chapéu
-    ctx.fillStyle = 'rgba(70,35,45,0.6)';
-    ctx.beginPath();
-    ctx.ellipse(cx, s.y + s.h, s.w / 2 + 8, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // brilho do topo
-    ctx.strokeStyle = 'rgba(255,230,170,0.5)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(cx, s.y + s.h, s.w / 2 + 3, s.h + 6, 0, Math.PI * 1.15, Math.PI * 1.65);
-    ctx.stroke();
-    // pintas claras
-    ctx.fillStyle = 'rgba(255,240,220,0.75)';
-    for (var i = 0; i < d.dots.length; i++) {
-      var dt2 = d.dots[i];
-      ctx.beginPath();
-      ctx.arc(s.x + dt2.dx, s.y + dt2.dy + s.h, dt2.rad, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
@@ -801,12 +1139,10 @@ window.FG = window.FG || {};
   // --- poça venenosa com bolhas ---
   function drawPool(ctx, hz, t) {
     var bot = hz.y + hz.h + 22;
-    // corpo do veneno
     ctx.fillStyle = '#0f3d14';
     ctx.fillRect(hz.x, hz.y, hz.w, bot - hz.y);
     ctx.fillStyle = 'rgba(60,150,40,0.5)';
     ctx.fillRect(hz.x, hz.y, hz.w, 10);
-    // superfície ondulada
     ctx.save();
     ctx.strokeStyle = '#8fe64a';
     ctx.lineWidth = 3;
@@ -819,7 +1155,6 @@ window.FG = window.FG || {};
     ctx.globalAlpha = 0.85;
     ctx.stroke();
     ctx.restore();
-    // bolhas subindo
     ctx.save();
     ctx.fillStyle = '#a8f060';
     var nb = Math.max(2, Math.floor(hz.w / 70));
@@ -832,7 +1167,6 @@ window.FG = window.FG || {};
       ctx.arc(bx, by, 2 + (i % 3), 0, Math.PI * 2);
       ctx.fill();
     }
-    // brilho tóxico difuso
     ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 2.4 + hz.x);
     ctx.fillStyle = '#5fd63a';
     ctx.fillRect(hz.x, hz.y - 3, hz.w, 3);
@@ -854,7 +1188,6 @@ window.FG = window.FG || {};
       ctx.lineTo(bx + sw, hz.y + hz.h);
       ctx.closePath();
       ctx.fill();
-      // face sombreada
       ctx.fillStyle = 'rgba(60,45,35,0.55)';
       ctx.beginPath();
       ctx.moveTo(bx + sw / 2, hz.y);
@@ -868,15 +1201,12 @@ window.FG = window.FG || {};
   // --- lanterna-checkpoint (acesa quando é o checkpoint atual) ---
   function drawLantern(ctx, cp, lit, t) {
     var x = cp.x, y = cp.y;
-    // poste
     ctx.fillStyle = '#3a2a1c';
     ctx.fillRect(x - 3, y - 64, 6, 64);
     ctx.fillStyle = '#2a1c12';
     ctx.fillRect(x - 8, y - 4, 16, 4);
-    // caixa da lanterna
     ctx.fillStyle = '#2a1c12';
     ctx.fillRect(x - 11, y - 92, 22, 30);
-    // vidro
     if (lit) {
       var fl = 0.8 + 0.2 * Math.sin(t * 9 + Math.sin(t * 5.3));
       ctx.save();
@@ -885,7 +1215,6 @@ window.FG = window.FG || {};
       ctx.fillStyle = '#ffd870';
       ctx.fillRect(x - 8, y - 89, 16, 24);
       ctx.restore();
-      // chama
       ctx.fillStyle = '#fff2c0';
       ctx.beginPath();
       ctx.ellipse(x, y - 77, 3.4, 5.5 * fl, 0, 0, Math.PI * 2);
@@ -896,7 +1225,6 @@ window.FG = window.FG || {};
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.fillRect(x - 8, y - 89, 5, 24);
     }
-    // telhadinho
     ctx.fillStyle = '#1d130c';
     ctx.beginPath();
     ctx.moveTo(x - 14, y - 92);
@@ -926,6 +1254,7 @@ window.FG = window.FG || {};
     hazards: hazards,
     checkpoints: checkpoints,
     enemyDefs: enemyDefs,
+    obstacleDefs: obstacleDefs,
     bossTriggerX: 6350,
     arena: { x: 6200, w: 1000 },
     update: update,

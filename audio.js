@@ -137,6 +137,16 @@ window.FG = window.FG || {};
       ruido({ t: t, dur: 0.4, vol: 0.09, ftype: 'bandpass', f0: 900, f1: 600, q: 1.2,
               attack: 0.08 });
     },
+    // raspão surdo — encostou na parede e agarrou
+    wallgrab: function (t) {
+      ruido({ t: t, dur: 0.18, vol: 0.11, ftype: 'bandpass', f0: 1400, f1: 500, q: 1.1 });
+    },
+    // impulso da parede: blip subindo + raspão de saída
+    walljump: function (t) {
+      tone({ t: t, dur: 0.15, vol: 0.2, type: 'square', freq: 380, freqEnd: 720,
+             filtro: { type: 'lowpass', f0: 2400 } });
+      ruido({ t: t, dur: 0.12, vol: 0.12, ftype: 'bandpass', f0: 900, f1: 2200, q: 1.4 });
+    },
     // whoosh grave e curto — soco
     punch: function (t) {
       ruido({ t: t, dur: 0.14, vol: 0.2, ftype: 'lowpass', f0: 900, f1: 200, q: 0.8 });
