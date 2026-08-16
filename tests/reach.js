@@ -1,19 +1,33 @@
 // Verificador de alcançabilidade: simula a física REAL do player (mesmas
-// constantes do player.js) sobre a geometria do level.js e responde quais
-// plataformas dá para alcançar a partir do começo do nível.
+// constantes do player.js) sobre a geometria de uma fase e responde quais
+// plataformas dá para alcançar a partir do começo dela.
 //
-// Uso: node tests/reach.js          — lista o que estiver inalcançável
+// Uso: node tests/reach.js [fase]   — fase = índice em FG.levels (default 0)
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const DIR = path.join(__dirname, '..');
 
-// ---------- carrega só o level.js (sem DOM: o desenho não é exercitado) ----------
+// ---------- carrega o kit + as fases (sem DOM: o desenho não é exercitado) ----------
+// levelkit.js vem antes: é a única dependência de load do projeto (kit → fase).
+// As fases entram na ordem do index.html e se registram em FG.levels; as que
+// ainda não existem no disco são simplesmente puladas.
 const win = { FG: {} };
 const doc = { createElement: () => ({ getContext: () => ({}) }), getElementById: () => null };
-const src = fs.readFileSync(path.join(DIR, 'level.js'), 'utf8');
-new Function('window', 'document', 'FG', src)(win, doc, win.FG);
-const level = win.FG.level;
+const ARQS = ['levelkit.js', 'level.js', 'level2.js', 'level3.js'];
+for (const f of ARQS) {
+  const p = path.join(DIR, f);
+  if (!fs.existsSync(p)) continue;
+  new Function('window', 'document', 'FG', fs.readFileSync(p, 'utf8'))(win, doc, win.FG);
+}
+const FASE = Number(process.argv[2] || 0);
+const levels = win.FG.levels || [];
+const level = levels[FASE];
+if (!level) {
+  console.error('fase %s não existe — carregadas %d: [%s]',
+    process.argv[2], levels.length, levels.map((l, i) => i + '=' + l.id).join(', '));
+  process.exit(1);
+}
 
 // ---------- constantes do player (espelham player.js) ----------
 const ACCEL = 2400, FRICTION = 2000, MAX_VX = 340;

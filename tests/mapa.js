@@ -1,18 +1,32 @@
-// Desenha o nível inteiro num SVG esquemático — o jeito rápido de olhar o
+// Desenha a fase inteira num SVG esquemático — o jeito rápido de olhar o
 // traçado sem jogar: relevo, perigos, lumis, checkpoints, inimigos e os
 // obstáculos dinâmicos, tudo em escala.
 //
-// Uso: node tests/mapa.js > mapa.svg
+// Uso: node tests/mapa.js [fase] > mapa.svg   — fase = índice em FG.levels (default 0)
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const DIR = path.join(__dirname, '..');
 
+// levelkit.js vem antes: é a única dependência de load do projeto (kit → fase).
+// As fases entram na ordem do index.html e se registram em FG.levels; as que
+// ainda não existem no disco são simplesmente puladas.
 const win = { FG: {} };
 const doc = { createElement: () => ({ getContext: () => ({}) }), getElementById: () => null };
-new Function('window', 'document', 'FG',
-  fs.readFileSync(path.join(DIR, 'level.js'), 'utf8'))(win, doc, win.FG);
-const L = win.FG.level;
+const ARQS = ['levelkit.js', 'level.js', 'level2.js', 'level3.js'];
+for (const f of ARQS) {
+  const p = path.join(DIR, f);
+  if (!fs.existsSync(p)) continue;
+  new Function('window', 'document', 'FG', fs.readFileSync(p, 'utf8'))(win, doc, win.FG);
+}
+const FASE = Number(process.argv[2] || 0);
+const levels = win.FG.levels || [];
+const L = levels[FASE];
+if (!L) {
+  console.error('fase %s não existe — carregadas %d: [%s]',
+    process.argv[2], levels.length, levels.map((l, i) => i + '=' + l.id).join(', '));
+  process.exit(1);
+}
 
 const SC = 0.28;                       // escala do desenho
 const W = Math.round(L.W * SC), H = Math.round(L.H * SC) + 46;

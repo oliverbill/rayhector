@@ -1,26 +1,22 @@
 // Fagulho: Lendas do Bosque — level.js
-// FG.level: geometria do mundo, lumis, checkpoints, inimigos e obstáculos
-// (defs) e todo o visual pintado do bosque crepuscular.
+// Fase 0, 'bosque': geometria do mundo, lumis, checkpoints, inimigos e
+// obstáculos (defs) e todo o visual pintado do bosque crepuscular.
+// Registra-se em FG.levels; quem escolhe a fase corrente é o engine.
 // Nada aqui referencia FG.player/FG.engine/FG.audio no load — só em runtime.
 window.FG = window.FG || {};
 
 (function () {
   'use strict';
 
-  var VIEW_W = 960, VIEW_H = 540;
+  // Único acoplamento de load permitido no projeto: kit → fase. O index.html
+  // carrega levelkit.js antes dos level*.js, então FG.levelkit já existe — e
+  // precisa existir, porque a geometria abaixo é construída no load.
+  var kit = FG.levelkit;
+  var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
+
+  var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
   var W = 7200, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
-
-  // ---------------------------------------------------------------
-  // RNG determinístico (as camadas e a decoração saem iguais sempre)
-  // ---------------------------------------------------------------
-  function makeRand(seed) {
-    var s = seed >>> 0;
-    return function () {
-      s = (s * 1664525 + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
-  }
 
   // ---------------------------------------------------------------
   // GEOMETRIA — sólidos
@@ -48,8 +44,6 @@ window.FG = window.FG || {};
   // Alturas: pulo simples sobe ~118px, duplo ~236px, e uma parede vertical
   // contínua sobe indefinidamente agarrando (~120px por salto de parede).
   // ---------------------------------------------------------------
-  function S(x, y, w, h, k) { return { x: x, y: y, w: w, h: h, k: k || 'g' }; }
-
   var solids = [
     // ---- (1) tutorial — chão plano e degraus curtos, nada de perigo ----
     S(0, 620, 1180, 100, 'g'),        // [0] chão inicial
@@ -191,19 +185,12 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   // LUMIS — linhas, arcos e COLUNAS (as colunas ensinam a escalar)
   // ---------------------------------------------------------------
+  // Os construtores vivem no kit; aqui ficam só os atalhos que amarram o
+  // array desta fase e preservam a ordem de argumento usada no traçado abaixo.
   var lumis = [];
-  function lumiLine(x, y, n, dx) {
-    for (var i = 0; i < n; i++) lumis.push({ x: x + i * dx, y: y, ph: lumis.length * 0.7, taken: false });
-  }
-  function lumiCol(x, y, n, dy) {
-    for (var i = 0; i < n; i++) lumis.push({ x: x, y: y + i * dy, ph: lumis.length * 0.7, taken: false });
-  }
-  function lumiArc(cx, apexY, n, span, sag) {
-    for (var i = 0; i < n; i++) {
-      var t = n > 1 ? i / (n - 1) - 0.5 : 0;
-      lumis.push({ x: cx + t * span, y: apexY + sag * 4 * t * t, ph: lumis.length * 0.7, taken: false });
-    }
-  }
+  function lumiLine(x, y, n, dx) { kit.lumiLine(lumis, x, y, n, dx); }
+  function lumiCol(x, y, n, dy) { kit.lumiCol(lumis, x, y, n, dy); }
+  function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumis, cx, apexY, span, sag, n); }
   // (1) tutorial
   lumiLine(150, 578, 4, 62);
   lumiArc(555, 460, 5, 180, 30);
@@ -242,24 +229,8 @@ window.FG = window.FG || {};
   lumiArc(5970, 546, 4, 140, 42);
   lumiLine(6090, 570, 2, 60);
 
-  // ---------------------------------------------------------------
-  // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo, sem GC)
-  // ---------------------------------------------------------------
-  var sparks = [];
-  for (var si = 0; si < 64; si++) sparks.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1 });
-  var sparkIdx = 0;
-  function burst(x, y) {
-    for (var i = 0; i < 6; i++) {
-      var p = sparks[sparkIdx];
-      sparkIdx = (sparkIdx + 1) % sparks.length;
-      var a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 70;
-      p.x = x; p.y = y;
-      p.vx = Math.cos(a) * sp;
-      p.vy = Math.sin(a) * sp - 40;
-      p.max = 0.45 + Math.random() * 0.25;
-      p.life = p.max;
-    }
-  }
+  // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC)
+  var sparks = kit.makeSparks(64);
 
   // ---------------------------------------------------------------
   // DECORAÇÃO por sólido (pré-computada: nada de random por frame).
@@ -300,12 +271,6 @@ window.FG = window.FG || {};
   var LAYER_H = 680;
   var ROCK_PAD = 16;        // folga para o musgo/capim transbordar a rocha
   var ISLE_TIP = 76;        // ponta de pedra pendurada sob a ilha
-
-  function makeCanvas(w, h) {
-    var c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    return c;
-  }
 
   function buildAll() {
     if (built) return;
@@ -381,17 +346,8 @@ window.FG = window.FG || {};
       g.fillRect(0, 0, VIEW_W, VIEW_H);
     })(vig.getContext('2d'));
 
-    // sprite da lumi (halo dourado + núcleo)
-    lumiSpr = makeCanvas(36, 36);
-    (function (g) {
-      var gr = g.createRadialGradient(18, 18, 1, 18, 18, 18);
-      gr.addColorStop(0, 'rgba(255,250,225,1)');
-      gr.addColorStop(0.28, 'rgba(255,215,110,0.95)');
-      gr.addColorStop(0.6, 'rgba(255,175,50,0.35)');
-      gr.addColorStop(1, 'rgba(255,160,40,0)');
-      g.fillStyle = gr;
-      g.fillRect(0, 0, 36, 36);
-    })(lumiSpr.getContext('2d'));
+    // sprite da lumi (halo dourado + núcleo) — igual nas três fases
+    lumiSpr = kit.makeLumiSprite();
 
     // um offscreen por penhasco e por ilha (desenho caro, feito uma vez)
     for (var i = 0; i < solids.length; i++) {
@@ -917,43 +873,22 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // UPDATE — coleta de lumis, faíscas, reset em jogo novo
+  // RESET — o engine chama ao (re)carregar a fase: reacende todas as lumis e
+  // apaga as faíscas em voo. Antes o próprio update reacendia sozinho quando
+  // via o contador do HUD zerado; com três fases o contador NÃO zera entre
+  // elas (as lumis acumulam), então aquele palpite virou mentira.
   // ---------------------------------------------------------------
-  var anyTaken = false;
+  function reset() {
+    for (var i = 0; i < lumis.length; i++) lumis[i].taken = false;
+    kit.apagarFaiscas(sparks);
+  }
 
+  // ---------------------------------------------------------------
+  // UPDATE — coleta de lumis e faíscas (a mecânica é do kit; o bosque não
+  // tem coletável próprio além das lumis)
+  // ---------------------------------------------------------------
   function update(dt) {
-    var eng = FG.engine, p = FG.player;
-
-    // jogo novo (o engine zera o contador): reacende todas as lumis
-    if (anyTaken && eng.lumis === 0) {
-      for (var r0 = 0; r0 < lumis.length; r0++) lumis[r0].taken = false;
-      anyTaken = false;
-    }
-
-    // coleta por proximidade do centro do player
-    var cx = p.x + p.w / 2, cy = p.y + p.h / 2;
-    for (var i = 0; i < lumis.length; i++) {
-      var l = lumis[i];
-      if (l.taken) continue;
-      var dx = l.x - cx, dy = l.y - cy;
-      if (dx * dx + dy * dy < 28 * 28) {
-        l.taken = true;
-        anyTaken = true;
-        eng.addLumi();
-        FG.audio.sfx('lumi');
-        burst(l.x, l.y);
-      }
-    }
-
-    // faíscas de despedida
-    for (var s2 = 0; s2 < sparks.length; s2++) {
-      var sp = sparks[s2];
-      if (sp.life <= 0) continue;
-      sp.life -= dt;
-      sp.x += sp.vx * dt;
-      sp.y += sp.vy * dt;
-      sp.vy -= 30 * dt; // faísca sobe de leve
-    }
+    kit.coletarLumis(lumis, sparks, dt);
   }
 
   // ---------------------------------------------------------------
@@ -1048,27 +983,9 @@ window.FG = window.FG || {};
       drawLantern(ctx, cp, FG.engine.checkpoint.x === cp.x, t);
     }
 
-    // lumis
-    ctx.save();
-    for (var li = 0; li < lumis.length; li++) {
-      var l = lumis[li];
-      if (l.taken || l.x > x1 || l.x < x0) continue;
-      var bob = Math.sin(t * 2 + l.ph) * 5;
-      ctx.globalAlpha = 0.72 + 0.28 * Math.sin(t * 3 + l.ph * 1.3);
-      ctx.drawImage(lumiSpr, l.x - 18, l.y - 18 + bob);
-    }
-    ctx.restore();
-
-    // faíscas de coleta
-    ctx.save();
-    ctx.fillStyle = '#ffe9a0';
-    for (var sp2 = 0; sp2 < sparks.length; sp2++) {
-      var pk = sparks[sp2];
-      if (pk.life <= 0) continue;
-      ctx.globalAlpha = Math.max(0, pk.life / pk.max);
-      ctx.beginPath(); ctx.arc(pk.x, pk.y, 2.4, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
+    // lumis e faíscas de coleta (ctx já está no espaço do mundo)
+    kit.desenharLumis(ctx, cam, lumis, lumiSpr, t);
+    kit.desenharFaiscas(ctx, sparks);
 
     ctx.restore();
   }
@@ -1244,9 +1161,14 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // API pública
+  // API pública — a fase entra no registro na ordem em que o index.html
+  // carrega os level*.js, então o índice sai certo sem ninguém combinar nada.
+  // Quem publica FG.level (a fase corrente) é o engine.
   // ---------------------------------------------------------------
-  FG.level = {
+  FG.levels = FG.levels || [];
+  FG.levels.push({
+    id: 'bosque',
+    nome: 'O Bosque Crepuscular',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },
@@ -1255,11 +1177,13 @@ window.FG = window.FG || {};
     checkpoints: checkpoints,
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
+    bossId: 'dragao',
     bossTriggerX: 6350,
     arena: { x: 6200, w: 1000 },
+    reset: reset,
     update: update,
     drawBack: drawBack,
     drawSolids: drawSolids,
     drawFront: drawFront,
-  };
+  });
 })();

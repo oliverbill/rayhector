@@ -46,7 +46,14 @@ function ImageStub() { this.complete = true; this.naturalWidth = 68; this.natura
 Object.defineProperty(ImageStub.prototype, 'src', { set() {} });
 
 global.window.FG = {};
-for (const f of ['assets.js', 'audio.js', 'level.js', 'obstacles.js', 'player.js', 'enemies.js', 'engine.js']) {
+// Ordem do index.html, pulando o que ainda não existe. O teste monta uma
+// parede sintética por cima da fase 0, então precisa dela publicada em
+// FG.level antes de mexer — quem publica normalmente é o engine, ao carregar
+// a fase, e aqui a partida ainda não começou.
+const CARGA = ['assets.js', 'audio.js', 'levelkit.js', 'level.js', 'level2.js', 'level3.js',
+  'obstacles.js', 'player.js', 'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'engine.js']
+  .filter((f) => fs.existsSync(path.join(DIR, f)));
+for (const f of CARGA) {
   new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', 'Image',
     fs.readFileSync(path.join(DIR, f), 'utf8'))(global.window, global.document,
     global.requestAnimationFrame, global.performance, global.window.FG, ImageStub);
@@ -62,6 +69,7 @@ function key(code, down) { for (const fn of (down ? listeners.keydown : listener
 // base no startGame para poder injetar as plataformas móveis nela.
 const ALTURA = 500;
 const BASE_Y = 620, TOPO_Y = BASE_Y - ALTURA;
+FG.level = FG.levels[0];
 FG.level.solids.length = 0;
 FG.level.solids.push({ x: 0, y: BASE_Y, w: 900, h: 100, k: 'g' });
 FG.level.solids.push({ x: 600, y: TOPO_Y, w: 300, h: ALTURA, k: 'c' });

@@ -36,6 +36,7 @@ window.FG = window.FG || {};
     input[action] = true;
     if (engine.state === 'menu' && (action === 'jump' || action === 'attack')) startGame();
     if (engine.state === 'victory' && action === 'jump') startGame();
+    if (engine.state === 'fase' && action === 'jump') nextLevel();
   });
   window.addEventListener('keyup', (e) => {
     const action = keyToAction[e.code];
@@ -79,16 +80,22 @@ window.FG = window.FG || {};
     state: 'menu',
     time: 0,
     lumis: 0,
+    levelIndex: 0,               // fase corrente dentro de FG.levels
     checkpoint: { x: 0, y: 0 },
     rectsOverlap, moveAndCollide,
-    addLumi() { engine.lumis++; },
+    addLumi(n) { engine.lumis += (n || 1); },
     setState(s) {
+      // Chefão derrotado com fase na fila não é vitória do JOGO, é fim de fase.
+      // Os chefões não sabem em que fase vivem — quem sabe é aqui, e é por isso
+      // que a decisão mora no setState e não em cada um deles.
+      if (s === 'victory' && FG.levels && engine.levelIndex < FG.levels.length - 1) s = 'fase';
       engine.state = s;
+      if (s === 'fase') faseTimer = 0;
       if (s === 'dead') {
         deadTimer = 0;
         FG.audio.sfx('death');
         FG.audio.music(null);
-      } else if (s === 'victory') {
+      } else if (s === 'victory' || s === 'fase') {
         FG.audio.music(null);
       }
     },
@@ -98,6 +105,7 @@ window.FG = window.FG || {};
   let deadTimer = 0;
   let arenaLocked = false;
   let playStart = 0;   // engine.time em que a partida começou (fade do tooltip)
+  let faseTimer = 0;   // animação da tela de fase completa
 
   // ---------- sólidos vivos = geometria fixa + plataformas móveis ----------
   // FG.level.solids passa a ser um array mantido aqui: a base imutável do nível
@@ -115,24 +123,47 @@ window.FG = window.FG || {};
     FG.level.solids = liveSolids;
   }
 
+  // A base de sólidos é POR FASE: guardá-la uma vez só (como era com um nível
+  // único) faria a fase 2 colidir com a geometria da fase 1.
   function captureBaseSolids() {
-    if (baseSolids) return;
-    baseSolids = FG.level.solids.slice();   // uma vez só, antes de qualquer troca
+    baseSolids = FG.level.solids.slice();
   }
 
-  function startGame() {
-    playStart = engine.time;
-    engine.lumis = 0;
+  // ---------- fases ----------
+  // FG.levels é preenchido no load pelos level*.js, na ordem do index.html.
+  // FG.level é sempre a fase corrente, e quem a troca é só esta função.
+  function loadLevel(i) {
+    engine.levelIndex = i;
+    FG.level = FG.levels[i];
+    baseSolids = null;
     captureBaseSolids();
+    FG.level.reset();
     engine.checkpoint = { x: FG.level.playerStart.x, y: FG.level.playerStart.y };
     FG.player.respawn(FG.level.playerStart.x, FG.level.playerStart.y);
     if (FG.obstacles) FG.obstacles.reset();
     syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
+    // câmera direto no lugar: um lerp desde a fase anterior atravessaria o
+    // mundo inteiro em cima do jogador
+    engine.cam.x = Math.max(0, Math.min(FG.player.x + FG.player.w / 2 - VIEW_W / 2, FG.level.W - VIEW_W));
+    engine.cam.y = Math.max(0, Math.min(FG.player.y + FG.player.h / 2 - VIEW_H / 2, FG.level.H - VIEW_H));
     engine.setState('playing');
-    FG.audio.sfx('select');
     FG.audio.music('overworld');
+  }
+
+  function startGame() {
+    playStart = engine.time;
+    engine.lumis = 0;       // as lumis só zeram em jogo novo; entre fases acumulam
+    loadLevel(0);
+    FG.audio.sfx('select');
+  }
+
+  function nextLevel() {
+    const i = engine.levelIndex + 1;
+    if (i >= FG.levels.length) { startGame(); return; }
+    loadLevel(i);
+    FG.audio.sfx('select');
   }
 
   function respawnFromCheckpoint() {
@@ -196,6 +227,8 @@ window.FG = window.FG || {};
     } else if (engine.state === 'dead') {
       deadTimer += dt;
       if (deadTimer > 1.6) respawnFromCheckpoint();
+    } else if (engine.state === 'fase') {
+      faseTimer += dt;
     }
   }
 
@@ -231,6 +264,7 @@ window.FG = window.FG || {};
     drawHUD();
 
     if (engine.state === 'dead') drawDeadOverlay();
+    if (engine.state === 'fase') drawFaseCompleta();
     if (engine.state === 'victory') drawVictory();
   }
 
@@ -303,7 +337,16 @@ window.FG = window.FG || {};
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd0d0';
       ctx.font = 'bold 14px "Trebuchet MS", sans-serif';
-      ctx.fillText('DRAGÃO DE TRÊS CABEÇAS', VIEW_W / 2, by - 10);
+      ctx.fillText(boss.nome || 'CHEFÃO', VIEW_W / 2, by - 10);
+      ctx.restore();
+    }
+    // nome da fase, discreto, no canto de baixo à esquerda
+    if (FG.level && FG.level.nome) {
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.font = '13px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = 'rgba(255,240,210,0.5)';
+      ctx.fillText((engine.levelIndex + 1) + '/' + FG.levels.length + '  ' + FG.level.nome, 22, VIEW_H - 16);
       ctx.restore();
     }
   }
@@ -393,6 +436,48 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Fim de fase (não de jogo): mostra a que caiu, a que vem, e as lumis
+  // acumuladas — que atravessam as fases e só zeram em jogo novo.
+  function drawFaseCompleta() {
+    const t = engine.time;
+    const k = Math.min(1, faseTimer * 1.6);
+    const atual = FG.levels[engine.levelIndex];
+    const proxima = FG.levels[engine.levelIndex + 1];
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.fillStyle = 'rgba(14,8,22,0.82)';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#ffd870';
+    ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 25;
+    ctx.font = 'bold 46px "Trebuchet MS", sans-serif';
+    ctx.fillText('FASE COMPLETA', VIEW_W / 2, 170 + Math.sin(t * 2) * 4);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = '24px "Trebuchet MS", sans-serif';
+    ctx.fillText(atual.nome, VIEW_W / 2, 218);
+
+    ctx.fillStyle = '#ffd870';
+    ctx.font = '22px "Trebuchet MS", sans-serif';
+    ctx.fillText('lumis até aqui: ' + engine.lumis, VIEW_W / 2, 274);
+
+    if (proxima) {
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '16px "Trebuchet MS", sans-serif';
+      ctx.fillText('a seguir', VIEW_W / 2, 330);
+      ctx.fillStyle = '#ffb830';
+      ctx.font = 'bold 30px "Trebuchet MS", sans-serif';
+      ctx.fillText(proxima.nome, VIEW_W / 2, 364);
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';
+    ctx.font = '20px "Trebuchet MS", sans-serif';
+    ctx.fillText('ESPAÇO para seguir', VIEW_W / 2, 432);
+    ctx.restore();
+  }
+
   function drawVictory() {
     const t = engine.time;
     ctx.save();
@@ -406,7 +491,7 @@ window.FG = window.FG || {};
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = '26px "Trebuchet MS", sans-serif';
-    ctx.fillText('as três cabeças apagaram de uma vez', VIEW_W / 2, 270);
+    ctx.fillText('bosque, pântano e vulcão — os três apagados', VIEW_W / 2, 270);
     ctx.fillStyle = '#ffd870';
     ctx.fillText('lumis coletadas: ' + engine.lumis, VIEW_W / 2, 320);
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';

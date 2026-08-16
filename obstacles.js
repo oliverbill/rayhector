@@ -1,11 +1,16 @@
 // Fagulho: Lendas do Bosque — obstacles.js
 // FG.obstacles: os perigos e as plataformas dinâmicas do cenário — o que dá
-// ritmo ao nível (o terreno parado só faz o chão). Cinco tipos:
+// ritmo ao nível (o terreno parado só faz o chão). Nove tipos:
 //   plataforma  — pedra flutuante que vai e volta e CARREGA o player
 //   desmorona   — saliência que treme, cai e volta 3s depois
 //   sopro       — coluna de ar quente que empurra o player para cima
 //   pendulo     — corrente sólida com bola de ferro que machuca
 //   espinhorolo — rolo de espinhos correndo num trilho
+//   cipo        — corda em catenária entre dois pinos: agarra no ar, anda nela
+//                 com ←/→ e solta com ESPAÇO (não é sólida)
+//   disco       — disco de âmbar que sobe e desce de leve; sólido e carrega
+//   tronco      — tronco que AFUNDA com o peso do player e volta a subir
+//   brasa       — zona de chuva de brasa em rajadas telegrafadas (não sólida)
 //
 // A colisão sai de graça: as peças sólidas vivas entram em `movers` e o engine
 // injeta esse array em FG.level.solids a cada frame. Aqui só se move a peça e
@@ -37,6 +42,35 @@ window.FG = window.FG || {};
 
   var CHAIN_LINKS = 4;       // elos sólidos do pêndulo (dá para pousar)
   var LINK_W = 30, LINK_H = 11;
+
+  // --- cipó ---------------------------------------------------------
+  var CIPO_SEGS = 24;        // pontos pré-calculados da catenária (SEGS+1)
+  var CIPO_SWAY = 5;         // amplitude do balanço na perpendicular (px)
+  var CIPO_SWAY_W = 1.15;    // rad/s do balanço — devagar, é corda pesada
+  var CIPO_DIP = 13;         // quanto a corda cede sob o peso do player
+  var CIPO_DIP_R = 0.30;     // raio (em t) da cedência em volta dele
+  var CIPO_SPEED = 1.1;      // comprimentos de corda por segundo andando nela
+  var CIPO_HANDS = 6;        // o player pendura pelas MÃOS: topo dele 6px abaixo
+  var CIPO_GRAB_PAD = 5;     // folga do teste de encostar na corda
+  var CIPO_COOL = 0.35;      // carência para reagarrar A MESMA corda
+  var CIPO_OUT_VY = -640;    // impulso vertical ao soltar com ESPAÇO
+  var CIPO_OUT_VX = 220;     // impulso horizontal, na direção em que andava
+  var CIPO_END_VX = 90;      // saída pela ponta: só a inércia, sem impulso
+
+  // --- disco --------------------------------------------------------
+  var DISCO_H = 18;          // altura sólida do disco (a elipse é maior)
+
+  // --- tronco -------------------------------------------------------
+  var TRONCO_H = 22;         // altura sólida do tronco deitado
+  var TRONCO_MAX = 70;       // afundamento máximo
+  var TRONCO_DOWN = 55;      // px/s afundando com o player em cima
+  var TRONCO_UP = 90;        // px/s voltando quando ele sai
+
+  // --- brasa --------------------------------------------------------
+  var BRASA_TELE = 0.8;      // telegraph: manchas pulsando antes da rajada
+  var BRASA_RAJADA = 1.1;    // duração da rajada
+  var BRASA_MAX = 30;        // brasas simultâneas por zona (pool fixa)
+  var BRASA_GRAV = 900;      // brasa é leve: cai mais devagar que o player
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
@@ -103,6 +137,8 @@ window.FG = window.FG || {};
   var grad = {
     pedra: null, musgo: null, terra: null, sopro: null, soproBase: null,
     bola: null, rolo: null, trilho: null,
+    pino: null, discoCrosta: null, discoGlow: null, discoBorda: null,
+    casca: null, limo: null, brasaAviso: null, brasaMiolo: null,
   };
 
   function buildGrads(ctx) {
@@ -165,6 +201,65 @@ window.FG = window.FG || {};
     g.addColorStop(0.5, '#33373e');
     g.addColorStop(1, '#191c21');
     grad.trilho = g;
+
+    // pino de ancoragem do cipó (metal escovado, luz de cima-esquerda)
+    g = ctx.createRadialGradient(-0.35, -0.4, 0.05, 0, 0, 1.05);
+    g.addColorStop(0, '#c9cfd8');
+    g.addColorStop(0.4, '#7a818d');
+    g.addColorStop(0.85, '#3a3f47');
+    g.addColorStop(1, '#1b1e23');
+    grad.pino = g; // usado com scale(r, r)
+
+    // disco de âmbar: crosta escura em cima, lava viva embaixo
+    g = ctx.createLinearGradient(0, -1, 0, 1);
+    g.addColorStop(0, '#3a2b1c');
+    g.addColorStop(0.34, '#5d3a17');
+    g.addColorStop(0.6, '#d1671a');
+    g.addColorStop(0.85, '#ffb038');
+    g.addColorStop(1, '#ffe6a0');
+    grad.discoCrosta = g; // usado com scale(rx, ry)
+
+    // glow que o disco derrama por baixo
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, 'rgba(255,190,90,0.55)');
+    g.addColorStop(0.45, 'rgba(255,130,30,0.24)');
+    g.addColorStop(1, 'rgba(255,90,10,0)');
+    grad.discoGlow = g; // usado com scale
+
+    // borda incandescente vista de lado
+    g = ctx.createLinearGradient(0, -1, 0, 1);
+    g.addColorStop(0, 'rgba(255,214,140,0.0)');
+    g.addColorStop(0.5, 'rgba(255,180,70,0.85)');
+    g.addColorStop(1, 'rgba(255,120,20,0.9)');
+    grad.discoBorda = g; // usado com scale(rx, ry)
+
+    // casca do tronco (topo iluminado, barriga na sombra do lodo)
+    g = ctx.createLinearGradient(0, 0, 0, TRONCO_H);
+    g.addColorStop(0, '#7c6238');
+    g.addColorStop(0.45, '#523f22');
+    g.addColorStop(1, '#241a0e');
+    grad.casca = g;
+
+    // limo do topo do tronco
+    g = ctx.createLinearGradient(0, -2, 0, 7);
+    g.addColorStop(0, '#c3e05a');
+    g.addColorStop(0.5, '#6f9a2a');
+    g.addColorStop(1, '#3c5a17');
+    grad.limo = g;
+
+    // mancha de aviso no chão da zona de brasa
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, 'rgba(255,120,30,0.55)');
+    g.addColorStop(0.5, 'rgba(160,40,10,0.30)');
+    g.addColorStop(1, 'rgba(90,20,5,0)');
+    grad.brasaAviso = g; // usado com scale
+
+    // miolo quente da brasa
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, 'rgba(255,248,210,0.95)');
+    g.addColorStop(0.35, 'rgba(255,176,60,0.75)');
+    g.addColorStop(1, 'rgba(255,90,10,0)');
+    grad.brasaMiolo = g; // usado com scale(r, r)
   }
 
   // ==================================================================
@@ -289,6 +384,112 @@ window.FG = window.FG || {};
       sparkAccum: 0,
       spikes: 10,
     };
+    return o;
+  }
+
+  // 6) cipo {x1, y1, x2, y2, sag}
+  // A corda pendurada entre dois pinos. Não é sólida: o contato dela com o
+  // player é agarre, não colisão — por isso não entra em `movers`.
+  function makeCipo(d) {
+    var x1 = d.x1, y1 = d.y1, x2 = d.x2, y2 = d.y2;
+    var dx = x2 - x1, dy = y2 - y1;
+    var corda = Math.sqrt(dx * dx + dy * dy);
+    var sag = d.sag != null ? d.sag : Math.max(30, corda * 0.22);
+    var o = {
+      type: 'cipo',
+      x1: x1, y1: y1, x2: x2, y2: y2, sag: sag,
+      corda: corda,
+      // comprimento real (com a barriga) — só para o desenho da trança
+      len: corda + sag * 0.9,
+      phase: (x1 * 0.011 + y1 * 0.007) % TAU,  // balanço dessincronizado por posição
+      pts: [],          // catenária amostrada: reescrita in loco a cada frame
+      held: false,      // o player está pendurado NESTA corda?
+      t: 0.5,           // parâmetro dele ao longo da corda (0..1)
+      dir: 1,           // última direção em que andava (dá a direção do impulso)
+      cool: 0,          // carência de reagarre depois de soltar
+      // O que vai para FG.player.hang. É um objeto próprio de cada corda, então
+      // dá para saber, por identidade, se é NESTA que ele está pendurado.
+      hangInfo: { type: 'cipo', x: 0, y: 0, t: 0.5, dir: 1 },
+    };
+    for (var i = 0; i <= CIPO_SEGS; i++) o.pts.push({ x: x1, y: y1 });
+    // meias-voltas da trança: uma a cada ~16px, para o passo não esticar em
+    // cordas longas nem virar renda em cordas curtas.
+    o.twist = Math.max(6, Math.round(o.len / 16));
+    return o;
+  }
+
+  // 7) disco {x, y, w, bob, period, phase}
+  function makeDisco(d) {
+    var w = d.w || 110;
+    var o = {
+      type: 'disco',
+      ox: d.x, oy: d.y, w: w, h: DISCO_H,
+      bob: d.bob != null ? d.bob : 10,
+      period: d.period || 3,
+      phase: d.phase || 0,
+      rect: { x: d.x, y: d.y, w: w, h: DISCO_H },
+      veios: [],   // gretas acesas na crosta (decoração determinística)
+    };
+    var n = Math.max(3, Math.round(w / 34));
+    for (var i = 0; i < n; i++) {
+      o.veios.push({
+        fx: -0.78 + (i + 0.5) * (1.56 / n),      // posição relativa no raio
+        fy: -0.42 + ((i * 31) % 5) * 0.10,
+        len: 0.16 + ((i * 17) % 4) * 0.06,
+        ph: i * 1.3,
+      });
+    }
+    return o;
+  }
+
+  // 8) tronco {x, y, w}
+  function makeTronco(d) {
+    var w = d.w || 130;
+    var o = {
+      type: 'tronco',
+      ox: d.x, oy: d.y, w: w, h: TRONCO_H,
+      sink: 0,          // quanto já afundou (0..TRONCO_MAX)
+      rect: { x: d.x, y: d.y, w: w, h: TRONCO_H },
+      bubAccum: 0,
+      limos: [],        // tufos de limo no topo
+      nos: [],          // nós/gretas na casca
+    };
+    var n = Math.max(3, Math.round(w / 30));
+    for (var i = 0; i < n; i++) {
+      o.limos.push({ x: 8 + (i + 0.5) * ((w - 16) / n), h: 4 + ((i * 41) % 5), lean: ((i % 3) - 1) * 0.4 });
+    }
+    var m = Math.max(2, Math.round(w / 44));
+    for (var k = 0; k < m; k++) {
+      o.nos.push({ x: 14 + (k + 0.5) * ((w - 28) / m), y: 5 + ((k * 23) % 9), r: 2.2 + (k % 3) * 0.8 });
+    }
+    return o;
+  }
+
+  // 9) brasa {x, y, w, h, period, phase}
+  function makeBrasa(d) {
+    var w = d.w || 200, h = d.h || 220;
+    var o = {
+      type: 'brasa',
+      x: d.x, y: d.y, w: w, h: h,
+      period: Math.max(BRASA_TELE + BRASA_RAJADA + 0.3, d.period || 3.4),
+      phase: d.phase || 0,        // em SEGUNDOS de adiantamento no ciclo
+      chao: d.y + h,              // onde a brasa estoura (base da zona)
+      fase: 'descanso',
+      ct: 0,
+      acc: 0,
+      taxa: Math.max(8, w / 9),   // brasas por segundo durante a rajada
+      hitRect: { x: 0, y: 0, w: 0, h: 0 },
+      colunas: [],                // onde caem (também são as manchas de aviso)
+      pool: [],
+      pn: 0,
+    };
+    var n = Math.max(3, Math.min(9, Math.round(w / 46)));
+    for (var i = 0; i < n; i++) {
+      o.colunas.push({ fx: (i + 0.5) / n, r: 16 + ((i * 29) % 11), ph: i * 0.9 });
+    }
+    for (var k = 0; k < BRASA_MAX; k++) {
+      o.pool.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, r: 3, life: 0, spin: 0 });
+    }
     return o;
   }
 
@@ -454,6 +655,231 @@ window.FG = window.FG || {};
     }
 
     if (p && FG.engine.rectsOverlap(p, o.rect)) p.hurt(1, o.x + o.w / 2);
+  }
+
+  // --- cipó ----------------------------------------------------------
+  // Reescreve os pontos da catenária IN LOCO (nada de alocar). A forma é a
+  // parábola 4u(1-u), que a esta escala é indistinguível de uma catenária e
+  // custa uma multiplicação; o balanço é uma senoide na perpendicular da
+  // corda, com a mesma barriga, para a corda ondular sem esticar as pontas.
+  function cipoPontos(o, t, comPeso) {
+    var dx = o.x2 - o.x1, dy = o.y2 - o.y1;
+    var L = o.corda || 1;
+    var nx = -dy / L, ny = dx / L;               // perpendicular unitária
+    var sw = Math.sin(t * CIPO_SWAY_W + o.phase) * CIPO_SWAY;
+    for (var i = 0; i <= CIPO_SEGS; i++) {
+      var u = i / CIPO_SEGS;
+      var barriga = 4 * u * (1 - u);             // 1 no meio, 0 nas pontas
+      var px = o.x1 + dx * u + nx * sw * barriga;
+      var py = o.y1 + dy * u + o.sag * barriga + ny * sw * barriga;
+      if (comPeso) {
+        // a corda cede em volta de quem está pendurado nela
+        var d = Math.abs(u - o.t);
+        if (d < CIPO_DIP_R) {
+          var k = 1 - d / CIPO_DIP_R;
+          py += CIPO_DIP * k * k;
+        }
+      }
+      var pt = o.pts[i];
+      pt.x = px; pt.y = py;
+    }
+  }
+
+  // Ponto da corda em t (0..1), escrito em o.hangInfo — é dali que sai a
+  // posição do player e o desenho das mãos.
+  function cipoPonto(o, t) {
+    var f = t * CIPO_SEGS;
+    var i = f | 0;
+    if (i < 0) i = 0;
+    if (i > CIPO_SEGS - 1) i = CIPO_SEGS - 1;
+    var fr = f - i;
+    var a = o.pts[i], b = o.pts[i + 1];
+    var hi = o.hangInfo;
+    hi.x = a.x + (b.x - a.x) * fr;
+    hi.y = a.y + (b.y - a.y) * fr;
+    hi.t = t;
+  }
+
+  // Soltar. `impulso` só com ESPAÇO; chegar na ponta larga sem prêmio.
+  function cipoSolta(o, p, impulso) {
+    o.held = false;
+    o.cool = CIPO_COOL;
+    p.hang = null;
+    if (impulso) {
+      p.vy = CIPO_OUT_VY;
+      p.vx = o.dir * CIPO_OUT_VX;
+      if (FG.audio) FG.audio.sfx('doublejump');
+    } else {
+      p.vy = 0;
+      p.vx = o.dir * CIPO_END_VX;
+    }
+  }
+
+  function updateCipo(o, dt, p, t) {
+    if (o.cool > 0) o.cool -= dt;
+    var input = FG.input;
+    var pendurado = !!(p && p.hang && p.hang === o.hangInfo);
+
+    if (pendurado) {
+      // ←/→ andam ao longo da corda; o resto da física dele está desligado
+      var dir = 0;
+      if (input) {
+        if (input.left && !input.right) dir = -1;
+        else if (input.right && !input.left) dir = 1;
+      }
+      if (dir !== 0) { o.t += dir * CIPO_SPEED * dt; o.dir = dir; }
+      o.hangInfo.dir = o.dir;
+
+      if (input && input.jumpPressed) {
+        cipoSolta(o, p, true);
+        pendurado = false;
+      } else if (o.t <= 0 || o.t >= 1) {
+        // passou da ponta: sai por ali mesmo, sem impulso
+        o.t = o.t <= 0 ? 0 : 1;
+        cipoSolta(o, p, false);
+        pendurado = false;
+      }
+    }
+
+    o.held = pendurado;
+    cipoPontos(o, t, pendurado);
+
+    if (pendurado) {
+      cipoPonto(o, o.t);
+      // pendura pelas MÃOS: o topo do corpo fica logo abaixo da corda
+      p.x = o.hangInfo.x - p.w / 2;
+      p.y = o.hangInfo.y + CIPO_HANDS;
+      p.vx = 0; p.vy = 0;   // senão, ao soltar, ele herda a queda de antes
+      return;
+    }
+
+    // Agarrar: só no ar, só se não estiver pendurado em nada e a carência
+    // desta corda tiver passado (senão ele gruda de novo no mesmo frame).
+    if (!p || p.onGround || p.hang || o.cool > 0) return;
+    var x0 = p.x - CIPO_GRAB_PAD, x1 = p.x + p.w + CIPO_GRAB_PAD;
+    var y0 = p.y - CIPO_GRAB_PAD, y1 = p.y + p.h + CIPO_GRAB_PAD;
+    var cx = p.x + p.w / 2, cy = p.y + p.h * 0.25;   // mira nas mãos, não nos pés
+    var melhor = -1, melhorD = 0;
+    for (var i = 0; i <= CIPO_SEGS; i++) {
+      var pt = o.pts[i];
+      if (pt.x < x0 || pt.x > x1 || pt.y < y0 || pt.y > y1) continue;
+      var ddx = pt.x - cx, ddy = pt.y - cy;
+      var d2 = ddx * ddx + ddy * ddy;
+      if (melhor < 0 || d2 < melhorD) { melhor = i; melhorD = d2; }
+    }
+    if (melhor < 0) return;
+
+    o.held = true;
+    // agarrar em cima do pino soltaria no frame seguinte (t fora de 0..1):
+    // afasta um pouco das pontas para ele sempre ganhar um instante de corda
+    o.t = Math.min(0.96, Math.max(0.04, melhor / CIPO_SEGS));
+    o.dir = p.vx < 0 ? -1 : 1;
+    o.hangInfo.dir = o.dir;
+    cipoPonto(o, o.t);
+    p.hang = o.hangInfo;
+    p.x = o.hangInfo.x - p.w / 2;
+    p.y = o.hangInfo.y + CIPO_HANDS;
+    p.vx = 0; p.vy = 0;
+    if (FG.audio) FG.audio.sfx('glide');
+  }
+
+  // --- disco ---------------------------------------------------------
+  function updateDisco(o, dt, p, t) {
+    // sobe e desce de leve; mesma mecânica de arrasto da plataforma
+    var ny = o.oy + o.bob * Math.sin((t / o.period) * TAU + o.phase);
+    var carrying = p && playerOnTop(o.rect, p);
+    var ddy = ny - o.rect.y;
+    o.rect.y = ny;
+    if (carrying) p.y += ddy;
+  }
+
+  // --- tronco --------------------------------------------------------
+  function updateTronco(o, dt, p) {
+    var carrying = p && playerOnTop(o.rect, p);
+    if (carrying) {
+      o.sink += TRONCO_DOWN * dt;
+      if (o.sink > TRONCO_MAX) o.sink = TRONCO_MAX;
+    } else if (o.sink > 0) {
+      o.sink -= TRONCO_UP * dt;
+      if (o.sink < 0) o.sink = 0;
+    }
+    var ny = o.oy + o.sink;
+    var ddy = ny - o.rect.y;
+    o.rect.y = ny;
+    if (carrying) p.y += ddy;
+
+    // bolhas de lodo escapando por baixo enquanto afunda (só afundando: parado
+    // no fundo não borbulha, senão a poça vira jacuzzi)
+    if (carrying && o.sink < TRONCO_MAX) {
+      o.bubAccum += dt * 16;
+      while (o.bubAccum >= 1) {
+        o.bubAccum -= 1;
+        spawnParticle(o.rect.x + rand(6, o.w - 6), o.rect.y + o.h - 2,
+          rand(-12, 12), rand(-40, -12), rand(0.4, 0.85), rand(1.8, 3.6),
+          'rgba(170,205,110,0.75)', -30);
+      }
+    } else {
+      o.bubAccum = 0;
+    }
+  }
+
+  // --- brasa ---------------------------------------------------------
+  function brasaSolta(o) {
+    var e = o.pool[o.pn];
+    o.pn = (o.pn + 1) % BRASA_MAX;
+    var col = o.colunas[(Math.random() * o.colunas.length) | 0];
+    e.active = true;
+    e.x = o.x + col.fx * o.w + rand(-14, 14);
+    e.y = o.y - rand(2, 26);
+    e.vx = rand(-24, 24);
+    e.vy = rand(90, 200);
+    e.r = rand(2.6, 5.2);
+    e.life = 4;
+    e.spin = rand(0, TAU);
+  }
+
+  function updateBrasa(o, dt, p, t) {
+    // ciclo: aviso (telegraph) → rajada → descanso
+    var ct = (t + o.phase) % o.period;
+    o.ct = ct;
+    o.fase = ct < BRASA_TELE ? 'aviso' : (ct < BRASA_TELE + BRASA_RAJADA ? 'rajada' : 'descanso');
+
+    if (o.fase === 'rajada') {
+      o.acc += dt * o.taxa;
+      while (o.acc >= 1) { o.acc -= 1; brasaSolta(o); }
+    } else {
+      o.acc = 0;
+    }
+
+    var hr = o.hitRect;
+    for (var i = 0; i < BRASA_MAX; i++) {
+      var e = o.pool[i];
+      if (!e.active) continue;
+      e.life -= dt;
+      e.vy += BRASA_GRAV * dt;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.spin += dt * 6;
+
+      if (p) {
+        hr.x = e.x - e.r; hr.y = e.y - e.r; hr.w = e.r * 2; hr.h = e.r * 2;
+        if (FG.engine.rectsOverlap(p, hr)) {
+          p.hurt(1, e.x);
+          e.active = false;
+          continue;
+        }
+      }
+      if (e.y >= o.chao) {
+        // estoura em faíscas ao bater no chão da zona
+        for (var k = 0; k < 4; k++) {
+          spawnParticle(e.x, o.chao - 1, rand(-90, 90), rand(-150, -40),
+            rand(0.18, 0.42), rand(1.2, 2.6), 'rgba(255,196,90,0.95)', 900);
+        }
+        e.active = false;
+        continue;
+      }
+      if (e.life <= 0) e.active = false;
+    }
   }
 
   // ==================================================================
@@ -882,6 +1308,351 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- cipó ----------------------------------------------------------
+  // Traça um dos dois fios da trança. O deslocamento é na perpendicular da
+  // corda e alterna de sinal ao longo dela (senoide), então os dois fios se
+  // cruzam: é isso que dá a leitura de corda trançada e não de fio de arame.
+  function cipoFio(ctx, o, cam, sinal) {
+    ctx.beginPath();
+    for (var i = 0; i <= CIPO_SEGS; i++) {
+      var pt = o.pts[i];
+      var a = o.pts[i > 0 ? i - 1 : 0];
+      var b = o.pts[i < CIPO_SEGS ? i + 1 : CIPO_SEGS];
+      var tx = b.x - a.x, ty = b.y - a.y;
+      var l = Math.sqrt(tx * tx + ty * ty) || 1;
+      var off = sinal * 3.2 * Math.sin((i / CIPO_SEGS) * o.twist * Math.PI);
+      var x = pt.x - cam.x + (-ty / l) * off;
+      var y = pt.y - cam.y + (tx / l) * off;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+  }
+
+  function drawCipoFundo(ctx, o, cam, t) {
+    var bx = Math.min(o.x1, o.x2) - 24, by = Math.min(o.y1, o.y2) - 24;
+    var bw = Math.abs(o.x2 - o.x1) + 48;
+    var bh = Math.abs(o.y2 - o.y1) + o.sag + CIPO_DIP + 60;
+    if (!visible(cam, bx, by, bw, bh)) return;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // alma da corda: um traço grosso e escuro por baixo dos dois fios, para a
+    // trança não ficar vazada contra o fundo
+    ctx.beginPath();
+    for (var i = 0; i <= CIPO_SEGS; i++) {
+      var pt = o.pts[i];
+      if (i === 0) ctx.moveTo(pt.x - cam.x, pt.y - cam.y);
+      else ctx.lineTo(pt.x - cam.x, pt.y - cam.y);
+    }
+    ctx.strokeStyle = '#3a2a12';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+
+    // os dois fios
+    cipoFio(ctx, o, cam, 1);
+    ctx.strokeStyle = '#9c7a3a';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    cipoFio(ctx, o, cam, -1);
+    ctx.strokeStyle = '#77592a';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // luz por cima do fio de fora (a corda é roliça)
+    cipoFio(ctx, o, cam, 1);
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#d8b46a';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // nós a cada 4 segmentos: marcam o passo e dão onde "olhar" para agarrar
+    ctx.fillStyle = '#5d4520';
+    for (var k = 4; k < CIPO_SEGS; k += 4) {
+      var n = o.pts[k];
+      var na = o.pts[k - 1], nb = o.pts[k + 1];
+      var ang = Math.atan2(nb.y - na.y, nb.x - na.x);
+      ctx.save();
+      ctx.translate(n.x - cam.x, n.y - cam.y);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 4.6, 5.4, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(216,180,106,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(-1, -1.4, 2.4, 2.6, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#5d4520';
+      ctx.restore();
+    }
+
+    // pinos das duas pontas
+    drawPino(ctx, o.x1 - cam.x, o.y1 - cam.y);
+    drawPino(ctx, o.x2 - cam.x, o.y2 - cam.y);
+
+    // faísca no ponto onde ele está agarrado (leitura de que a corda o segura)
+    if (o.held) {
+      ctx.globalAlpha = 0.5 + 0.25 * Math.sin(t * 9);
+      ctx.fillStyle = '#ffd88a';
+      ctx.beginPath();
+      ctx.arc(o.hangInfo.x - cam.x, o.hangInfo.y - cam.y, 6, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  function drawPino(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    // chapa de madeira presa no poste
+    ctx.fillStyle = '#4a3a20';
+    ctx.fillRect(-7, -11, 14, 22);
+    ctx.fillStyle = 'rgba(230,200,140,0.25)';
+    ctx.fillRect(-7, -11, 14, 3);
+    // argola de metal
+    ctx.save();
+    ctx.scale(9, 9);
+    ctx.fillStyle = grad.pino;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#1d2026';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.4, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = '#e6eeff';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 6.4, Math.PI * 1.05, Math.PI * 1.65);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // --- disco ---------------------------------------------------------
+  function drawDisco(ctx, o, cam, t) {
+    var r = o.rect;
+    if (!visible(cam, r.x - 24, r.y - 24, r.w + 48, r.h + 70)) return;
+    var cx = r.x + r.w / 2 - cam.x;
+    var cy = r.y + r.h / 2 - cam.y;
+    var rx = r.w / 2, ry = r.h / 2 + 4;   // elipse achatada, um pouco mais alta
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // glow derramado por baixo — é o que faz o disco parecer feito de lava
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.55 + 0.15 * Math.sin(t * 1.9 + o.phase);
+    ctx.translate(0, ry * 0.8);
+    ctx.scale(rx * 1.3, ry * 3.2);
+    ctx.fillStyle = grad.discoGlow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // corpo: crosta escura em cima virando âmbar incandescente embaixo
+    ctx.save();
+    ctx.scale(rx, ry);
+    ctx.fillStyle = grad.discoCrosta;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // borda quente
+    ctx.save();
+    ctx.scale(rx, ry);
+    ctx.strokeStyle = grad.discoBorda;
+    ctx.lineWidth = 1 / Math.max(rx, ry) * 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.97, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    // tampo de crosta escura (a superfície onde se pisa)
+    ctx.fillStyle = '#241a12';
+    ctx.beginPath();
+    ctx.ellipse(0, -ry * 0.28, rx * 0.9, ry * 0.6, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120,102,84,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(0, -ry * 0.34, rx * 0.86, ry * 0.5, 0, 0, TAU);
+    ctx.fill();
+
+    // gretas acesas na crosta, respirando
+    ctx.lineCap = 'round';
+    for (var i = 0; i < o.veios.length; i++) {
+      var v = o.veios[i];
+      var pulse = 0.45 + 0.4 * Math.sin(t * 2.4 + v.ph);
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = '#ffb44a';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(v.fx * rx, (v.fy - 0.1) * ry);
+      ctx.lineTo((v.fx + v.len) * rx, (v.fy + 0.22) * ry);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // --- tronco --------------------------------------------------------
+  function drawTronco(ctx, o, cam, t) {
+    var r = o.rect;
+    if (!visible(cam, r.x - 16, r.y - 16, r.w + 32, r.h + 40)) return;
+    var sx = r.x - cam.x, sy = r.y - cam.y;
+    var h = o.h, cap = 9;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // corpo roliço: retângulo com as duas pontas arredondadas
+    ctx.fillStyle = grad.casca;
+    ctx.beginPath();
+    ctx.moveTo(cap, 0);
+    ctx.lineTo(o.w - cap, 0);
+    ctx.ellipse(o.w - cap, h / 2, cap, h / 2, 0, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(cap, h);
+    ctx.ellipse(cap, h / 2, cap, h / 2, 0, Math.PI / 2, Math.PI * 1.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // estrias da casca
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#1c1409';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (var i = 0; i < o.nos.length; i++) {
+      var n = o.nos[i];
+      ctx.moveTo(n.x - 10, n.y);
+      ctx.lineTo(n.x + 10, n.y + 1.5);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // nós da madeira
+    ctx.fillStyle = '#33240f';
+    for (var k = 0; k < o.nos.length; k++) {
+      var no = o.nos[k];
+      ctx.beginPath();
+      ctx.ellipse(no.x, no.y, no.r * 1.4, no.r, 0, 0, TAU);
+      ctx.fill();
+    }
+
+    // limo no topo (é o que diz "escorregadio, não confie")
+    ctx.fillStyle = grad.limo;
+    ctx.beginPath();
+    ctx.moveTo(cap * 0.4, 1);
+    ctx.lineTo(o.w - cap * 0.4, 1);
+    ctx.lineTo(o.w - cap * 0.4, 5);
+    ctx.quadraticCurveTo(o.w / 2, 8.5, cap * 0.4, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#8fc23a';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for (var j = 0; j < o.limos.length; j++) {
+      var lm = o.limos[j];
+      var sway = Math.sin(t * 1.8 + lm.x * 0.1) * 1.2 + lm.lean;
+      ctx.moveTo(lm.x, 2);
+      ctx.quadraticCurveTo(lm.x + sway, -lm.h * 0.5, lm.x + sway * 1.6, -lm.h);
+    }
+    ctx.stroke();
+
+    // face do tronco na ponta direita: anéis de crescimento
+    ctx.save();
+    ctx.translate(o.w - cap * 0.6, h / 2);
+    ctx.fillStyle = '#6b5228';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, cap * 0.62, h / 2 - 1, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,28,12,0.6)';
+    ctx.lineWidth = 1;
+    for (var a = 1; a <= 2; a++) {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, cap * 0.62 * (a / 3), (h / 2 - 1) * (a / 3), 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // linha do lodo: quanto mais afundado, mais escura a barriga
+    if (o.sink > 0) {
+      ctx.globalAlpha = Math.min(0.55, o.sink / TRONCO_MAX * 0.55);
+      ctx.fillStyle = '#25330f';
+      ctx.fillRect(0, h * 0.55, o.w, h * 0.45 + 3);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // --- brasa ---------------------------------------------------------
+  function drawBrasaFundo(ctx, o, cam, t) {
+    if (!visible(cam, o.x, o.y - 30, o.w, o.h + 60)) return;
+    var sx = o.x - cam.x, sy = o.y - cam.y;
+
+    // Telegraph: as manchas acendem no chão ANTES de cair qualquer coisa. É o
+    // aviso que torna a rajada justa.
+    var aviso = o.fase === 'aviso' ? o.ct / BRASA_TELE : (o.fase === 'rajada' ? 1 : 0);
+    if (aviso <= 0) return;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    for (var i = 0; i < o.colunas.length; i++) {
+      var c = o.colunas[i];
+      var pulse = 0.55 + 0.45 * Math.sin(t * 12 + c.ph);
+      ctx.save();
+      ctx.globalAlpha = aviso * (o.fase === 'rajada' ? 0.4 : pulse);
+      ctx.translate(c.fx * o.w, o.h - 2);
+      ctx.scale(c.r * (0.7 + 0.5 * aviso), c.r * 0.4);
+      ctx.fillStyle = grad.brasaAviso;
+      ctx.beginPath();
+      ctx.arc(0, 0, 1, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    // clarão no alto da zona, de onde a brasa vai despencar
+    ctx.globalAlpha = aviso * 0.30;
+    ctx.fillStyle = 'rgba(255,120,30,0.8)';
+    ctx.fillRect(0, -6, o.w, 8);
+    ctx.restore();
+  }
+
+  function drawBrasaFrente(ctx, o, cam, t) {
+    if (!visible(cam, o.x - 20, o.y - 40, o.w + 40, o.h + 60)) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < BRASA_MAX; i++) {
+      var e = o.pool[i];
+      if (!e.active) continue;
+      var ex = e.x - cam.x, ey = e.y - cam.y;
+      if (ex < -40 || ex > VIEW_W + 40 || ey < -40 || ey > VIEW_H + 40) continue;
+      // rastro: a brasa risca o ar por onde veio
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = '#ff9a30';
+      ctx.lineWidth = e.r * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - e.vx * 0.03, ey - e.vy * 0.045);
+      ctx.stroke();
+      // miolo quente
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.scale(e.r * 2.4, e.r * 2.4);
+      ctx.fillStyle = grad.brasaMiolo;
+      ctx.beginPath();
+      ctx.arc(0, 0, 1, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // API pública — FG.obstacles
   // ==================================================================
@@ -900,6 +1671,10 @@ window.FG = window.FG || {};
       movers.length = 0;
       for (var i = 0; i < MAXP; i++) particles[i].active = false;
       pNext = 0;
+      // As cordas antigas morrem aqui; se o player ficasse pendurado numa
+      // delas, o update dele continuaria desligado para sempre e ninguém o
+      // soltaria. Repovoar é sempre soltar.
+      if (FG.player) FG.player.hang = null;
 
       var lvl = FG.level;
       var defs = (lvl && lvl.obstacleDefs) || [];
@@ -911,6 +1686,10 @@ window.FG = window.FG || {};
         else if (d.type === 'sopro') list.push(makeSopro(d));
         else if (d.type === 'pendulo') list.push(makePendulo(d));
         else if (d.type === 'espinhorolo') list.push(makeEspinhorolo(d));
+        else if (d.type === 'cipo') list.push(makeCipo(d));
+        else if (d.type === 'disco') list.push(makeDisco(d));
+        else if (d.type === 'tronco') list.push(makeTronco(d));
+        else if (d.type === 'brasa') list.push(makeBrasa(d));
       }
     },
 
@@ -941,6 +1720,16 @@ window.FG = window.FG || {};
           for (var k = 0; k < o.links.length; k++) movers.push(o.links[k]);
         } else if (o.type === 'espinhorolo') {
           updateEspinhorolo(o, dt, p);
+        } else if (o.type === 'cipo') {
+          updateCipo(o, dt, p, t);   // não é sólido: nada em movers
+        } else if (o.type === 'disco') {
+          updateDisco(o, dt, p, t);
+          movers.push(o.rect);
+        } else if (o.type === 'tronco') {
+          updateTronco(o, dt, p);
+          movers.push(o.rect);
+        } else if (o.type === 'brasa') {
+          updateBrasa(o, dt, p, t);
         }
       }
 
@@ -959,6 +1748,10 @@ window.FG = window.FG || {};
         else if (o.type === 'sopro') drawSoproFundo(ctx, o, cam, t);
         else if (o.type === 'pendulo') drawPenduloFundo(ctx, o, cam, t);
         else if (o.type === 'espinhorolo') drawTrilho(ctx, o, cam);
+        else if (o.type === 'cipo') drawCipoFundo(ctx, o, cam, t);
+        else if (o.type === 'disco') drawDisco(ctx, o, cam, t);
+        else if (o.type === 'tronco') drawTronco(ctx, o, cam, t);
+        else if (o.type === 'brasa') drawBrasaFundo(ctx, o, cam, t);
       }
     },
 
@@ -972,6 +1765,7 @@ window.FG = window.FG || {};
         if (o.type === 'sopro') drawSoproFrente(ctx, o, cam, t);
         else if (o.type === 'pendulo') drawPenduloFrente(ctx, o, cam, t);
         else if (o.type === 'espinhorolo') drawEspinhorolo(ctx, o, cam, t);
+        else if (o.type === 'brasa') drawBrasaFrente(ctx, o, cam, t);
       }
       drawParticles(ctx, cam);
     },

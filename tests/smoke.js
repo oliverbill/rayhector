@@ -68,17 +68,27 @@ Object.defineProperty(ImageStub.prototype, 'src', { set() {} });
 // No browser, `FG` e `window.FG` são o mesmo global; aqui pré-criamos o objeto
 // e o passamos também como parâmetro `FG` para os bare references funcionarem.
 global.window.FG = {};
-const order = ['assets.js', 'audio.js', 'level.js', 'obstacles.js', 'player.js', 'enemies.js', 'engine.js'];
+// A ordem é a do index.html. As fases e os chefões são opcionais no filtro
+// porque o jogo cresce em arquivos: com 1 fase o teste roda igual, com 3 ele
+// exercita as três. Só assets/audio/player/enemies/engine são obrigatórios.
+const order = [
+  'assets.js', 'audio.js',
+  'levelkit.js', 'level.js', 'level2.js', 'level3.js',
+  'obstacles.js', 'player.js',
+  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js',
+  'engine.js',
+].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {
   const src = fs.readFileSync(path.join(DIR, f), 'utf8');
   const fn = new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', 'Image', src);
   fn(global.window, global.document, global.requestAnimationFrame, global.performance, global.window.FG, ImageStub);
 }
 const FG = global.window.FG;
-if (!FG || !FG.engine || !FG.player || !FG.level || !FG.enemies || !FG.audio) {
+if (!FG || !FG.engine || !FG.player || !FG.levels || !FG.enemies || !FG.audio) {
   console.error('FALHOU: módulos ausentes', Object.keys(FG || {}));
   process.exit(1);
 }
+console.log('carregados: %s · fases: %d', order.join(' '), FG.levels.length);
 
 // ---------- helpers de simulação ----------
 let now = 0;
@@ -121,48 +131,84 @@ console.log('pós-passeio: x=%s hp=%s lumis=%s estado=%s',
 
 // (a escalada de parede tem teste próprio, com cenário controlado: tests/parede.js)
 
-// ---------- cenário 3: teleporta perto do boss e luta ----------
-if (FG.engine.state === 'dead') frames(120); // deixa respawnar
-FG.player.x = 6400; FG.player.y = 560; FG.player.vy = 0; FG.player.hp = FG.player.maxHp;
-frames(10);
-if (!FG.enemies.boss.started) throw new Error('boss não disparou com player em x=6400');
-frames(90); // intro + primeiro ataque
-if (!FG.enemies.boss.active) throw new Error('boss não ficou ativo após a intro');
-// simula 20s de briga com movimento e socos
-for (let i = 0; i < 20; i++) {
-  key(i % 2 ? 'ArrowLeft' : 'ArrowRight', true);
-  frames(30);
-  key(i % 2 ? 'ArrowLeft' : 'ArrowRight', false);
-  tap('Space', 3); tap('KeyX', 3);
-  frames(30);
-  if (FG.player.hp <= 0 || FG.engine.state === 'dead') {
-    FG.player.hp = FG.player.maxHp; // "cheats" para continuar exercitando código
-    if (FG.engine.state === 'dead') frames(120);
+// ---------- cenário 3: percorre TODAS as fases, lutando e matando cada chefão ----------
+// Cada volta: teleporta para a arena, deixa o chefão acordar, briga um pouco
+// (para exercitar update/draw de ataque e projétil), mata pelo takeHit e
+// confere a transição — 'fase' se ainda há fase na fila, 'victory' na última.
+const totalFases = FG.levels.length;
+let lumisAntes = 0;
+
+for (let f = 0; f < totalFases; f++) {
+  if (FG.engine.levelIndex !== f) {
+    throw new Error('esperava estar na fase ' + f + ', estou na ' + FG.engine.levelIndex);
+  }
+  const lv = FG.level;
+  if (FG.engine.state === 'dead') frames(120);
+
+  // cai dentro da arena a partir do alto: funciona em qualquer fase, sem
+  // precisar saber a altura do chão dela
+  FG.player.x = lv.bossTriggerX + 40; FG.player.y = 60; FG.player.vy = 0;
+  for (let k = 0; k < 60; k++) { FG.player.hp = FG.player.maxHp; frames(1); }
+
+  const boss = FG.enemies.boss;
+  if (!boss) throw new Error('fase ' + f + ' (' + lv.id + ') não tem chefão em FG.enemies.boss');
+  if (boss.id !== lv.bossId) {
+    throw new Error('fase ' + lv.id + ' pediu chefão ' + lv.bossId + ' e veio ' + boss.id);
+  }
+  if (!boss.started) throw new Error('chefão ' + boss.id + ' não disparou dentro da arena');
+  frames(90); // intro + primeiro ataque
+  if (!boss.active) throw new Error('chefão ' + boss.id + ' não ficou ativo após a intro');
+
+  for (let i = 0; i < 14; i++) {
+    key(i % 2 ? 'ArrowLeft' : 'ArrowRight', true);
+    frames(30);
+    key(i % 2 ? 'ArrowLeft' : 'ArrowRight', false);
+    tap('Space', 3); tap('KeyX', 3);
+    frames(30);
+    if (FG.player.hp <= 0 || FG.engine.state === 'dead') {
+      FG.player.hp = FG.player.maxHp; // "cheats" para continuar exercitando código
+      if (FG.engine.state === 'dead') frames(120);
+    }
+  }
+  console.log('fase %d (%s) · chefão %s: hp=%s estado=%s · lumis=%d',
+    f, lv.id, boss.id, boss.hp, boss.state, FG.engine.lumis);
+
+  if (typeof boss.takeHit !== 'function') {
+    throw new Error('chefão ' + boss.id + ' não expõe takeHit() — o smoke precisa dele para matar');
+  }
+  let guard = 0;
+  while (boss.hp > 0 && guard++ < 100) boss.takeHit();
+  if (!boss.dead) throw new Error('chefão ' + boss.id + ': dead não setado com hp 0');
+
+  lumisAntes = FG.engine.lumis;
+  frames(240); // morte cinematográfica + overlay
+  const esperado = f < totalFases - 1 ? 'fase' : 'victory';
+  if (FG.engine.state !== esperado) {
+    throw new Error('fase ' + f + ': esperava ' + esperado + ', veio ' + FG.engine.state);
+  }
+  tap('Space', 2);
+  frames(5);
+  if (f < totalFases - 1) {
+    if (FG.engine.state !== 'playing') throw new Error('não entrou na fase ' + (f + 1) + ': ' + FG.engine.state);
+    if (FG.engine.lumis < lumisAntes) {
+      throw new Error('as lumis zeraram na troca de fase (eram ' + lumisAntes + ', viraram ' + FG.engine.lumis + ')');
+    }
   }
 }
-console.log('luta: bossHp=%s estado boss=%s player hp=%s',
-  FG.enemies.boss.hp, FG.enemies.boss.state, FG.player.hp);
 
-// ---------- cenário 4: mata o boss via takeHit e confere vitória ----------
-while (FG.enemies.boss.hp > 0) FG.enemies.boss.takeHit();
-if (!FG.enemies.boss.dead) throw new Error('boss.dead não setado com hp 0');
-frames(200); // morte cinematográfica (2.5s) + overlay
-if (FG.engine.state !== 'victory') throw new Error('não chegou em victory: ' + FG.engine.state);
-
-// ---------- cenário 5: reinicia da vitória ----------
-tap('Space', 2);
-frames(5);
+// ---------- cenário 4: reinicia da vitória ----------
 if (FG.engine.state !== 'playing') throw new Error('restart pós-vitória falhou: ' + FG.engine.state);
+if (FG.engine.levelIndex !== 0) throw new Error('restart não voltou para a fase 0: ' + FG.engine.levelIndex);
 if (FG.engine.lumis !== 0) throw new Error('lumis não zeraram no restart: ' + FG.engine.lumis);
-if (FG.enemies.boss.started) throw new Error('boss não re-armou no restart');
+if (FG.enemies.boss.started) throw new Error('chefão não re-armou no restart');
 frames(60);
 
-// ---------- cenário 6: morte por queda e respawn ----------
+// ---------- cenário 5: morte por queda e respawn ----------
 FG.player.y = FG.level.H + 200; FG.player.vy = 100; FG.player.hp = 1;
 frames(5);
 if (FG.engine.state !== 'dead') throw new Error('queda com hp 1 não matou: ' + FG.engine.state);
 frames(120);
 if (FG.engine.state !== 'playing') throw new Error('não respawnou: ' + FG.engine.state);
 
-console.log('SMOKE OK — todos os cenários passaram');
+console.log('SMOKE OK — %d fase(s), todos os cenários passaram', totalFases);
 process.exit(0);

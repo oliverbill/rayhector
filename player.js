@@ -121,10 +121,33 @@ window.FG = window.FG || {};
     wallDir: 0,               // preenchido pelo engine: parede à direita (+1) / esquerda (-1)
     attackBox: { x: 0, y: 0, w: 34, h: 30, active: false },
     invuln: 0,
+    // Pendurado num cipó: null quando livre. Quem escreve é o FG.obstacles —
+    // enquanto não for null, é ELE que manda na posição, e este update pula
+    // corrida, pulo, gravidade e colisão. O soco continua valendo, porque
+    // dependurado ainda dá para socar quem vem.
+    hang: null,
 
     // ---------- lógica ----------
     update(dt) {
       const input = FG.input;
+
+      // ---------- dependurado: só o soco e os timers ----------
+      if (this.hang) {
+        // zera o que só faz sentido com física: senão, ao soltar, o player
+        // herda um estado de parede ou de planagem que não existe mais.
+        clinging = false; gliding = false;
+        this.clinging = false;
+        wallLock = 0; wallCoyote = 0; lastWallDir = 0; this.wallDir = 0;
+        // solta com os dois pulos na mão — o cipó é um recomeço, não um castigo
+        jumpsUsed = 0; jumpCut = false; jumpBuffer = 0; coyoteTimer = 0;
+        this.jumpsUsed = 0; this.wallCoyote = 0;
+        this.onGround = false;
+
+        this.updateAttack(dt, input);
+        if (this.invuln > 0) this.invuln -= dt;
+        this.updateSparks(dt, false);
+        return;
+      }
 
       // ---------- parede: quem está encostado e de que lado ----------
       // wallDir vem do moveAndCollide do frame anterior (1 frame de latência).
@@ -235,7 +258,21 @@ window.FG = window.FG || {};
         }
       } else scrapeAccum = 0;
 
-      // soco
+      this.updateAttack(dt, input);
+
+      // física + colisão (o engine seta onGround)
+      FG.engine.moveAndCollide(this, dt);
+      if (this.onGround) { jumpsUsed = 0; jumpCut = false; gliding = false; }
+
+      // invulnerabilidade pós-dano
+      if (this.invuln > 0) this.invuln -= dt;
+
+      this.updateSparks(dt, true);
+    },
+
+    // Soco — extraído do update porque dependurado no cipó ele continua
+    // valendo, e é a única coisa daquele bloco que continua.
+    updateAttack(dt, input) {
       if (attackCooldown > 0) attackCooldown -= dt;
       if (input.attackPressed && attackCooldown <= 0) {
         attackTimer = ATTACK_TIME;
@@ -249,27 +286,26 @@ window.FG = window.FG || {};
         box.x = this.facing > 0 ? this.x + this.w : this.x - box.w;
         box.y = this.y + this.h / 2 - box.h / 2;
       }
+    },
 
-      // física + colisão (o engine seta onGround)
-      FG.engine.moveAndCollide(this, dt);
-      if (this.onGround) { jumpsUsed = 0; jumpCut = false; gliding = false; }
-
-      // invulnerabilidade pós-dano
-      if (this.invuln > 0) this.invuln -= dt;
-
-      // faíscas ao correr / no ar
-      const running = this.onGround && Math.abs(this.vx) > 60;
-      sparkAccum += dt * (running ? 14 : (!this.onGround ? 6 : 2));
-      while (sparkAccum >= 1) {
-        sparkAccum -= 1;
-        emitSpark(
-          this.x + this.w / 2 + (Math.random() - 0.5) * this.w,
-          this.y + this.h - 6 + Math.random() * 6,
-          -this.vx * 0.15 + (Math.random() - 0.5) * 40,
-          20 + Math.random() * 60,
-          0.35 + Math.random() * 0.3,
-          1.5 + Math.random() * 1.5
-        );
+    // Faíscas da aura. `emitir` desliga só a emissão (dependurado ele não
+    // rasteja faísca pelo chão), mas o pool continua integrando: as faíscas
+    // que já estavam no ar precisam terminar de cair.
+    updateSparks(dt, emitir) {
+      if (emitir) {
+        const running = this.onGround && Math.abs(this.vx) > 60;
+        sparkAccum += dt * (running ? 14 : (!this.onGround ? 6 : 2));
+        while (sparkAccum >= 1) {
+          sparkAccum -= 1;
+          emitSpark(
+            this.x + this.w / 2 + (Math.random() - 0.5) * this.w,
+            this.y + this.h - 6 + Math.random() * 6,
+            -this.vx * 0.15 + (Math.random() - 0.5) * 40,
+            20 + Math.random() * 60,
+            0.35 + Math.random() * 0.3,
+            1.5 + Math.random() * 1.5
+          );
+        }
       }
       // integra o pool inteiro (barato, tamanho fixo)
       for (let i = 0; i < SPARKS; i++) {
@@ -280,7 +316,6 @@ window.FG = window.FG || {};
         s.y += s.vy * dt;
         s.vy += 300 * dt;
       }
-
     },
 
     // rajada de faíscas (pulos, dano)
@@ -316,6 +351,7 @@ window.FG = window.FG || {};
       this.hp = this.maxHp;
       this.invuln = 0;
       this.onGround = false;
+      this.hang = null;         // nunca renascer ainda pendurado num cipó
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; attackTimer = 0; attackCooldown = 0;
@@ -388,7 +424,11 @@ window.FG = window.FG || {};
       // ---- pés: posição por estado ----
       let f1x, f1y, f2x, f2y;                                    // 1 = perna da frente, 2 = de trás
       if (!this.onGround) {
-        if (clinging) {                                          // pés apoiados na parede
+        if (this.hang) {                                         // pendurado: pernas soltas balançando
+          const sw = Math.sin(t * 2.4) * 3;
+          f1x = 3 + sw; f1y = 2;
+          f2x = -3 + sw; f2y = 3;
+        } else if (clinging) {                                   // pés apoiados na parede
           f1x = 8; f1y = -14;
           f2x = 6; f2y = -2;
         } else if (gliding) {                                    // balançam pendurados
@@ -461,6 +501,11 @@ window.FG = window.FG || {};
           y: (box.y + box.h / 2) - (this.y + this.h),
         };
         gB = { x: 2, y: -28 };                                   // a outra protege o queixo
+      } else if (this.hang) {
+        // dependurado no cipó: as duas luvas para cima, agarradas na corda,
+        // e o corpo balançando por baixo delas
+        gF = { x: 5, y: -58 };
+        gB = { x: -6, y: -58 };
       } else if (clinging) {
         // uma luva firma em cima na parede, a outra escora embaixo
         gF = { x: 11, y: -46 };
