@@ -46,7 +46,8 @@ window.FG = window.FG || {};
     { id: 'attack', action: 'attack', x: 748, y: 462, r: 46, hit: 64, tipo: 'texto', label: 'SOCO' },
     { id: 'jump',   action: 'jump',   x: 872, y: 404, r: 62, hit: 82, tipo: 'texto', label: 'PULO' },
   ];
-  var pressed = {};   // id -> true enquanto houver dedo em cima
+  var pressed = {};     // id do botão -> true enquanto houver dedo em cima
+  var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
 
   // Dedo -> coordenadas do canvas. O canvas é escalado por CSS (letterbox), e
   // é o rect que conta — não innerWidth/innerHeight.
@@ -67,13 +68,12 @@ window.FG = window.FG || {};
   // Reconstrói o estado inteiro a partir dos dedos que ainda estão na tela.
   // Sem contabilidade por identifier: arrastar o dedo de ◀ para ▶ (ou soltar
   // dois botões de uma vez) já cai certo, porque o estado é recalculado do zero.
-  function sync(e) {
+  function sync(pontos) {
     var rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     var agora = {};
-    var lista = e.touches || [];
-    for (var i = 0; i < lista.length; i++) {
-      var b = pick(lista[i].clientX, lista[i].clientY, rect);
+    for (var i = 0; i < pontos.length; i++) {
+      var b = pick(pontos[i].clientX, pontos[i].clientY, rect);
       if (b) agora[b.id] = true;
     }
     for (var j = 0; j < BTNS.length; j++) {
@@ -87,6 +87,7 @@ window.FG = window.FG || {};
   }
 
   function soltarTudo() {
+    ponteiros = {};
     for (var i = 0; i < BTNS.length; i++) {
       if (pressed[BTNS[i].id]) {
         pressed[BTNS[i].id] = false;
@@ -95,34 +96,83 @@ window.FG = window.FG || {};
     }
   }
 
-  function onStart(e) {
-    e.preventDefault();
+  // Começo de um toque, venha ele de Touch ou de Pointer Event.
+  function comecou(x, y) {
     touch.active = true;
-    if (FG.engine) FG.engine.gesture();   // destrava o áudio (o iOS exige gesto)
-
+    if (!FG.engine) return;
+    FG.engine.gesture();   // destrava o áudio (o iOS exige gesto do usuário)
     // Fora dos botões, nas telas paradas (menu, fase completa, vitória), o
     // toque em qualquer lugar avança — é o que se espera de um jogo de celular.
     var rect = canvas.getBoundingClientRect();
-    if (rect.width && FG.engine && FG.engine.state !== 'playing') {
-      var t = e.changedTouches && e.changedTouches[0];
-      if (t && !pick(t.clientX, t.clientY, rect)) {
-        FG.engine.setAction('jump', true);
-        FG.engine.setAction('jump', false);
-      }
+    if (rect.width && FG.engine.state !== 'playing' && !pick(x, y, rect)) {
+      FG.engine.setAction('jump', true);
+      FG.engine.setAction('jump', false);
     }
-    sync(e);
   }
-  function onMove(e) { e.preventDefault(); sync(e); }
-  function onEnd(e) { e.preventDefault(); sync(e); }
 
-  // Ouvindo no document, não no canvas: o jogo é 16:9 e o iPhone é mais
+  // ------------------------------------------------------- Touch Events -----
+  // Caminho principal: é o que o Safari do iOS sempre entrega, e o que dá o
+  // multi-toque de graça em e.touches.
+  function lista(e) {
+    var out = [], t = e.touches || [];
+    for (var i = 0; i < t.length; i++) out.push(t[i]);
+    return out;
+  }
+  function onStart(e) {
+    e.preventDefault();
+    var t = e.changedTouches && e.changedTouches[0];
+    if (t) comecou(t.clientX, t.clientY);
+    sync(lista(e));
+  }
+  function onMoveOuEnd(e) { e.preventDefault(); sync(lista(e)); }
+
+  // ----------------------------------------------------- Pointer Events -----
+  // Rede de segurança para aparelho que tem tela sensível mas NÃO emite touch
+  // events — PC com touchscreen no Firefox, caneta, alguns Windows. Sem isto o
+  // jogo fica exatamente como estava: a tela não responde e só o teclado anda.
+  // Só entra quando não há touch events, para os dois caminhos nunca brigarem.
+  // (declarado no topo do escopo porque o soltarTudo, acima, também o limpa)
+  function pontos() {
+    var out = [];
+    for (var k in ponteiros) if (ponteiros.hasOwnProperty(k)) out.push(ponteiros[k]);
+    return out;
+  }
+  function dedo(e) { return e.pointerType !== 'mouse'; }   // mouse tem teclado junto
+  function onPtrDown(e) {
+    if (!dedo(e)) return;
+    e.preventDefault();
+    ponteiros[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
+    comecou(e.clientX, e.clientY);
+    sync(pontos());
+  }
+  function onPtrMove(e) {
+    if (!dedo(e) || !ponteiros[e.pointerId]) return;
+    e.preventDefault();
+    ponteiros[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
+    sync(pontos());
+  }
+  function onPtrUp(e) {
+    if (!ponteiros[e.pointerId]) return;
+    delete ponteiros[e.pointerId];
+    sync(pontos());
+  }
+
+  // Ouvindo no document, não no canvas: o jogo é 16:9 e o celular é mais
   // comprido, então sobra tarja preta dos dois lados — dedo que cai ali ainda
   // é dedo no jogo, e sem isto a página rolava por baixo.
   var opt = { passive: false };
-  document.addEventListener('touchstart', onStart, opt);
-  document.addEventListener('touchmove', onMove, opt);
-  document.addEventListener('touchend', onEnd, opt);
-  document.addEventListener('touchcancel', function (e) { e.preventDefault(); soltarTudo(); }, opt);
+  var temTouchEvents = ('ontouchstart' in window);
+  if (temTouchEvents) {
+    document.addEventListener('touchstart', onStart, opt);
+    document.addEventListener('touchmove', onMoveOuEnd, opt);
+    document.addEventListener('touchend', onMoveOuEnd, opt);
+    document.addEventListener('touchcancel', function (e) { e.preventDefault(); soltarTudo(); }, opt);
+  } else if (window.PointerEvent) {
+    document.addEventListener('pointerdown', onPtrDown, opt);
+    document.addEventListener('pointermove', onPtrMove, opt);
+    document.addEventListener('pointerup', onPtrUp, opt);
+    document.addEventListener('pointercancel', function (e) { onPtrUp(e); soltarTudo(); }, opt);
+  }
 
   // Pinça de zoom no Safari: user-scalable=no é ignorado desde o iOS 10, e sem
   // isto uma pinça no meio da luta escala a página e desalinha os botões.
