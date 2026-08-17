@@ -22,7 +22,7 @@ escalado por CSS para caber na janela.
 
 | arquivo      | conteúdo |
 |--------------|----------|
-| `index.html` | shell, carrega na ordem: assets.js, audio.js, level.js, obstacles.js, player.js, enemies.js, engine.js |
+| `index.html` | shell, carrega na ordem: assets.js, audio.js, level.js, obstacles.js, player.js, enemies.js, engine.js, touch.js |
 | `obstacles.js` | `FG.obstacles` — perigos e plataformas dinâmicas do cenário |
 | `engine.js`  | loop, input, câmera, colisão, estados de jogo, HUD, menu/vitória (JÁ ESCRITO — ler antes de codar) |
 | `player.js`  | `FG.player` |
@@ -32,6 +32,7 @@ escalado por CSS para caber na janela.
 | `enemies.js` | `FG.enemies` — bichos comuns, registro de chefões e `fx` |
 | `boss1/2/3.js` | um chefão por arquivo; registram-se via `FG.enemies.registerBoss` |
 | `audio.js`   | `FG.audio` (WebAudio procedural, zero assets) |
+| `touch.js`   | `FG.touch` — controles de toque; carrega **depois** do engine |
 
 Namespace global único: `window.FG = window.FG || {}`. Cada arquivo só adiciona
 a sua chave. **Nenhum arquivo referencia outro no load** (só dentro de funções
@@ -54,10 +55,32 @@ ser o último.
 - `FG.engine.lumis` — total coletado (leitura)
 - `FG.engine.checkpoint` — `{x,y}` do último checkpoint ativado (leitura)
 
+- `FG.engine.setAction(action, down)` — porta única de entrada do input:
+  `action` é uma chave de `FG.input`, `down` é o estado do botão. Cuida da
+  borda de subida (`jumpPressed`/`attackPressed`) e das transições de tela
+  (menu/fase/vitória). Teclado e toque passam os dois por aqui.
+- `FG.engine.gesture()` — avisa que houve gesto do usuário; destrava o áudio.
+  O iOS só sai de `suspended` dentro do handler do gesto, e volta a suspender
+  sozinho, então chame a cada gesto (é idempotente), não só no primeiro.
+
 ### FG.input (fornecido pelo engine)
 
 `{ left, right, down, jump, attack }` booleans (segurando) e
 `{ jumpPressed, attackPressed }` (borda de subida, válido só no frame).
+
+### FG.touch (touch.js)
+
+- `FG.touch.active` — leitura. `true` em aparelho de ponteiro grosso (celular,
+  tablet) já no load, ou depois do primeiro toque em qualquer outro. Quem
+  escreve texto de tela troca a legenda por ele (não existe ESPAÇO no toque).
+- `FG.touch.draw(ctx)` — desenha os botões em coordenadas do canvas (960×540).
+  O engine chama por último, por cima de tudo, inclusive das telas de fase e
+  vitória — é por esses botões que se sai delas.
+- Os botões são pintados no canvas, não em DOM: assim acompanham de graça o
+  letterbox e a escala. A conversão dedo → jogo sai de um único
+  `getBoundingClientRect` do canvas, e o estado é **recalculado do zero** a
+  cada evento a partir de `e.touches` — é o que faz arrastar o dedo entre os
+  botões e soltar dois de uma vez caírem certo.
 
 ### FG.player (player.js)
 

@@ -23,26 +23,40 @@ window.FG = window.FG || {};
   const keyToAction = {};
   for (const action in KEYS) for (const code of KEYS[action]) keyToAction[code] = action;
 
-  let firstGesture = false;
-  window.addEventListener('keydown', (e) => {
-    const action = keyToAction[e.code];
-    if (action) e.preventDefault();
-    if (!firstGesture) { firstGesture = true; FG.audio.init(); }
-    if (!action) return;
+  const pressBuffer = { jump: false, attack: false };
+
+  // Um único caminho de entrada para teclado e toque: quem manda ação é sempre
+  // daqui para baixo, então o touch.js não precisa saber nada de pressBuffer
+  // nem das transições de estado das telas.
+  function setAction(action, down) {
+    if (!(action in input)) return;
+    if (!down) { input[action] = false; return; }
     if (!input[action]) {
       if (action === 'jump') pressBuffer.jump = true;
       if (action === 'attack') pressBuffer.attack = true;
     }
     input[action] = true;
     if (engine.state === 'menu' && (action === 'jump' || action === 'attack')) startGame();
-    if (engine.state === 'victory' && action === 'jump') startGame();
-    if (engine.state === 'fase' && action === 'jump') nextLevel();
+    else if (engine.state === 'victory' && action === 'jump') startGame();
+    else if (engine.state === 'fase' && action === 'jump') nextLevel();
+  }
+
+  // Todo gesto do usuário passa por aqui: o iOS só deixa o AudioContext sair de
+  // 'suspended' dentro de um handler de gesto, e ele volta a suspender sozinho
+  // (troca de app, chamada, botão de silencioso) — por isso init() a cada
+  // gesto, e não só no primeiro. init() é idempotente e barato.
+  function gesture() { FG.audio.init(); }
+
+  window.addEventListener('keydown', (e) => {
+    const action = keyToAction[e.code];
+    if (action) e.preventDefault();
+    gesture();
+    if (action) setAction(action, true);
   });
   window.addEventListener('keyup', (e) => {
     const action = keyToAction[e.code];
-    if (action) input[action] = false;
+    if (action) setAction(action, false);
   });
-  const pressBuffer = { jump: false, attack: false };
 
   // ---------- helpers ----------
   function rectsOverlap(a, b) {
@@ -83,6 +97,7 @@ window.FG = window.FG || {};
     levelIndex: 0,               // fase corrente dentro de FG.levels
     checkpoint: { x: 0, y: 0 },
     rectsOverlap, moveAndCollide,
+    setAction, gesture,
     addLumi(n) { engine.lumis += (n || 1); },
     setState(s) {
       // Chefão derrotado com fase na fila não é vitória do JOGO, é fim de fase.
@@ -252,7 +267,7 @@ window.FG = window.FG || {};
     const cam = engine.cam;
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
 
-    if (engine.state === 'menu') { drawMenu(); return; }
+    if (engine.state === 'menu') { drawMenu(); drawTouch(); return; }
 
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
@@ -266,6 +281,18 @@ window.FG = window.FG || {};
     if (engine.state === 'dead') drawDeadOverlay();
     if (engine.state === 'fase') drawFaseCompleta();
     if (engine.state === 'victory') drawVictory();
+    drawTouch();
+  }
+
+  // Os botões de toque são desenhados por último, por cima de tudo (inclusive
+  // das telas de fase/vitória), porque é por eles que se sai dessas telas.
+  function drawTouch() {
+    if (FG.touch && FG.touch.active) FG.touch.draw(ctx);
+  }
+
+  // Em qualquer texto de tela: no toque não existe ESPAÇO.
+  function botao(tecla, toque) {
+    return (FG.touch && FG.touch.active) ? toque : tecla;
   }
 
   function drawMenu() {
@@ -297,10 +324,13 @@ window.FG = window.FG || {};
     ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(255,255,255,' + (0.6 + 0.4 * Math.sin(t * 3)) + ')';
     ctx.font = '22px "Trebuchet MS", sans-serif';
-    ctx.fillText('aperte ESPAÇO para acender a lenda', VIEW_W / 2, 360);
+    ctx.fillText(botao('aperte ESPAÇO para acender a lenda',
+                       'toque em PULO para acender a lenda'), VIEW_W / 2, 360);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = '16px "Trebuchet MS", sans-serif';
-    ctx.fillText('setas / WASD para mover · ESPAÇO pula (2x; segure para planar) · X soca', VIEW_W / 2, 400);
+    ctx.fillText(botao('setas / WASD para mover · ESPAÇO pula (2x; segure para planar) · X soca',
+                       '◀ ▶ para mover · PULO pula (2x; segure para planar) · SOCO soca'),
+                 VIEW_W / 2, 400);
     ctx.restore();
   }
 
@@ -354,7 +384,7 @@ window.FG = window.FG || {};
   // Tooltip de comandos, no canto superior direito logo abaixo das lumis.
   // Fica sempre visível (é o que ensina o pulo duplo e a planagem), mas
   // esmaece um pouco depois dos primeiros segundos para não roubar a cena.
-  const CONTROLS = [
+  const CONTROLS_TECLADO = [
     { key: '← →', desc: 'correr' },
     { key: 'ESPAÇO', desc: 'pular' },
     { key: 'ESPAÇO ×2', desc: 'pulo duplo' },
@@ -363,10 +393,21 @@ window.FG = window.FG || {};
     { key: 'ESPAÇO na parede', desc: 'escalar' },
     { key: 'X', desc: 'socar' },
   ];
+  // No toque o quadro ensina os mesmos truques com os nomes dos botões da tela.
+  const CONTROLS_TOQUE = [
+    { key: '◀ ▶', desc: 'correr' },
+    { key: 'PULO', desc: 'pular' },
+    { key: 'PULO ×2', desc: 'pulo duplo' },
+    { key: 'segurar PULO', desc: 'planar' },
+    { key: '▶ na parede', desc: 'agarrar' },
+    { key: 'PULO na parede', desc: 'escalar' },
+    { key: 'SOCO', desc: 'socar' },
+  ];
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
-    const h = TIP.padY * 2 + CONTROLS.length * TIP.rowH;
+    const lista = (FG.touch && FG.touch.active) ? CONTROLS_TOQUE : CONTROLS_TECLADO;
+    const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
     const fade = Math.max(0.55, Math.min(1, 1 - (elapsed - 8) / 4 * 0.45));
@@ -383,16 +424,16 @@ window.FG = window.FG || {};
     ctx.strokeStyle = 'rgba(255,190,90,0.4)';
     ctx.stroke();
 
-    for (let i = 0; i < CONTROLS.length; i++) {
+    for (let i = 0; i < lista.length; i++) {
       const y = TIP.y + TIP.padY + i * TIP.rowH + 14;
       ctx.textAlign = 'left';
       ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
       ctx.fillStyle = '#ffd870';
-      ctx.fillText(CONTROLS[i].key, TIP.x + 12, y);
+      ctx.fillText(lista[i].key, TIP.x + 12, y);
       ctx.textAlign = 'right';
       ctx.font = '13px "Trebuchet MS", sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.82)';
-      ctx.fillText(CONTROLS[i].desc, TIP.x + TIP.w - 12, y);
+      ctx.fillText(lista[i].desc, TIP.x + TIP.w - 12, y);
     }
     ctx.restore();
   }
@@ -474,7 +515,7 @@ window.FG = window.FG || {};
 
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';
     ctx.font = '20px "Trebuchet MS", sans-serif';
-    ctx.fillText('ESPAÇO para seguir', VIEW_W / 2, 432);
+    ctx.fillText(botao('ESPAÇO para seguir', 'toque em PULO para seguir'), VIEW_W / 2, 432);
     ctx.restore();
   }
 
@@ -496,17 +537,29 @@ window.FG = window.FG || {};
     ctx.fillText('lumis coletadas: ' + engine.lumis, VIEW_W / 2, 320);
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';
     ctx.font = '20px "Trebuchet MS", sans-serif';
-    ctx.fillText('ESPAÇO para reacender', VIEW_W / 2, 390);
+    ctx.fillText(botao('ESPAÇO para reacender', 'toque em PULO para reacender'), VIEW_W / 2, 390);
     ctx.restore();
   }
 
   // ---------- redimensionamento ----------
+  // No Safari do iOS a janela muda de tamanho sozinha (barra de endereço que
+  // some ao rolar, teclado, giro do aparelho) e o innerHeight só é confiável
+  // depois que a mudança assenta — daí o visualViewport quando existe e o
+  // reajuste atrasado no orientationchange, que dispara ANTES do layout girar.
   function resize() {
-    const scale = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
+    const vv = window.visualViewport;
+    const w = (vv && vv.width) || window.innerWidth;
+    const h = (vv && vv.height) || window.innerHeight;
+    const scale = Math.min(w / VIEW_W, h / VIEW_H);
     canvas.style.width = Math.floor(VIEW_W * scale) + 'px';
     canvas.style.height = Math.floor(VIEW_H * scale) + 'px';
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => {
+    resize();
+    setTimeout(resize, 300);
+  });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
 
   // ---------- loop ----------
