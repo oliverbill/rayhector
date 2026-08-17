@@ -76,7 +76,7 @@ const order = [
   'levelkit.js', 'level.js', 'level2.js', 'level3.js',
   'obstacles.js', 'player.js',
   'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js',
-  'engine.js',
+  'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {
   const src = fs.readFileSync(path.join(DIR, f), 'utf8');

@@ -42,16 +42,27 @@ python3 -m http.server 8000   # acesse http://localhost:8000
 ## Controles
 
 Os comandos também aparecem num quadro no canto superior direito, durante o
-jogo.
+jogo — no celular ele já vem escrito com o nome dos botões da tela.
 
-| tecla | ação |
-|---|---|
-| ← → ou A D | correr |
-| ESPAÇO / Z / ↑ / W | pular (aperte de novo no ar: **pulo duplo**) |
-| segurar pulo no ar | **planar** (uma hélice de fogo surge sobre a cabeça) |
-| direção contra a parede, no ar | **agarrar** (escorrega devagar) |
-| ESPAÇO agarrado | **escalar** — salta na parede e sobe ~90px por salto |
-| X / K | **soco** com a luva de boxe |
+| tecla | toque | ação |
+|---|---|---|
+| ← → ou A D | ◀ ▶ | correr |
+| ESPAÇO / Z / ↑ / W | PULO | pular (aperte de novo no ar: **pulo duplo**) |
+| segurar pulo no ar | segurar PULO | **planar** (uma hélice de fogo surge sobre a cabeça) |
+| direção contra a parede, no ar | ◀ ▶ contra a parede | **agarrar** (escorrega devagar) |
+| ESPAÇO agarrado | PULO agarrado | **escalar** — salta na parede e sobe ~90px por salto |
+| X / K | SOCO | **soco** com a luva de boxe |
+
+### No iPhone, iPad e Android
+
+Basta abrir o link no navegador: em aparelho de toque os botões aparecem
+sozinhos na tela e o menu já convida a tocar, em vez de pedir uma tecla que
+não existe ali. Vale **virar o aparelho para a horizontal** — o jogo é 16:9, e
+em pé ele fica numa faixa fina (o próprio jogo avisa). Os botões são
+desenhados no canvas, como o resto, então acompanham a escala da tela; o
+multi-toque funciona (dá para pular e socar ao mesmo tempo) e arrastar o dedo
+de ◀ para ▶ troca a direção sem soltar. Teclado e toque convivem: num iPad com
+teclado, os dois funcionam ao mesmo tempo.
 
 ## O jogo
 
@@ -115,6 +126,7 @@ jogo.
 | `enemies.js` | os quatro inimigos comuns e o registro de chefões |
 | `boss1.js` `boss2.js` `boss3.js` | um chefão por arquivo, cada um com a sua máquina de estados |
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
+| `touch.js` | controles de toque desenhados no canvas (iPhone, iPad, Android) |
 
 Contratos entre os módulos em `SPEC.md`.
 
@@ -122,6 +134,7 @@ Contratos entre os módulos em `SPEC.md`.
 
 ```bash
 node tests/smoke.js    # joga o jogo inteiro sem navegador (menu → chefão → vitória)
+node tests/toque.js    # finge um iPhone e joga só com o dedo (ver abaixo)
 node tests/reach.js    # simula a física do pulo e prova que dá para alcançar tudo
 node tests/reach.js 1  # a mesma prova para a fase 2 (0 = bosque, 1 = pântano, 2 = vulcão)
 node tests/parede.js   # monta um penhasco de 500px e prova que dá para escalá-lo
@@ -134,7 +147,13 @@ percorre o nível em busca larga e reporta o que for inalcançável, o que só �
 alcançável com timing perfeito, e o maior degrau vertical que cada plataforma
 cobra (referência: pulo simples sobe ~118px, duplo ~236px).
 
-Ele tem um ponto cego que vale conhecer: enxerga cada plataforma **na posição de
+`toque.js` monta um DOM que se comporta como aparelho de toque — com o canvas
+deslocado e escalado na página, como fica de verdade no letterbox — e dirige o
+jogo só com o dedo: sai do menu, corre, arrasta o dedo entre os botões, pula e
+soca ao mesmo tempo, e confere que ir para segundo plano com o dedo no botão
+não deixa o Heitor correndo sozinho. É o que substitui ter um iPhone na mão.
+
+`reach.js` tem um ponto cego que vale conhecer: enxerga cada plataforma **na posição de
 repouso**. Onde o chão se mexe — o tronco que afunda 70px, o disco que oscila —
 a conta tem de ser feita à mão, a partir do **pior caso**. Foi assim que se
 achou um salto do pântano que não fechava nem com pulo duplo depois do tronco
