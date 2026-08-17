@@ -1,4 +1,4 @@
-# 🔥 Fagulho: Lendas do Bosque
+# 🔥 Rayhector
 
 Um jogo de plataforma 2D em HTML5 inspirado no visual exuberante de **Rayman
 Legends** — mundo e inimigos desenhados em canvas puro. O herói é o
