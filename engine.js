@@ -352,6 +352,7 @@ window.FG = window.FG || {};
     ctx.fillStyle = '#fff2d0';
     ctx.fillText(String(engine.lumis), VIEW_W - 30, 42);
     ctx.restore();
+    drawMudo();
     drawControls();
     // barra do boss
     const boss = FG.enemies.boss;
@@ -435,6 +436,30 @@ window.FG = window.FG || {};
       ctx.fillStyle = 'rgba(255,255,255,0.82)';
       ctx.fillText(lista[i].desc, TIP.x + TIP.w - 12, y);
     }
+    ctx.restore();
+  }
+
+  // Alto-falante cortado, ao lado das lumis, enquanto o WebAudio não estiver
+  // tocando. Só aparece quando o contexto NÃO está em 'running' — ou seja,
+  // quando o áudio de fato não destravou. Se o jogo estiver mudo e este ícone
+  // não estiver aqui, o som está saindo do navegador e quem cortou foi o
+  // aparelho: no iPhone, o botão de silencioso ou o volume.
+  function drawMudo() {
+    if (!FG.audio || !FG.audio.ativo || FG.audio.ativo()) return;
+    const x = VIEW_W - 152, y = 34;
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#ffd0c0';
+    ctx.beginPath();               // caixinha + cone do alto-falante
+    ctx.moveTo(x - 8, y - 3); ctx.lineTo(x - 4, y - 3); ctx.lineTo(x + 1, y - 8);
+    ctx.lineTo(x + 1, y + 8); ctx.lineTo(x - 4, y + 3); ctx.lineTo(x - 8, y + 3);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 2;             // o corte
+    ctx.strokeStyle = '#ff6050';
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y - 6); ctx.lineTo(x + 12, y + 6);
+    ctx.moveTo(x + 12, y - 6); ctx.lineTo(x + 4, y + 6);
+    ctx.stroke();
     ctx.restore();
   }
 

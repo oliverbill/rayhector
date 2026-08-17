@@ -24,6 +24,17 @@ window.FG = window.FG || {};
   function init() {
     try {
       if (!actx) {
+        // O áudio de página no iOS nasce na categoria "ambient", que é a que o
+        // botão de silencioso do iPhone cala — o jogo roda inteiro, com o
+        // contexto em 'running', e não sai som nenhum. 'playback' é a
+        // categoria de mídia: toca com o silencioso ligado, como um tocador de
+        // música. (AudioSession API, Safari 16.4+; onde não existe, é no-op.)
+        try {
+          if (window.navigator && window.navigator.audioSession) {
+            window.navigator.audioSession.type = 'playback';
+          }
+        } catch (e) { /* categoria é um extra, não um requisito */ }
+
         var AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return; // navegador sem WebAudio: jogo segue mudo
         actx = new AC();
@@ -47,9 +58,24 @@ window.FG = window.FG || {};
         var data = noiseBuf.getChannelData(0);
         for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
       }
-      if (actx.state === 'suspended') actx.resume();
+      // 'suspended' é quem nunca foi destravado. O Safari tem TAMBÉM o estado
+      // 'interrupted' (ligação, Siri, outro app tomando o áudio), e desse o
+      // contexto não sai sozinho: checar só por 'suspended' deixava o jogo mudo
+      // para sempre depois de uma interrupção. Resume de tudo que não é
+      // 'running' — em contexto já rodando, resume() é no-op.
+      if (actx.state !== 'running') actx.resume();
     } catch (e) { /* áudio quebrado não derruba o jogo */ }
   }
+
+  // Voltar do segundo plano: o iOS suspende o contexto sem avisar ninguém, e
+  // sem isto o jogo continua rodando mudo até o próximo gesto do usuário.
+  try {
+    if (document.addEventListener) {
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) init();
+      });
+    }
+  } catch (e) { /* sem document utilizável: segue sem o reparo automático */ }
 
   // Pronto para tocar AGORA (sfx exige isso; a música tolera 'suspended'
   // porque o resume() do init é assíncrono e o engine pede música no mesmo
@@ -502,5 +528,9 @@ window.FG = window.FG || {};
   }
 
   // ------------------------------------------------------------------ API --
-  FG.audio = { init: init, sfx: sfx, music: music };
+  // ativo(): o contexto está mesmo tocando? É o que deixa o HUD dizer "mudo"
+  // em vez de o jogador ficar adivinhando se o som quebrou ou se é o aparelho.
+  // Atenção: 'running' quer dizer que o WebAudio está tocando, não que sai som
+  // pelo alto-falante — o botão de silencioso do iPhone corta depois disto.
+  FG.audio = { init: init, sfx: sfx, music: music, ativo: running };
 })();

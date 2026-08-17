@@ -64,6 +64,14 @@ multi-toque funciona (dá para pular e socar ao mesmo tempo) e arrastar o dedo
 de ◀ para ▶ troca a direção sem soltar. Teclado e toque convivem: num iPad com
 teclado, os dois funcionam ao mesmo tempo.
 
+**Som no iPhone.** O áudio de página nasce na categoria `ambient`, que o botão
+de silencioso do iPhone cala — o jogo roda inteiro, o WebAudio em `running`, e
+não sai nada. O `audio.js` pede a categoria `playback` (AudioSession API,
+Safari 16.4+), que é a de tocador de música e escapa do silencioso. Se mesmo
+assim estiver mudo, olhe o **alto-falante cortado** ao lado das lumis: ele só
+aparece quando o WebAudio de fato não destravou (aí um toque na tela resolve).
+Sem o ícone e sem som, quem cortou foi o aparelho — volume ou silencioso.
+
 ## O jogo
 
 - **Três mundos** com parallax próprio, todos pintados em canvas: o bosque ao
@@ -135,6 +143,7 @@ Contratos entre os módulos em `SPEC.md`.
 ```bash
 node tests/smoke.js    # joga o jogo inteiro sem navegador (menu → chefão → vitória)
 node tests/toque.js    # finge um iPhone e joga só com o dedo (ver abaixo)
+node tests/som.js      # WebAudio de mentira: prova que a trilha e os efeitos soam
 node tests/reach.js    # simula a física do pulo e prova que dá para alcançar tudo
 node tests/reach.js 1  # a mesma prova para a fase 2 (0 = bosque, 1 = pântano, 2 = vulcão)
 node tests/parede.js   # monta um penhasco de 500px e prova que dá para escalá-lo
@@ -146,6 +155,10 @@ achismo: reproduz a física do `player.js` sobre a geometria do `level.js`,
 percorre o nível em busca larga e reporta o que for inalcançável, o que só é
 alcançável com timing perfeito, e o maior degrau vertical que cada plataforma
 cobra (referência: pulo simples sobe ~118px, duplo ~236px).
+
+`som.js` conta os osciladores que a trilha e os efeitos criam, e maltrata o
+contexto como o Safari maltrata — `interrupted` (ligação, Siri) e suspensão em
+segundo plano — para garantir que o jogo volta a soar sozinho.
 
 `toque.js` monta um DOM que se comporta como aparelho de toque — com o canvas
 deslocado e escalado na página, como fica de verdade no letterbox — e dirige o
