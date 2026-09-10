@@ -35,7 +35,7 @@ window.FG = window.FG || {};
   // a esquerda, na direção do jogador; y negativo é para cima. Sem sprite,
   // sem matriz: um número aqui é o mesmo número no desenho e na hitbox.
   // ==================================================================
-  const BODY = { cx: 0, cy: -88, rx: 100, ry: 82 };      // macacão/tronco atarracado
+  const BODY = { cx: 0, cy: -88, rx: 60, ry: 82 };       // tronco MAGRO (era rx 100, um barril)
   const HEAD = { cx: -18, cy: -176, rx: 58, ry: 54 };    // cabeçorra redonda, virada p/ o jogador
   const EYE_L = { cx: -46, cy: -186, r: 9 };
   const EYE_R = { cx: -2, cy: -192, r: 9 };
@@ -63,8 +63,11 @@ window.FG = window.FG || {};
   const WEAK_W = 104, WEAK_H = 96;
 
   // Massas que machucam no contato fora da janela: cabeça e tronco.
-  const HEAD_HULL = { x: -92, y: -238, w: 150, h: 122 };
-  const BODY_HULL = { x: -112, y: -172, w: 224, h: 172 };
+  // Caixas de contato encolhidas junto com o corpo magro — a antiga
+  // BODY_HULL de 224px de largura obrigava o jogador a ficar DENTRO dela
+  // pra alcançar o nariz.
+  const HEAD_HULL = { x: -84, y: -238, w: 134, h: 122 };
+  const BODY_HULL = { x: -72, y: -172, w: 144, h: 172 };
 
   // ---------- pools do HUGO (pedras, destroços, frutas, ondas) ----------
   // Pré-alocadas: nada de `new` por frame, e o reset() apaga todas — senão
@@ -128,6 +131,7 @@ window.FG = window.FG || {};
     raise: 0,        // 0..1 — estilete erguido (telegraph da facada/martelada)
     charge: 0,       // 0..1 — recuo/tensão (telegraph de pedras/investida)
     glow: 0,         // brilho do ponto fraco na janela
+    safe: 0,         // carência de contato ao sair da janela (empurra, não machuca)
     dieScale: 1,      // encolhimento na morte
     poof: 0,          // nuvenzinha de fumaça crescendo na morte
 
@@ -182,6 +186,7 @@ window.FG = window.FG || {};
       this.raise = 0;
       this.charge = 0;
       this.glow = 0;
+      this.safe = 0;
       this.dieScale = 1;
       this.poof = 0;
       this.dieTimer = 0;
@@ -218,10 +223,13 @@ window.FG = window.FG || {};
         this.dieTimer = 0;
         this.timer = 0;
       } else {
-        // Levanta o busto, o nariz recolhe
+        // Levanta o busto, o nariz recolhe. O `bent` NÃO zera de repente e a
+        // carência `safe` cobre a subida: quem acabou de socar está COLADO
+        // no corpo dele, e sem a carência levava dano de graça na hora em
+        // que ele se reerguia — era o que tornava o soco "impossível".
         this.state = 'idle';
         this.timer = this.isPhase2() ? 1.0 : 1.4;
-        this.bent = 0;
+        this.safe = 0.6;
       }
     },
 
@@ -232,6 +240,7 @@ window.FG = window.FG || {};
       const p = FG.player;
       const ov = FG.engine.rectsOverlap;
       if (this.flash > 0) this.flash -= dt;
+      if (this.safe > 0) this.safe -= dt;
 
       // ---------- morte cinematográfica ----------
       if (this.state === 'dying') {
@@ -332,6 +341,7 @@ window.FG = window.FG || {};
           this.state = 'idle';
           this.timer = 1.1 * speedMul;
           this.glow = 0;
+          this.safe = 0.5;   // mesma carência de quem acertou: dá tempo de sair
         }
 
       } else if (this.state === 'martelada') {
@@ -468,10 +478,17 @@ window.FG = window.FG || {};
       }
 
       // ---------- contato com o HUGO ----------
-      // Encostar na cabeça ou no tronco machuca. Assim que ele começa a se
-      // curvar (bent), tudo fica inofensivo: é justamente aí que o jogador
-      // precisa chegar perto para socar o nariz.
-      if (this.bent <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
+      // Encostar na cabeça ou no tronco machuca. Curvado (bent) fica
+      // inofensivo — é aí que o jogador precisa colar pra socar o nariz.
+      // E entre um e outro há a carência `safe`, em que ele EMPURRA em vez
+      // de machucar: acertar o soco não pode custar dano só por estar onde
+      // o soco exige estar (mesma regra do golem/vampira).
+      if (this.safe > 0) {
+        if (ov(p, this.headBox) || ov(p, this.bodyBox)) {
+          const lado = (p.x + p.w / 2) < this.x ? -1 : 1;
+          p.vx = lado * 300;
+        }
+      } else if (this.bent <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
         p.hurt(1, this.x - 60);
       }
     },
@@ -510,6 +527,12 @@ window.FG = window.FG || {};
     const p = FG.player;
     const ov = FG.engine.rectsOverlap;
     const a = FG.level.arena;
+    // "Nada machuca durante a janela" vale para o chefão INTEIRO: a onda da
+    // martelada ainda varrendo a arena e a pedra que sobrou no chão apagam o
+    // dano enquanto ele está curvado ofegante. Sem isto, o jogador que corre
+    // para socar o nariz apanha do ataque que acabou de esquivar — e a
+    // janela deixa de ser janela (mesma regra do golem, boss3.js).
+    const janela = boss.state === 'exposto';
 
     // pedras de jardim (arco com gravidade; ao cair viram monte de destroços)
     for (let i = 0; i < MAXROCK; i++) {
@@ -535,7 +558,7 @@ window.FG = window.FG || {};
           q.t = 1.3;
           break;
         }
-      } else if (ov(p, circleRect(s.x, s.y, 12))) {
+      } else if (!janela && ov(p, circleRect(s.x, s.y, 12))) {
         s.active = false;
         p.hurt(1, s.x);
       }
@@ -551,7 +574,7 @@ window.FG = window.FG || {};
       if (Math.random() < 0.25) {
         spawnParticle(q.x + rand(0, q.w), q.y, rand(-15, 15), rand(-60, -20), 0.3, 3, 'rgba(140,120,100,0.8)', 300);
       }
-      if (ov(p, q)) p.hurt(1, q.x + q.w / 2);
+      if (!janela && ov(p, q)) p.hurt(1, q.x + q.w / 2);
     }
 
     // chuva de pinhas/maçãs: sombra → cai → some no chão
@@ -564,7 +587,7 @@ window.FG = window.FG || {};
       } else {
         f.vy += GRAV * 1.05 * dt;
         f.y += f.vy * dt;
-        if (ov(p, f)) {
+        if (!janela && ov(p, f)) {
           f.active = false;
           p.hurt(1, f.x + f.w / 2);
           continue;
@@ -589,7 +612,7 @@ window.FG = window.FG || {};
         spawnParticle(w.x + (w.vx < 0 ? 0 : w.w), w.y + w.h, rand(-30, 30), rand(-110, -30),
           0.3, 3.5, 'rgba(150,120,90,0.85)', 320);
       }
-      if (ov(p, w)) {
+      if (!janela && ov(p, w)) {
         w.active = false;
         p.hurt(1, w.x + w.w / 2);
       }
@@ -635,7 +658,7 @@ window.FG = window.FG || {};
     // ---- sombra de contato no chão ----
     ctx.fillStyle = 'rgba(10,6,4,0.35)';
     ctx.beginPath();
-    ctx.ellipse(X - 10, GY + 4, 118 * sc, 20 * sc, 0, 0, Math.PI * 2);
+    ctx.ellipse(X - 10, GY + 4, 82 * sc, 18 * sc, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // ---- nuvenzinha de fumaça crescendo na morte ----
@@ -704,16 +727,18 @@ window.FG = window.FG || {};
     ctx.lineWidth = 22;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-72, BODY.cy - 20);
-    ctx.quadraticCurveTo(-104, BODY.cy + 10, -100, BODY.cy + 50);
+    ctx.moveTo(-50, BODY.cy - 22);
+    ctx.quadraticCurveTo(-80, BODY.cy + 8, -76, BODY.cy + 48);
     ctx.stroke();
-    drawGlove(ctx, -100, BODY.cy + 50, -0.35);
+    drawGlove(ctx, -76, BODY.cy + 48, -0.35);
+
+    // gola franzida ATRÁS da cabeça, colada no queixo: o rosto cobre o miolo
+    // e só as pontinhas do babado aparecem em volta — gola de palhaço de
+    // verdade, não uma linguiça solta atravessando o peito.
+    drawCollar(ctx);
 
     // ---- cabeça: rosto pálido/creme uniforme (nada de pele alaranjada) ----
     blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, '#ecdfc8', '#faf3e6');
-
-    // gola franzida vermelho-escura no pescoço, por baixo da cabeça
-    drawCollar(ctx);
 
     // orelhas em estrela vermelha pontuda + peruca amarela em meio-círculo
     drawEars(ctx);
@@ -846,24 +871,29 @@ window.FG = window.FG || {};
 
   // Gola franzida vermelho-escura em volta do pescoço, entre a cabeça e o
   // tronco — feita de uma fileira de "pétalas" boboladas.
-  // Empurrada bem abaixo do queixo (HEAD.ry*2.0, não *1.25): a boca e o
-  // nariz já ocupam a faixa logo abaixo dos olhos, e a gola colada ali
-  // virava uma mancha escura fundida com a boca. Ela mora no pescoço/peito,
-  // separada por um vão visível.
+  // Desenhada ANTES da cabeça (fica atrás dela), colada no queixo: o rosto
+  // tapa o miolo e só o babado aparece — sem encostar na boca e sem virar
+  // uma linguiça solta no peito.
+  // Leque de pétalas ao longo do arco INFERIOR da cabeça: cada pétala é uma
+  // elipse pequena apontando pra fora, e o rosto (desenhado depois) cobre a
+  // metade interna — sobra só o babado espiando em volta do queixo. A versão
+  // anterior era uma fileira horizontal de elipses grandes que descia pelo
+  // peito e lia como um cachecol/linguiça.
   function drawCollar(ctx) {
-    const cy = HEAD.cy + HEAD.ry * 2.05;
     ctx.fillStyle = '#7a1010';
-    const n = 9;
+    const n = 7;
     for (let i = 0; i < n; i++) {
-      const cx = HEAD.cx - 52 + (i / (n - 1)) * 104;
-      const bump = Math.sin((i / (n - 1)) * Math.PI) * 6;
+      const ang = Math.PI * (0.16 + (i / (n - 1)) * 0.68);   // arco de baixo
+      const px = HEAD.cx + Math.cos(ang) * HEAD.rx * 0.95;
+      const py = HEAD.cy + Math.sin(ang) * HEAD.ry * 0.98;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(ang - Math.PI / 2);
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 4 - bump * 0.2, 18, 14 + bump, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 6, 11, 15, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
-    ctx.strokeStyle = 'rgba(20,4,4,0.4)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
   }
 
   // Luva vermelha com dedos — mão livre (não segura o estilete) e mão que
