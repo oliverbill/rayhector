@@ -51,6 +51,10 @@ window.FG = window.FG || {};
   let lastWallDir = 0;       // lado da última parede tocada (+1 direita, -1 esquerda)
   let clinging = false;      // agarrado na parede neste frame?
   let scrapeAccum = 0;       // acumulador de faíscas do atrito na parede
+  // nado (só desenho — a física da água vive no update e não muda aqui)
+  let swimBlend = 0;         // 0 em pé ↔ 1 deitado nadando (persegue inWater)
+  let swimPhase = 0;         // fase acumulada da braçada (rápida subindo, lenta boiando)
+  let bubbleAccum = 0;       // acumulador de bolhinhas saindo da boca
 
   // ---------- helpers de desenho do boneco (coordenadas locais, +x = frente) ----------
   // membro "mangueira de borracha": curva do ponto A ao B, sem cotovelo/joelho,
@@ -145,6 +149,7 @@ window.FG = window.FG || {};
         this.jumpsUsed = 0; this.wallCoyote = 0;
         this.onGround = false;
 
+        swimBlend += (0 - swimBlend) * Math.min(1, dt * 9);  // no cipó, sai da pose de nado
         this.updateAttack(dt, input);
         if (this.invuln > 0) this.invuln -= dt;
         this.updateSparks(dt, false);
@@ -190,8 +195,55 @@ window.FG = window.FG || {};
       this.jumpsUsed = jumpsUsed;
       this.wallCoyote = wallCoyote;
 
+      // ---------- água mergulhável (FG.level.waters, opcional por fase) ----------
+      // Dentro d'água a física troca: gravidade fraca (afunda devagar), segurar
+      // PULO nada para cima, e os créditos de pulo/planagem ficam sempre cheios
+      // — sair pela superfície com um pulo inteiro é o que faz a saída da água
+      // nunca virar armadilha. O ponto testado é o meio do peito: os pés
+      // molhados na beirada não contam como mergulho.
+      let inWater = false;
+      let waterTop = 0;   // linha da superfície da água em que está
+      const _ws = FG.level.waters;
+      if (_ws) {
+        const wcx = this.x + this.w / 2, wcy = this.y + this.h * 0.55;
+        for (let i = 0; i < _ws.length; i++) {
+          const wz = _ws[i];
+          if (wcx >= wz.x && wcx <= wz.x + wz.w && wcy >= wz.y && wcy <= wz.y + wz.h) {
+            inWater = true;
+            waterTop = wz.y;
+            break;
+          }
+        }
+      }
+      if (inWater) {
+        jumpsUsed = 0;
+        glideLeft = GLIDE_TIME;
+        coyoteTimer = 0;   // emergir conta como "chão fresco": o pulo sai na hora
+      }
+      this.inWater = inWater;
+
+      // pose de nado: o blend persegue inWater (deita/levanta sem pular de pose)
+      swimBlend += ((inWater ? 1 : 0) - swimBlend) * Math.min(1, dt * 9);
+      if (inWater) {
+        // braçada de crawl: gira rápido enquanto sobe nadando, lenta boiando
+        swimPhase += dt * (this.vy < 0 ? 11 : 4.5);
+        // bolhinhas ocasionais saindo da boca (cor da aura, o pool é o mesmo)
+        bubbleAccum += dt * (this.vy < 0 ? 4 : 1.6);
+        while (bubbleAccum >= 1) {
+          bubbleAccum -= 1;
+          emitSpark(
+            this.x + this.w / 2 + this.facing * (10 + Math.random() * 6),
+            this.y + 4 + Math.random() * 6,
+            this.facing * (10 + Math.random() * 20),
+            -50 - Math.random() * 60,
+            0.35 + Math.random() * 0.3,
+            1 + Math.random()
+          );
+        }
+      } else bubbleAccum = 0;
+
       // timers de pulo
-      coyoteTimer = this.onGround ? 0 : coyoteTimer + dt;
+      if (!inWater) coyoteTimer = this.onGround ? 0 : coyoteTimer + dt;
       if (input.jumpPressed) jumpBuffer = BUFFER;
       else if (jumpBuffer > 0) jumpBuffer -= dt;
 
@@ -246,10 +298,30 @@ window.FG = window.FG || {};
       if (gliding) glideLeft = Math.max(0, glideLeft - dt);
       this.glideLeft = glideLeft;   // espelhado para os testes e para o desenho
 
-      // gravidade (limitada pelo planar ou pelo atrito na parede)
-      this.vy += GRAVITY * dt;
-      const cap = clinging ? WALL_SLIDE : (gliding ? GLIDE_FALL : MAX_FALL);
-      if (this.vy > cap) this.vy = cap;
+      // gravidade (limitada pelo planar ou pelo atrito na parede) — ou, dentro
+      // d'água, o nado: segurar PULO sobe, soltar afunda devagar, tudo em
+      // velocidades curtas para a água parecer densa e não um céu de cabeça
+      // para baixo.
+      if (inWater) {
+        if (input.jump) this.vy -= 1500 * dt;   // braçada contínua para cima
+        else this.vy += 520 * dt;               // afunda devagar
+        // Perto da superfície o cap de subida NÃO se aplica: o pulo que o
+        // coyote-de-água libera (vy -720) passa inteiro e o salto para a
+        // margem sai de verdade. Sem esta exceção o cap de -280 engolia o
+        // pulo e a saída da água virava um quicar infinito na linha d'água.
+        const pertoDaSuperficie = (this.y + this.h * 0.55) < waterTop + 70;
+        if (!pertoDaSuperficie && this.vy < -280) this.vy = -280;
+        if (this.vy > 220) this.vy = 220;
+        // a água também segura a corrida
+        if (this.vx > 240) this.vx = 240;
+        if (this.vx < -240) this.vx = -240;
+        gliding = false;
+        jumpCut = true;   // nado não é pulo: nada de corte de altura ao soltar
+      } else {
+        this.vy += GRAVITY * dt;
+        const cap = clinging ? WALL_SLIDE : (gliding ? GLIDE_FALL : MAX_FALL);
+        if (this.vy > cap) this.vy = cap;
+      }
 
       // faíscas do atrito ao escorregar na parede
       if (clinging) {
@@ -365,6 +437,7 @@ window.FG = window.FG || {};
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; glideLeft = GLIDE_TIME; attackTimer = 0; attackCooldown = 0;
       wallLock = 0; wallCoyote = 0; lastWallDir = 0; clinging = false; scrapeAccum = 0;
+      swimBlend = 0; swimPhase = 0; bubbleAccum = 0; this.inWater = false;
       this.wallDir = 0;
       for (let i = 0; i < SPARKS; i++) sparks[i].life = 0;
     },
@@ -421,10 +494,26 @@ window.FG = window.FG || {};
       const COAT = '#1c1a20';                                    // casaco preto
       const COAT2 = '#16141a';                                   // manga de trás, mais escura
 
+      // nadando: o esticar/achatar de ar não combina com o corpo deitado
+      sx += (1 - sx) * swimBlend;
+      sy += (1 - sy) * swimBlend;
+
       ctx.save();
       ctx.translate(cx, bottom);
       ctx.rotate(tilt);
       ctx.scale(this.facing * sx, sy);                           // espelha pelo facing; +x = frente
+
+      // ---- pose de nado: corpo deitado, barriga para baixo ----
+      // Gira o boneco inteiro em torno do meio do corpo. No espaço local já
+      // espelhado, +x é a frente: rodar ~90° põe a cabeça na direção do facing
+      // e a barriga (lado das luvas) para baixo. O swimBlend faz o deitar e o
+      // levantar serem contínuos, e o seno dá a ondulação leve de quem nada.
+      if (swimBlend > 0.001) {
+        const wob = Math.sin(t * 3.2) * 0.065 * swimBlend;       // ±3.7° de gingado
+        ctx.translate(0, -SH * 0.45);
+        ctx.rotate(swimBlend * 1.38 + wob);                      // ~79°: deitado, nariz um tico pra baixo
+        ctx.translate(0, SH * 0.45);
+      }
 
       const stride = Math.min(1, Math.abs(this.vx) / MAX_VX);
       const phase = t * 14;                                      // sincronizado com a "bomba" do sy
@@ -450,6 +539,17 @@ window.FG = window.FG || {};
         f2x = -swing; f2y = -Math.max(0, -Math.sin(phase)) * 5 * stride;
       } else {                                                   // parado: base de boxe
         f1x = 5; f1y = 0; f2x = -4.5; f2y = 0;
+      }
+
+      // nadando: pernas esticadas para trás batendo tesourinha. Com o corpo
+      // deitado, o eixo local x virou o vertical do mundo — a oscilação em x
+      // é o bater de pés para cima/baixo, alternado entre as duas pernas.
+      if (swimBlend > 0.001) {
+        const kick = Math.sin(t * 9) * 4.5 * swimBlend;
+        f1x += (( 2.5 + kick) - f1x) * swimBlend;
+        f1y += (-1 - f1y) * swimBlend;
+        f2x += ((-2.5 - kick) - f2x) * swimBlend;
+        f2y += (-3 - f2y) * swimBlend;
       }
 
       // ---- pernas compridas (quadril em -20) + tênis ----
@@ -531,6 +631,21 @@ window.FG = window.FG || {};
         const bob = Math.sin(t * 2.2) * 1.2;                     // guarda de boxe, respirando
         gF = { x: 10, y: -31 + bob };
         gB = { x: 4, y: -27 + bob * 0.7 };
+      }
+
+      // nadando: braçada de crawl — cada luva gira em círculo contínuo em
+      // torno do ombro, meia-volta defasada da outra (swimPhase acelera no
+      // update quando ele está subindo com o botão de pulo). O soco continua
+      // mandando na luva da frente: o braço do golpe interrompe a braçada.
+      if (swimBlend > 0.001 && !punching) {
+        gF.x += ((4.5 + Math.cos(swimPhase) * 13) - gF.x) * swimBlend;
+        gF.y += ((-33 + Math.sin(swimPhase) * 11) - gF.y) * swimBlend;
+        gB.x += ((-4.5 + Math.cos(swimPhase + Math.PI) * 12) - gB.x) * swimBlend;
+        gB.y += ((-33 + Math.sin(swimPhase + Math.PI) * 10) - gB.y) * swimBlend;
+      } else if (swimBlend > 0.001) {
+        // socando: só o braço de trás segue remando
+        gB.x += ((-4.5 + Math.cos(swimPhase + Math.PI) * 12) - gB.x) * swimBlend;
+        gB.y += ((-33 + Math.sin(swimPhase + Math.PI) * 10) - gB.y) * swimBlend;
       }
       limb(ctx, -4.5, -33, gB.x, gB.y, -3, 3.8, COAT2);          // braço de trás
       gloveAt(ctx, gB.x, gB.y, 4.8, false, t);

@@ -16,7 +16,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 7200, H = 720;
+  var W = 7200, H = 1040;   // H cresceu para caber a GRUTA SUBMERSA do trecho 1
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -27,78 +27,58 @@ window.FG = window.FG || {};
   //    raízes escalável, 'h' = piso oculto (fundo das poças, não é desenhado).
   //
   // RITMO EM 6 TRECHOS — cada um ensina uma coisa antes de cobrá-la
-  //  (1) x 0..1410    MARGEM SECA. Chão firme, raízes em degrau, nenhum perigo.
-  //                   No fim, UM tronco que afunda sobre água RASA: cair não
-  //                   custa nada, e é ali que se descobre que ele desce e volta.
-  //  (2) x 1410..2510 O TAPETE DE TRONCOS. Os mesmos troncos, agora sobre poça
-  //                   venenosa. Afundar passou a custar; as lumis em linha por
-  //                   cima puxam o ritmo de atravessar sem parar em cima.
-  //  (3) x 2510..3700 O BAMBUZAL. Postes verticais que bloqueiam o chão e só
-  //                   se vencem escalando, feixes de bambu subindo em degraus,
-  //                   peixes voadores cruzando na horizontal. No topo, o CIPÓ
-  //                   TUTORIAL entre dois postes, com o outro lado à vista e
-  //                   chão macio embaixo: erra e não morre.
-  //  (4) x 3700..5150 A TRAVESSIA DOS CIPÓS. Três cipós encadeados sobre lodo
-  //                   profundo, com discos flutuantes de descanso entre eles.
-  //                   O ninho fica no arco de quem solta o cipó na hora certa.
-  //  (5) x 5150..5560 A FENDA DAS RAÍZES. Duas paredes frente a frente: descida
-  //                   controlada agarrando, e a ÚNICA saída de quem caiu no
-  //                   lodo (a face esquerda sobe 430px do fundo até o topo).
-  //  (6) x 5560..7200 LAMAÇAL FINAL e a clareira de lodo do chefão.
-  //
-  // Nada de beco sem saída: quem cai no lodo do trecho 4 anda até a parede da
-  // fenda e sobe por ela; quem cai no bambuzal reencontra o chão e reescala os
-  // postes; as poças dos trechos 2 e 6 têm piso no fundo e borda a um pulo.
-  //
-  // Alturas de referência do player: pulo simples ~118px, duplo ~236px, e uma
+  //  (1) x 0..880     MARGEM SECA. Chão firme, raízes em degrau, nenhum perigo.
+//  (2+3) x 880..4480 O LAGO SUBMERSO — METADE DA FASE debaixo d'água. Água
+//                   limpa (sem veneno): mergulhar é a rota principal, com
+//                   trilhas de lumis, um ninho no fundo, pilares de pedra,
+//                   piranhas e carangos. Na superfície, troncos-boia e três
+//                   ILHAS de lodo (com nado por baixo delas) dão a rota seca
+//                   e os respiros; o checkpoint do meio fica na ILHA B.
+//  (4) x 4480..5150 MARGEM LESTE. Sai da água, lodo raso, rumo à fenda.
+//  (5) x 5150..5560 A FENDA DAS RAÍZES. Duas paredes frente a frente: descida
+//                   controlada agarrando, e a saída de quem caiu no lamaçal.
+//  (6) x 5560..7200 LAMAÇAL FINAL e a clareira de lodo do chefão.
+//
+// Nada de beco sem saída: o lago se atravessa nadando por definição, as faces
+// das margens e das ilhas são escaláveis, e as poças do trecho 6 têm piso.
+//
+// Alturas de referência do player: pulo simples ~118px, duplo ~236px, e uma
   // face vertical contínua sobe indefinidamente agarrando (~120px por salto).
   // ---------------------------------------------------------------
   var solids = [
     // ---- (1) MARGEM SECA — degraus de raiz, nada que machuque ----
-    S(0, 620, 880, 100, 'g'),        // [0] margem inicial 0..880
+    S(0, 620, 880, 420, 'g'),        // [0] margem inicial 0..880 (parede oeste do lago)
     S(230, 586, 90, 34, 'r'),        // [1] raiz baixa (+34)
     S(400, 544, 110, 26, 'g'),       // [2] (+42)
     S(590, 492, 120, 24, 'g'),       // [3] (+52)
     S(780, 438, 110, 22, 'g'),       // [4] bônus alto (+54)
-    S(880, 678, 300, 42, 'h'),       // [5] fundo da ÁGUA RASA 880..1180
-    S(1180, 620, 230, 100, 'g'),     // [6] margem oposta 1180..1410
 
-    // ---- (2) TAPETE DE TRONCOS — duas poças, cinco troncos ----
-    S(1410, 700, 350, 40, 'h'),      // [7] fundo da poça A 1410..1760
-    S(1760, 620, 200, 100, 'g'),     // [8] ilhota de descanso 1760..1960
-    S(1960, 700, 370, 40, 'h'),      // [9] fundo da poça B 1960..2330
-    S(2330, 620, 180, 100, 'g'),     // [10] ilhota do checkpoint 2330..2510
+    // ---- (2+3) O LAGO SUBMERSO — metade da fase debaixo d'água ----
+    // x 880..4480 (3600px = 50% do mundo). Superfície em 664, leito em 1000.
+    // A rota principal é NADAR; os troncos-boia e as ilhas dão a rota de
+    // superfície para quem preferir, e os pilares dão relevo ao mergulho.
+    S(836, 1000, 3688, 40, 'h'),     // [5] leito do lago (entra 44px sob as
+                                     //     margens: rente às faces p/ escalada)
+    S(1750, 610, 240, 190, 'g'),     // [6] ILHA A (topo 610, base 800 — nado por baixo)
+    S(2650, 600, 260, 200, 'g'),     // [7] ILHA B (checkpoint; base 800)
+    S(3550, 610, 240, 190, 'g'),     // [8] ILHA C (base 800)
+    S(2200, 820, 90, 180, 'r'),      // [9] pilar submerso 1 (topo 820)
+    S(3080, 760, 100, 240, 'r'),     // [10] pilar submerso 2 (topo 760 — tem carango!)
+    S(4050, 840, 90, 160, 'r'),      // [11] pilar submerso 3 (topo 840)
 
-    // ---- (3) BAMBUZAL — postes bloqueiam o chão, feixes sobem em degraus ----
-    // Cada poste nasce na quina de um trecho de chão: assim a face fica rente
-    // ao apoio e a escalada é a saída natural, não um truque.
-    S(2510, 620, 300, 100, 'g'),     // [11] chão 2510..2810
-    S(2810, 452, 26, 268, 'p'),      // [12] POSTE A (452..720) — 168px de face
-    S(2836, 452, 120, 18, 'b'),      // [13] feixe A 2836..2956
-    S(2836, 620, 314, 100, 'g'),     // [14] lodaçal 2836..3150
-    S(3000, 400, 110, 18, 'b'),      // [15] feixe B 3000..3110 (+52 do feixe A)
-    S(3150, 300, 26, 420, 'p'),      // [16] POSTE B (300..720) — 320px de face
-    S(3176, 300, 120, 18, 'b'),      // [17] feixe C — margem esquerda do cipó
-    S(3176, 620, 344, 100, 'g'),     // [18] lodaçal sob o vão do cipó 3176..3520
-    S(3520, 300, 26, 420, 'p'),      // [19] POSTE C (300..720)
-    S(3546, 300, 130, 18, 'b'),      // [20] feixe D — margem direita + checkpoint
-    S(3546, 620, 154, 100, 'g'),     // [21] lodaçal 3546..3700 (desce para o lodo)
-
-    // ---- (4) TRAVESSIA DOS CIPÓS — só o fundo é sólido ----
-    // Lá em cima quem sustenta são cipós e discos (obstáculos, não sólidos):
-    // a travessia é toda dinâmica. Este chão é o preço de errar, não a rota.
-    S(3700, 640, 1450, 80, 'g'),     // [22] fundo do lodo 3700..5150
+    // ---- (4) MARGEM LESTE — a saída do lago, caminho para a fenda ----
+    S(4480, 640, 670, 400, 'g'),     // [12] margem leste 4480..5150 (parede do lago)
 
     // ---- (5) FENDA DAS RAÍZES ----
-    S(5150, 210, 90, 510, 'c'),      // [23] parede esquerda (do fundo do lodo ao topo)
-    S(5240, 620, 800, 100, 'g'),     // [24] fundo da fenda + lamaçal 5240..6040
-    S(5390, 230, 110, 320, 'c'),     // [25] parede direita suspensa (arco de 70px por baixo)
+    S(5150, 210, 90, 510, 'c'),      // [13] parede esquerda (do fundo ao topo)
+    S(5240, 620, 800, 100, 'g'),     // [14] fundo da fenda + lamaçal 5240..6040
+    S(5390, 230, 110, 320, 'c'),     // [15] parede direita suspensa (arco de 70px por baixo)
 
     // ---- (6) LAMAÇAL FINAL e a clareira do chefão ----
-    S(5700, 540, 120, 24, 'g'),      // [26] degrau por cima dos juncos
-    S(5880, 486, 110, 22, 'g'),      // [27] bônus
-    S(6040, 700, 140, 40, 'h'),      // [28] piso oculto da poça pré-clareira
-    S(6180, 620, 1020, 100, 'g'),    // [29] clareira de lodo do chefão
+    S(5700, 540, 120, 24, 'g'),      // [16] degrau por cima dos juncos
+    S(5880, 486, 110, 22, 'g'),      // [17] bônus
+    S(6040, 700, 140, 40, 'h'),      // [18] piso oculto da poça pré-clareira
+    S(6180, 620, 1020, 100, 'g'),    // [19] clareira de lodo do chefão
   ];
 
   // ---------------------------------------------------------------
@@ -110,12 +90,8 @@ window.FG = window.FG || {};
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(1410, 676, 350, 26, 'p'),   // poça A
-    Hz(1960, 676, 370, 26, 'p'),   // poça B
-    Hz(3020, 596, 90, 24, 's'),    // juncos secos no lodaçal do bambuzal
-    Hz(3700, 616, 460, 26, 'p'),   // lodo profundo 1
-    Hz(4270, 616, 400, 26, 'p'),   // lodo profundo 2 (banco seco em 4160..4270)
-    Hz(4780, 616, 370, 26, 'p'),   // lodo profundo 3 (banco seco em 4670..4780)
+    Hz(4480, 616, 190, 26, 'p'),   // lodo raso na saída do lago
+    Hz(4780, 616, 370, 26, 'p'),   // lodo profundo antes da fenda
     Hz(5390, 206, 110, 24, 's'),   // crista da parede direita: sem atalho por cima
     Hz(5760, 596, 100, 24, 's'),   // reta final
     Hz(6040, 676, 140, 26, 'p'),   // poça pré-clareira
@@ -123,8 +99,8 @@ window.FG = window.FG || {};
 
   // 3 lanternas-checkpoint, nos três respiros do traçado
   var checkpoints = [
-    { x: 2400, y: 620 },   // fim do tapete de troncos
-    { x: 3620, y: 300 },   // topo do bambuzal (feixe D), antes dos cipós
+    { x: 2760, y: 600 },   // topo da ILHA B, no meio do lago
+    { x: 4560, y: 640 },   // margem leste, saindo da água
     { x: 5580, y: 620 },   // saída da fenda, já no lamaçal
   ];
 
@@ -138,22 +114,27 @@ window.FG = window.FG || {};
   var enemyDefs = [
     { type: 'voadeira',  x: 1030, y: 520, range: 110 },  // (1) fim da margem
 
-    { type: 'voadeira',  x: 1560, y: 500, range: 120 },  // (2) sobre a poça A
-    { type: 'sapeca',    x: 1830, y: 584, range: 70 },   // ilhota de descanso
-    { type: 'voadeira',  x: 2150, y: 486, range: 140 },  // sobre a poça B
+    // (2+3) O LAGO — piranhas patrulhando o volume, carangos no leito e nos
+    // pilares, e os peixes voadores rasantes por cima da superfície
+    { type: 'piranha',   x: 930,  y: 770, range: 110 },
+    { type: 'piranha',   x: 1060, y: 890, range: 100 },
+    { type: 'carango',   x: 970,  y: 968, range: 90 },
+    { type: 'piranha',   x: 1550, y: 810, range: 120 },
+    { type: 'carango',   x: 1900, y: 968, range: 90 },
+    { type: 'piranha',   x: 2150, y: 760, range: 130 },
+    { type: 'piranha',   x: 2450, y: 900, range: 110 },
+    { type: 'carango',   x: 3110, y: 734, range: 38 },   // em cima do pilar 2!
+    { type: 'piranha',   x: 2950, y: 880, range: 120 },
+    { type: 'carango',   x: 3300, y: 968, range: 100 },
+    { type: 'piranha',   x: 3450, y: 790, range: 110 },
+    { type: 'piranha',   x: 4100, y: 900, range: 120 },
+    { type: 'carango',   x: 4300, y: 968, range: 80 },
+    { type: 'peixe',     x: 2500, y: 600, range: 380, speed: 540 }, // rasante sobre a água
+    { type: 'peixe',     x: 3900, y: 590, range: 340, speed: 560 },
+    { type: 'voadeira',  x: 3550, y: 520, range: 140 },  // sobre a ILHA C
 
-    { type: 'peixe',     x: 2700, y: 548, range: 300, speed: 520 }, // (3) o primeiro peixe
-    { type: 'espinhoco', x: 2900, y: 590, range: 90 },
-    { type: 'peixe',     x: 2980, y: 432, range: 320 },  // na altura dos feixes
-    { type: 'sapeca',    x: 3250, y: 584, range: 80 },
-    { type: 'peixe',     x: 3380, y: 236, range: 300, speed: 600 }, // cruza o vão do cipó
-    { type: 'voadeira',  x: 3300, y: 400, range: 130 },
-
-    { type: 'peixe',     x: 4020, y: 254, range: 340, speed: 600 }, // (4) cruza o cipó 1
-    { type: 'espinhoco', x: 4190, y: 610, range: 70 },   // banco seco do lodo
-    { type: 'voadeira',  x: 4300, y: 246, range: 130 },
-    { type: 'peixe',     x: 4480, y: 336, range: 360 },
-    { type: 'peixe',     x: 4900, y: 262, range: 340, speed: 620 }, // cruza o cipó 3
+    // (4) margem leste
+    { type: 'espinhoco', x: 4600, y: 614, range: 100 },
 
     // range curto de propósito: a fenda tem 150px de vão, e uma voadeira de
     // range largo entraria e sairia de dentro das paredes (ela não colide)
@@ -183,39 +164,16 @@ window.FG = window.FG || {};
   // Todo cipó reserva sag+13+60px livres abaixo da reta dos pinos.
   // ---------------------------------------------------------------
   var obstacleDefs = [
-    // (1) o tronco-tutorial, sobre água rasa: afundar aqui não custa nada
-    { type: 'tronco', x: 960, y: 556, w: 130 },
-
-    // (2) o tapete: os mesmos troncos, agora sobre veneno.
-    // Os vãos são de 90px e não de 30-40px, e os pares estão na MESMA altura de
-    // repouso, por um motivo medido: saindo do ponto mais fundo (repouso+70) o
-    // pulo sobe 70px, e num vão curto o arco a 340px/s passa POR CIMA do tronco
-    // seguinte em vez de pousar nele. Com 90px de vão o pouso cai no meio do
-    // alvo, e os seis troncos da fase fecham com PULO SIMPLES correndo solto.
+    // troncos-boia na superfície do lago: a rota seca de quem ainda não quer
+    // mergulhar. Afundam com o peso (556+70+22 = 648 < 664, nunca somem).
+    { type: 'tronco', x: 960,  y: 556, w: 130 },
     { type: 'tronco', x: 1440, y: 568, w: 110 },
     { type: 'tronco', x: 1640, y: 568, w: 110 },
-    { type: 'tronco', x: 1990, y: 560, w: 110 },
-    { type: 'tronco', x: 2190, y: 560, w: 110 },
-
-    // (3) o CIPÓ TUTORIAL, pendurado alto entre os postes B e C. O vão de
-    // 224px também se atravessa de pulo duplo — a corda é o caminho bonito,
-    // não o único, e é por isso que se pode errar aqui sem morrer.
-    { type: 'cipo', x1: 3300, y1: 176, x2: 3540, y2: 176, sag: 56 },
-
-    // (4) a travessia: disco → cipó → disco → cipó → disco → cipó → disco.
-    // Os discos são o respiro entre cordas; as fases das oscilações são
-    // diferentes de propósito, para os quatro nunca subirem juntos.
-    { type: 'disco', x: 3730, y: 300, w: 110, bob: 10, period: 3.0, phase: 0 },
-    { type: 'cipo',  x1: 3900, y1: 200, x2: 4130, y2: 200, sag: 54 },
-    { type: 'disco', x: 4180, y: 306, w: 110, bob: 12, period: 3.4, phase: 1.6 },
-    { type: 'cipo',  x1: 4350, y1: 186, x2: 4600, y2: 214, sag: 58 },
-    { type: 'disco', x: 4650, y: 330, w: 110, bob: 12, period: 2.8, phase: 3.1 },
-    { type: 'cipo',  x1: 4800, y1: 196, x2: 5020, y2: 176, sag: 50 },
-    { type: 'disco', x: 5045, y: 286, w: 100, bob: 9, period: 3.6, phase: 0.8 },
+    { type: 'tronco', x: 2280, y: 560, w: 110 },
+    { type: 'tronco', x: 3180, y: 560, w: 110 },
+    { type: 'tronco', x: 4180, y: 560, w: 110 },
 
     // (6) lamaçal final: um tronco sobre a poça pré-clareira, como despedida.
-    // y=570 e não 590 porque 570+70+22 = 662 ainda fica acima da superfície da
-    // poça (676) — a 590 ele sumiria dentro do veneno no ponto mais fundo.
     { type: 'tronco', x: 6060, y: 570, w: 110 },
   ];
 
@@ -228,7 +186,7 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   var NINHO_R = 34;      // raio de coleta: é um casulo gordo, não uma fagulha
   var ninhos = [
-    { x: 4550, y: 198, taken: false, ph: 0.0 },
+    { x: 2450, y: 930, taken: false, ph: 0.0 },   // no fundo do lago, entre as piranhas
     { x: 5312, y: 396, taken: false, ph: 1.7 },
   ];
 
@@ -238,8 +196,139 @@ window.FG = window.FG || {};
   // um lugar em que afundar não seja punição.
   // ---------------------------------------------------------------
   var rasos = [
-    { x: 880, y: 662, w: 300, h: 58 },
+    { x: 880, y: 662, w: 3600, h: 378 },  // o LAGO inteiro, metade da fase
   ];
+
+  // ---------------------------------------------------------------
+  // ÁGUA MERGULHÁVEL — o player.js lê FG.level.waters: dentro destes
+  // retângulos a física vira nado (segurar PULO sobe, soltar afunda).
+  // A gruta é a única água mergulhável da fase; as poças venenosas
+  // continuam sendo hazard, não piscina.
+  // ---------------------------------------------------------------
+  var waters = [
+    { x: 880, y: 664, w: 3600, h: 336 },
+  ];
+
+  // ---------------------------------------------------------------
+  // GRUTA SUBMERSA — tabelas fixas da animação (nada de random por frame).
+  // Tudo em coordenadas LOCAIS do retângulo da água (0,0 = canto do raso):
+  // algas presas ao leito, plâncton em deriva, colunas de bolhas e os raios
+  // de luz que entram pela superfície. O que não mexe (leito, paredes,
+  // pedras, concha) vai baked no offscreen grutaSpr, montado no buildAll.
+  // ---------------------------------------------------------------
+  var gruta = { algas: [], plancton: [], bolhas: [], raios: [], deco: [] };
+  (function () {
+    var r = makeRand(20260910);
+    var gw = rasos[0].w, gh = rasos[0].h;
+    // as densidades escalam com a largura (as bases foram afinadas para os
+    // ~300px da gruta original), com TETO para o custo por frame não crescer
+    // junto do lago — quem segura o resto é o culling do drawGruta
+    var nAlgas = Math.min(34, Math.round(4 * gw / 300));
+    var nPlanc = Math.min(104, Math.round(16 * gw / 300));
+    var nBolhas = Math.min(20, Math.round(3 * gw / 300));
+    var nRaios = Math.min(16, Math.round(3 * gw / 300));
+    // talos de alga no leito, comprimentos e fases diferentes para nunca
+    // ondularem em uníssono
+    for (var i = 0; i < nAlgas; i++) {
+      gruta.algas.push({
+        dx: 34 + i * ((gw - 68) / (nAlgas - 1)) + (r() * 2 - 1) * 26,
+        len: 64 + r() * 52,
+        ph: r() * Math.PI * 2,
+        amp: 7 + r() * 7,
+        seg: 3 + (i % 2),          // nº de folhas laterais
+      });
+    }
+    // plâncton: pontinhos claros em suspensão, cada um com órbita própria
+    for (var p = 0; p < nPlanc; p++) {
+      gruta.plancton.push({
+        dx: 12 + r() * (gw - 24),
+        dy: 40 + r() * (gh - 80),
+        ph: r() * Math.PI * 2,
+        ax: 6 + r() * 10,          // amplitude horizontal da deriva
+        ay: 4 + r() * 8,           // amplitude vertical
+        rad: 0.8 + r() * 1.1,
+      });
+    }
+    // colunas esparsas de bolhinhas subindo do fundo
+    for (var b = 0; b < nBolhas; b++) {
+      gruta.bolhas.push({ dx: 50 + b * ((gw - 100) / (nBolhas - 1)) + (r() * 2 - 1) * 34, ph: r() });
+    }
+    // feixes de luz diagonais, cada um com largura e balanço próprios
+    for (var f = 0; f < nRaios; f++) {
+      gruta.raios.push({
+        dx: 40 + f * ((gw - 80) / (nRaios - 1)) + (r() * 2 - 1) * 42,  // onde fura a superfície
+        wTop: 16 + r() * 12,
+        wBot: 44 + r() * 26,
+        lean: 46 + r() * 30,       // quanto o feixe tomba para a direita
+        ph: r() * Math.PI * 2,
+      });
+    }
+  })();
+
+  // ---------------------------------------------------------------
+  // DECORAÇÃO SUBMERSA das ilhas e pilares — musgo/limo escorrido pelas
+  // paredes, cracas/caramujos grudados e raízes descendo da base das ilhas
+  // flutuantes até perto do leito. Tudo VISUAL (sem colisão nenhuma), em
+  // coordenadas de MUNDO, com as posições das 3 ilhas + 3 pilares do lago
+  // hardcoded aqui — o drawGrutaDeco desenha por cima dos sólidos.
+  // ---------------------------------------------------------------
+  (function () {
+    var r = makeRand(20260912);
+    var LEITO = 1000, SUP = 666;   // leito do lago e linha d'água
+    var st = [
+      // as 3 ilhas de lodo flutuantes (topo fora d'água, base em 800)
+      { x: 1750, w: 240, top: SUP, bot: 800, ilha: true },
+      { x: 2650, w: 260, top: SUP, bot: 800, ilha: true },
+      { x: 3550, w: 240, top: SUP, bot: 800, ilha: true },
+      // os 3 pilares submersos (assentam no leito)
+      { x: 2200, w: 90, top: 822, bot: LEITO, ilha: false },
+      { x: 3080, w: 100, top: 762, bot: LEITO, ilha: false },
+      { x: 4050, w: 90, top: 842, bot: LEITO, ilha: false },
+    ];
+    for (var si = 0; si < st.length; si++) {
+      var s = st[si];
+      var d = { x0: s.x - 50, x1: s.x + s.w + 50, musgo: [], cracas: [], raizes: [] };
+      for (var lado = 0; lado < 2; lado++) {
+        var wx = lado === 0 ? s.x + 2 : s.x + s.w - 2;
+        var dir = lado === 0 ? -1 : 1;
+        // musgo/limo escorrido pela parede submersa
+        var nm = 2 + Math.round(r() * 2);
+        for (var m = 0; m < nm; m++) {
+          var my = s.top + 8 + r() * (s.bot - s.top - 34);
+          d.musgo.push({
+            x: wx, y: my, l: 14 + r() * 26,
+            cx: wx + dir * (2 + r() * 4),
+            ex: wx + dir * (3 + r() * 5),
+          });
+        }
+        // cracas/caramujos grudados na parede
+        var nc = 3 + Math.round(r() * 2);
+        for (var c = 0; c < nc; c++) {
+          d.cracas.push({
+            x: wx + dir * 1.5,
+            y: s.top + 14 + r() * (s.bot - s.top - 24),
+            rad: 1.6 + r() * 1.8,
+          });
+        }
+      }
+      // raízes descendo da base flutuante da ilha até perto do leito —
+      // é o que vende que a ilha BOIA em vez de assentar no fundo
+      if (s.ilha) {
+        for (var k = 0; k < 3; k++) {
+          var rx = s.x + 24 + k * ((s.w - 48) / 2) + (r() * 2 - 1) * 12;
+          var ry = LEITO - 16 - r() * 26;   // ponta perto do leito
+          d.raizes.push({
+            x: rx, y: s.bot - 4,
+            c1x: rx + (r() * 2 - 1) * 22, c1y: s.bot + (ry - s.bot) * 0.35,
+            c2x: rx + (r() * 2 - 1) * 16, c2y: s.bot + (ry - s.bot) * 0.7,
+            ex: rx + (r() * 2 - 1) * 26, ey: ry,
+            lw: 3 + r() * 2.5,
+          });
+        }
+      }
+      gruta.deco.push(d);
+    }
+  })();
 
   // ---------------------------------------------------------------
   // LUMIS — linhas por cima dos troncos (puxam o ritmo de atravessar sem
@@ -255,31 +344,23 @@ window.FG = window.FG || {};
   lumiLine(150, 578, 4, 62);
   lumiArc(500, 500, 5, 190, 34);
   lumiLine(800, 396, 3, 36);
-  lumiArc(1035, 556, 4, 190, 44);      // por cima do tronco-tutorial
-  // (2) tapete de troncos — a linha reta é o convite a não parar em cima
-  lumiLine(1470, 518, 4, 60);
-  lumiArc(1660, 506, 3, 130, 34);
-  lumiLine(1800, 572, 3, 52);
-  lumiLine(2020, 510, 4, 58);
-  lumiArc(2230, 498, 3, 130, 36);
-  // (3) bambuzal — arco por cima do poste A, escadas coladas nos postes B e C
-  lumiArc(2823, 408, 5, 150, 40);
-  lumiLine(2870, 404, 3, 44);
-  lumiArc(2980, 348, 3, 130, 34);
-  lumiCol(3135, 580, 6, -50);          // POSTE B: a escada que ensina a subir
-  lumiLine(3200, 250, 3, 46);
-  lumiArc(3420, 212, 5, 200, 40);      // desenha o arco do cipó tutorial
-  lumiCol(3505, 580, 5, -56);          // POSTE C, para quem caiu do vão
-  lumiLine(3580, 250, 3, 44);
-  // (4) travessia dos cipós — linhas na altura de quem passa PENDURADO
-  // (o corpo fica ~34px abaixo da corda) e arcos na trajetória de quem solta
-  lumiArc(3800, 244, 3, 130, 34);
-  lumiLine(4000, 286, 3, 46);
-  lumiArc(4155, 188, 4, 150, 40);
-  lumiLine(4440, 288, 3, 48);
-  lumiArc(4640, 248, 4, 150, 40);
-  lumiLine(4880, 274, 3, 48);
-  lumiArc(5040, 208, 3, 130, 34);
+  lumiArc(1035, 556, 4, 190, 44);      // por cima do tronco-boia tutorial
+  // (2+3) O LAGO — trilha de superfície pelos troncos e ilhas...
+  lumiLine(1470, 630, 3, 60);
+  lumiArc(1870, 560, 3, 130, 30);      // sobre a ILHA A
+  lumiArc(2780, 550, 3, 140, 30);      // sobre a ILHA B
+  lumiArc(3670, 560, 3, 130, 30);      // sobre a ILHA C
+  // ...e as trilhas SUBMERSAS: o convite pro mergulho é a luz lá embaixo
+  lumiCol(1030, 940, 4, -72);          // a escada que convida a descer
+  lumiLine(920, 972, 3, 56);
+  lumiLine(1300, 800, 4, 90);
+  lumiArc(2000, 770, 4, 220, 50);      // por cima do pilar 1
+  lumiLine(2330, 900, 4, 80);          // rumo ao ninho submerso
+  lumiCol(2770, 940, 4, -70);          // debaixo da ILHA B
+  lumiLine(3000, 724, 4, 90);          // por cima do pilar 2 (cuidado co'o carango)
+  lumiArc(3600, 850, 4, 220, 50);
+  lumiLine(4000, 800, 3, 90);
+  lumiCol(4430, 950, 4, -75);          // a subida para a margem leste
   // (5) fenda das raízes — a coluna da esquerda é a placa de "sobe por aqui"
   lumiCol(5132, 578, 6, -56);
   lumiCol(5312, 268, 5, 58);
@@ -335,6 +416,7 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   var built = false;
   var skySpr, luzSpr, farL, midL, mistL, nearL, frontL, brumaSpr, vig, lumiSpr, casuloSpr;
+  var grutaSpr, veuSpr;
   var LAYER_H = 680;
   var ROCK_PAD = 16;        // folga para o limo transbordar o barranco
 
@@ -415,6 +497,29 @@ window.FG = window.FG || {};
     })(vig.getContext('2d'));
 
     lumiSpr = kit.makeLumiSprite();
+
+    // GRUTA SUBMERSA — tudo o que não mexe vai num offscreen só: o corpo
+    // d'água em gradiente (superfície verde-oliva clareada pela luz →
+    // fundo verde-escuro profundo), as raízes descendo pelas paredes, as
+    // pedras musgosas do leito e a conchinha. O custo por frame é um blit;
+    // por cima dele só entram as camadas animadas (algas, raios, plâncton,
+    // bolhas e a linha de superfície).
+    grutaSpr = makeCanvas(rasos[0].w, rasos[0].h);
+    paintGruta(grutaSpr.getContext('2d'), rasos[0].w, rasos[0].h, 20260911);
+
+    // véu de imersão: cobre a tela quando o player está debaixo d'água.
+    // Verde-azulado escuro com uma vinheta aquática levinha nas bordas —
+    // desenhado com alpha ~0.14 lá no drawFront, com transição por lerp.
+    veuSpr = makeCanvas(VIEW_W, VIEW_H);
+    (function (g) {
+      g.fillStyle = 'rgba(14,52,44,1)';
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+      var gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 200, VIEW_W / 2, VIEW_H / 2, 620);
+      gr.addColorStop(0, 'rgba(6,30,28,0)');
+      gr.addColorStop(1, 'rgba(6,30,28,0.85)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+    })(veuSpr.getContext('2d'));
 
     // halo do casulo: verde-azulado, o único frio da paleta inteira — é o que
     // faz o ninho saltar no meio de tanto amarelo
@@ -685,6 +790,125 @@ window.FG = window.FG || {};
       g.quadraticCurveTo(lx + (r() * 2 - 1) * 5, Y + h + ll * 0.6, lx + (r() * 2 - 1) * 7, Y + h + ll);
       g.stroke();
     }
+  }
+
+  // ---------------------------------------------------------------
+  // GRUTA SUBMERSA (estático) — o corpo d'água e o cenário do fundo.
+  // Ordem das tintas: gradiente da água → decoração (raízes, pedras,
+  // concha) → segunda demão fina de água por cima, para o cenário parecer
+  // AFUNDADO na água e não colado na frente dela.
+  // ---------------------------------------------------------------
+  function paintGruta(g, w, h, seed) {
+    var r = makeRand(seed);
+
+    // o corpo d'água: superfície verde-oliva clareada pela luz difusa,
+    // escurecendo até um verde-escuro de fundo de gruta
+    var gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, 'rgba(118,138,62,0.5)');
+    gr.addColorStop(0.22, 'rgba(84,108,52,0.6)');
+    gr.addColorStop(0.55, 'rgba(48,72,42,0.72)');
+    gr.addColorStop(1, 'rgba(16,34,24,0.88)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, h);
+
+    // raízes retorcidas descendo pelas paredes internas (x=0 e x=w),
+    // do meio da gruta até perto do leito — são as margens que continuam
+    // vivas debaixo d'água
+    g.lineCap = 'round';
+    for (var lado = 0; lado < 2; lado++) {
+      var px = lado === 0 ? 3 : w - 3;
+      var dir = lado === 0 ? 1 : -1;
+      var nr = 3;
+      for (var k = 0; k < nr; k++) {
+        var ry = 58 + k * 86 + r() * 40;
+        var rl = 90 + r() * 110;
+        g.strokeStyle = 'rgba(26,34,16,0.7)';
+        g.lineWidth = 4.5 + r() * 3.5;
+        g.beginPath();
+        g.moveTo(px, ry);
+        g.bezierCurveTo(px + dir * (14 + r() * 18), ry + rl * 0.3,
+                        px + dir * (4 + r() * 10), ry + rl * 0.65,
+                        px + dir * (18 + r() * 20), ry + rl);
+        g.stroke();
+        // fio de limo claro acompanhando a raiz
+        g.strokeStyle = 'rgba(120,150,70,0.3)';
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(px + dir * 2, ry + 6);
+        g.quadraticCurveTo(px + dir * (12 + r() * 12), ry + rl * 0.5, px + dir * (10 + r() * 14), ry + rl * 0.9);
+        g.stroke();
+      }
+    }
+
+    // pedras musgosas espalhadas pelo leito inteiro (escala com a largura)
+    var np = Math.max(5, Math.round(w / 72));
+    for (var pi = 0; pi < np; pi++) {
+      var bx = 24 + pi * ((w - 48) / (np - 1)) + (r() * 2 - 1) * 22;
+      var brw = 12 + r() * 14, brh = 7 + r() * 7;
+      g.fillStyle = 'rgba(30,38,22,0.9)';
+      g.beginPath();
+      g.ellipse(bx, h - 5 - brh * 0.4, brw, brh, 0, 0, Math.PI * 2);
+      g.fill();
+      // coroa de musgo por cima da pedra
+      g.fillStyle = 'rgba(74,104,46,0.55)';
+      g.beginPath();
+      g.ellipse(bx - brw * 0.15, h - 6 - brh * 0.8, brw * 0.7, brh * 0.45, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // conchinhas rente ao leito, espalhadas pelo comprimento todo — cada
+    // trecho do lago ganha o seu tesourinho para valer a nadada
+    var nsh = Math.max(1, Math.round(w / 620));
+    for (var sh = 0; sh < nsh; sh++) {
+      var cx2 = 90 + sh * ((w - 180) / Math.max(1, nsh - 1)) + (r() * 2 - 1) * 60;
+      var cy2 = h - 8;
+      g.fillStyle = 'rgba(214,206,170,0.85)';
+      g.beginPath();
+      g.moveTo(cx2 - 9, cy2);
+      g.quadraticCurveTo(cx2, cy2 - 13, cx2 + 9, cy2);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(120,110,80,0.7)';
+      g.lineWidth = 1.2;
+      for (var v = -1; v <= 1; v++) {
+        g.beginPath();
+        g.moveTo(cx2 + v * 4, cy2 - 1);
+        g.lineTo(cx2 + v * 6, cy2 - 9 + Math.abs(v) * 3);
+        g.stroke();
+      }
+    }
+    // cristaizinhos verde-azulados pelo leito — o único frio da paleta,
+    // como o casulo: são o que faz o fundo valer o mergulho
+    var nkx = Math.max(1, Math.round(w / 740));
+    for (var kk = 0; kk < nkx; kk++) {
+      var kx = 180 + kk * ((w - 360) / Math.max(1, nkx - 1)) + (r() * 2 - 1) * 80;
+      var ky = h - 7;
+      g.fillStyle = 'rgba(110,220,200,0.8)';
+      g.beginPath();
+      g.moveTo(kx, ky - 14);
+      g.lineTo(kx + 5, ky - 4);
+      g.lineTo(kx + 2, ky);
+      g.lineTo(kx - 3, ky - 2);
+      g.closePath();
+      g.fill();
+      g.fillStyle = 'rgba(220,255,246,0.7)';
+      g.fillRect(kx - 1, ky - 12, 2, 6);
+    }
+
+    // segunda demão fina de água por cima da decoração: afunda tudo
+    var gr2 = g.createLinearGradient(0, 0, 0, h);
+    gr2.addColorStop(0, 'rgba(104,128,60,0.16)');
+    gr2.addColorStop(0.6, 'rgba(40,64,38,0.2)');
+    gr2.addColorStop(1, 'rgba(12,28,20,0.34)');
+    g.fillStyle = gr2;
+    g.fillRect(0, 0, w, h);
+
+    // faixa clara logo abaixo da superfície: a luz que ainda entra
+    var gr3 = g.createLinearGradient(0, 0, 0, 26);
+    gr3.addColorStop(0, 'rgba(222,232,150,0.28)');
+    gr3.addColorStop(1, 'rgba(222,232,150,0)');
+    g.fillStyle = gr3;
+    g.fillRect(0, 0, w, 26);
   }
 
   // --- camada distante: barrancos e árvores mortas afogadas na bruma ---
@@ -1071,11 +1295,13 @@ window.FG = window.FG || {};
     ctx.save();
     ctx.translate(-cam.x, -cam.y);
 
-    // água rasa do trecho 1 (não machuca: é o berçário do tronco)
+    // água do trecho 1 (não machuca): o que era vau raso virou a boca da
+    // GRUTA SUBMERSA — água funda ganha o desenho próprio de mergulho
     for (var ri = 0; ri < rasos.length; ri++) {
       var ra = rasos[ri];
       if (ra.x > x1 || ra.x + ra.w < x0) continue;
-      drawRaso(ctx, ra, t);
+      if (ra.h > 120) drawGruta(ctx, ra, t, x0, x1);
+      else drawRaso(ctx, ra, t);
     }
 
     // lodo venenoso, atrás das bordas dos buracos
@@ -1094,6 +1320,10 @@ window.FG = window.FG || {};
       else if (s.k === 'r') drawRoot(ctx, s, d);
       else drawTerrain(ctx, s, d);
     }
+
+    // decoração submersa das ilhas e pilares do lago — vem DEPOIS dos
+    // sólidos porque o musgo, as cracas e as raízes grudam neles por cima
+    drawGrutaDeco(ctx, x0, x1);
 
     // espinhos por cima do terreno
     for (var h2 = 0; h2 < hazards.length; h2++) {
@@ -1130,6 +1360,18 @@ window.FG = window.FG || {};
     if (s.h > 20) {
       ctx.fillStyle = 'rgba(14,18,6,0.4)';
       ctx.fillRect(s.x, s.y + s.h - 12, s.w, 12);
+    }
+    // barranco fundo (as margens da gruta descem 420px): bandas de
+    // escurecimento progressivo, para a terra afundar em vez de ficar uma
+    // parede chapada da mesma cor até lá embaixo. Rects fixos, sem gradiente
+    // por frame.
+    if (s.h > 220) {
+      ctx.fillStyle = 'rgba(14,18,8,0.18)';
+      ctx.fillRect(s.x, s.y + s.h * 0.4, s.w, s.h * 0.6);
+      ctx.fillStyle = 'rgba(10,14,8,0.22)';
+      ctx.fillRect(s.x, s.y + s.h * 0.62, s.w, s.h * 0.38);
+      ctx.fillStyle = 'rgba(6,10,6,0.26)';
+      ctx.fillRect(s.x, s.y + s.h * 0.82, s.w, s.h * 0.18);
     }
     ctx.fillStyle = 'rgba(20,26,8,0.5)';
     for (var i = 0; i < d.spots.length; i++) {
@@ -1205,6 +1447,173 @@ window.FG = window.FG || {};
       ctx.beginPath();
       ctx.ellipse(px, ra.y + ra.h - 16 - (i % 3) * 5, 7 + (i % 3) * 3, 4, 0, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------
+  // GRUTA SUBMERSA (animado) — o blit do corpo d'água estático e, por cima,
+  // as camadas vivas: algas ondulando no leito, raios de luz entrando pela
+  // superfície, plâncton em deriva, bolhinhas subindo e a linha de
+  // superfície ondulante. Tudo determinístico por t, tabelas fixas do init.
+  // ---------------------------------------------------------------
+  function drawGruta(ctx, ra, t, x0, x1) {
+    // o lago tem 3600px: blita só a FATIA visível do offscreen e faz culling
+    // por elemento em todas as tabelas — o custo por frame é o de uma tela
+    var sx = Math.max(0, Math.floor(x0 - ra.x));
+    var sw = Math.min(ra.w, Math.ceil(x1 - ra.x)) - sx;
+    if (sw <= 0) return;
+    ctx.drawImage(grutaSpr, sx, 0, sw, ra.h, ra.x + sx, ra.y, sw, ra.h);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ra.x, ra.y, ra.w, ra.h);
+    ctx.clip();
+
+    // algas compridas presas ao leito, ondulando devagar
+    ctx.lineCap = 'round';
+    for (var ai = 0; ai < gruta.algas.length; ai++) {
+      var al = gruta.algas[ai];
+      var bx = ra.x + al.dx, by = ra.y + ra.h - 2;
+      if (bx < x0 - 60 || bx > x1 + 60) continue;
+      var sw1 = Math.sin(t * 0.7 + al.ph) * al.amp;          // balanço do meio
+      var sw2 = Math.sin(t * 0.7 + al.ph + 1.1) * al.amp * 1.7; // balanço da ponta
+      ctx.strokeStyle = 'rgba(58,110,48,0.85)';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.bezierCurveTo(bx + sw1 * 0.4, by - al.len * 0.4,
+                        bx + sw1, by - al.len * 0.72, bx + sw2, by - al.len);
+      ctx.stroke();
+      // folhas laterais curtas acompanhando o talo
+      ctx.strokeStyle = 'rgba(96,152,64,0.6)';
+      ctx.lineWidth = 2;
+      for (var fs = 1; fs <= al.seg; fs++) {
+        var ft = fs / (al.seg + 1);
+        var fx = bx + sw1 * ft, fy = by - al.len * ft;
+        var fdir = fs % 2 === 0 ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.quadraticCurveTo(fx + fdir * 7, fy - 5, fx + fdir * 11 + sw1 * 0.2, fy - 11);
+        ctx.stroke();
+      }
+    }
+
+    // raios de luz diagonais entrando pela superfície, com respiração lenta
+    for (var li = 0; li < gruta.raios.length; li++) {
+      var rl = gruta.raios[li];
+      var top = ra.y + 3;
+      var lx = ra.x + rl.dx + Math.sin(t * 0.22 + rl.ph) * 8;
+      if (lx + rl.lean + rl.wBot < x0 - 20 || lx - rl.wTop > x1 + 20) continue;
+      var depth = ra.h * 0.72;
+      ctx.globalAlpha = 0.055 + 0.035 * Math.sin(t * 0.3 + rl.ph);
+      if (ctx.globalAlpha > 0.015) {
+        ctx.fillStyle = '#e8ecaa';
+        ctx.beginPath();
+        ctx.moveTo(lx - rl.wTop / 2, top);
+        ctx.lineTo(lx + rl.wTop / 2, top);
+        ctx.lineTo(lx + rl.lean + rl.wBot / 2, top + depth);
+        ctx.lineTo(lx + rl.lean - rl.wBot / 2, top + depth);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // plâncton em suspensão: pontinhos claros com deriva lenta e brilho
+    // pulsando fora de fase
+    ctx.fillStyle = '#d8e8b0';
+    for (var pi = 0; pi < gruta.plancton.length; pi++) {
+      var pl = gruta.plancton[pi];
+      if (ra.x + pl.dx < x0 - 24 || ra.x + pl.dx > x1 + 24) continue;
+      var px = ra.x + pl.dx + Math.sin(t * 0.24 + pl.ph) * pl.ax;
+      var py = ra.y + pl.dy + Math.sin(t * 0.17 + pl.ph * 1.9) * pl.ay;
+      var pa = 0.16 + 0.16 * Math.sin(t * 0.9 + pl.ph * 2.3);
+      if (pa <= 0.03) continue;
+      ctx.globalAlpha = pa;
+      ctx.beginPath();
+      ctx.arc(px, py, pl.rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // bolhinhas subindo do fundo em colunas esparsas, sumindo perto da
+    // superfície (mesma receita das poças de veneno, em tom de água)
+    ctx.fillStyle = 'rgba(210,232,190,0.9)';
+    var fundo = ra.y + ra.h - 6;
+    for (var bi = 0; bi < gruta.bolhas.length; bi++) {
+      var bo = gruta.bolhas[bi];
+      if (ra.x + bo.dx < x0 - 20 || ra.x + bo.dx > x1 + 20) continue;
+      for (var k2 = 0; k2 < 3; k2++) {
+        var per = (t * 0.16 + bo.ph + k2 * 0.34) % 1;
+        var byy = fundo - per * (ra.h - 18);
+        var bxx = ra.x + bo.dx + Math.sin(t * 1.1 + bi * 2 + k2 * 2.4 + per * 5) * 4;
+        ctx.globalAlpha = 0.5 * (1 - per);
+        ctx.beginPath();
+        ctx.arc(bxx, byy, 1.6 + (k2 % 3) * 0.9 + per * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // a linha de superfície ondulante, por cima de tudo (fora do clip para
+    // as cristas poderem passar 2-3px da borda, como no raso) — só o trecho
+    // visível, alinhado na grade de 20px para a onda não "pular" com a câmera
+    ctx.save();
+    ctx.strokeStyle = 'rgba(206,222,140,0.55)';
+    ctx.lineWidth = 2;
+    var lx0 = Math.max(ra.x, ra.x + Math.floor((x0 - ra.x - 20) / 20) * 20);
+    var lx1 = Math.min(ra.x + ra.w, x1 + 20);
+    ctx.beginPath();
+    ctx.moveTo(lx0, ra.y + Math.sin(t * 1.6 + lx0 * 0.045) * 2);
+    for (var x = lx0 + 20; x <= lx1; x += 20) {
+      ctx.lineTo(x, ra.y + Math.sin(t * 1.6 + x * 0.045) * 2.6);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------
+  // DECORAÇÃO SUBMERSA das ilhas/pilares — desenhada POR CIMA dos sólidos
+  // (drawSolids chama depois do loop de plataformas): musgo escorrido nas
+  // paredes, cracas/caramujos e as raízes das ilhas flutuantes descendo até
+  // perto do leito. Tabelas fixas do init, culling por estrutura.
+  // ---------------------------------------------------------------
+  function drawGrutaDeco(ctx, x0, x1) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (var di = 0; di < gruta.deco.length; di++) {
+      var d = gruta.deco[di];
+      if (d.x1 < x0 || d.x0 > x1) continue;
+      // musgo/limo escorrido pelas paredes submersas
+      ctx.strokeStyle = 'rgba(96,132,52,0.55)';
+      ctx.lineWidth = 2.2;
+      for (var m = 0; m < d.musgo.length; m++) {
+        var mo = d.musgo[m];
+        ctx.beginPath();
+        ctx.moveTo(mo.x, mo.y);
+        ctx.quadraticCurveTo(mo.cx, mo.y + mo.l * 0.6, mo.ex, mo.y + mo.l);
+        ctx.stroke();
+      }
+      // cracas/caramujos grudados
+      ctx.fillStyle = 'rgba(206,196,160,0.6)';
+      for (var c = 0; c < d.cracas.length; c++) {
+        var cr = d.cracas[c];
+        ctx.beginPath();
+        ctx.arc(cr.x, cr.y, cr.rad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // raízes descendo da base das ilhas — visual puro, sem colisão
+      ctx.strokeStyle = 'rgba(26,34,16,0.65)';
+      for (var k = 0; k < d.raizes.length; k++) {
+        var rz = d.raizes[k];
+        ctx.lineWidth = rz.lw;
+        ctx.beginPath();
+        ctx.moveTo(rz.x, rz.y);
+        ctx.bezierCurveTo(rz.c1x, rz.c1y, rz.c2x, rz.c2y, rz.ex, rz.ey);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -1375,6 +1784,10 @@ window.FG = window.FG || {};
   // A bruma vem DEPOIS de tudo, inclusive do player: é o que faz o pântano
   // parecer abafado em vez de só amarelo.
   // ---------------------------------------------------------------
+  // véu de imersão: persegue 0/1 com lerp por frame, para o mergulho na
+  // gruta entrar e sair de cena suave em vez de piscar
+  var veuAlvo = 0, veuNivel = 0;
+
   function drawFront(ctx, cam) {
     buildAll();
     var t = FG.engine.time;
@@ -1383,6 +1796,18 @@ window.FG = window.FG || {};
     ctx.globalAlpha = 0.82 + 0.1 * Math.sin(t * 0.23);
     ctx.drawImage(brumaSpr, 0, 0);
     ctx.restore();
+
+    // debaixo d'água a tela inteira ganha o filtro verde-azulado escuro —
+    // é ele que vende a sensação de mergulho, mais que a própria gruta
+    veuAlvo = (FG.player && FG.player.inWater) ? 1 : 0;
+    veuNivel += (veuAlvo - veuNivel) * 0.1;
+    if (veuNivel > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = veuNivel * (0.14 + 0.02 * Math.sin(t * 0.7));
+      ctx.drawImage(veuSpr, 0, 0);
+      ctx.restore();
+    }
+
     ctx.drawImage(vig, 0, 0);
   }
 
@@ -1407,6 +1832,7 @@ window.FG = window.FG || {};
     bossId: 'sandrola',
     bossTriggerX: 6350,
     arena: { x: 6200, w: 1000 },
+    waters: waters,
     reset: reset,
     update: update,
     drawBack: drawBack,

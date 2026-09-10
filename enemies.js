@@ -115,7 +115,13 @@ window.FG = window.FG || {};
     if (e.type === 'espinhoco') { e.w = 48; e.h = 26; }
     else if (e.type === 'voadeira') { e.w = 34; e.h = 26; }
     else if (e.type === 'peixe') { e.w = 46; e.h = 24; } // achatado: é um torpedo
+    else if (e.type === 'piranha') { e.w = 36; e.h = 22; } // gruta submersa
+    else if (e.type === 'carango') { e.w = 44; e.h = 26; } // leito da gruta
     else { e.w = 38; e.h = 32; } // sapeca
+    // baseY: linha da patrulha da piranha — desliza de volta ao spawnY depois
+    // de um bote, para não teleportar na vertical ao retomar a ondulação.
+    e.baseY = def.y;
+    if (e.type === 'carango') e.timer = rand(1.2, 2.2); // primeira pinçada dessincronizada
     return e;
   }
 
@@ -219,6 +225,102 @@ window.FG = window.FG || {};
           e.y = e.spawnY;
         }
         return;
+      }
+    } else if (e.type === 'piranha') {
+      // Piranha da gruta submersa: patrulha horizontal flutuando (sem
+      // gravidade, como a voadeira), com ondulação leve. Perto do player ela
+      // se eriça por um instante (telegraph legível) e dá um bote curto na
+      // direção dele; depois volta à patrulha.
+      const t = FG.engine.time + e.phase;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dy = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        // patrulha
+        const SPD = 55;
+        e.x += e.dir * SPD * dt;
+        if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+        if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+        // a linha da patrulha volta devagar ao y do spawn após um bote
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 2.5);
+        e.y = e.baseY + Math.sin(t * 2.6) * 6;
+        // bolhinhas: estamos debaixo d'água
+        if (Math.random() < 0.02) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.85 : 0.15), e.y + e.h * 0.3,
+            rand(-8, 8), -30, 0.8, 2.5, 'rgba(200,245,250,0.7)', -40);
+        }
+        if (dx * dx + dy * dy < 140 * 140 && Math.abs(dy) < 90) {
+          e.dir = dx >= 0 ? 1 : -1;
+          e.st = 'erica';
+          e.timer = 0.25;      // parada, tremendo — o aviso do bote
+        }
+      } else if (e.st === 'erica') {
+        e.timer -= dt;
+        // tremida no lugar (o desenho reforça)
+        e.y = e.baseY + Math.sin(t * 40) * 1.5;
+        if (e.timer <= 0) {
+          // mira o player no instante do avanço
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const BOTE = 300;
+          e.dir = dx >= 0 ? 1 : -1;
+          e.vx = (dx / d) * BOTE;
+          e.vy = (dy / d) * BOTE;
+          e.st = 'bote';
+          e.timer = 0.5;
+        }
+      } else { // bote
+        e.timer -= dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        // rastro de bolhas na arrancada
+        if (Math.random() < 0.35) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.1 : 0.9), e.y + e.h * 0.5,
+            rand(-20, 20), rand(-40, -10), 0.35, 2 + Math.random() * 2, 'rgba(200,245,250,0.75)', -50);
+        }
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.baseY = e.y;       // retoma a patrulha de onde parou, sem salto
+          e.vx = 0; e.vy = 0;
+        }
+      }
+    } else if (e.type === 'carango') {
+      // Carango do fundo: anda devagar no leito (gravidade + colisão, como o
+      // espinhoco) e, de tempos em tempos, telegrafa e dá um pulinho de pinça
+      // para cima. O corpo sobe junto — o contato genérico já machuca.
+      e.vy += GRAV * dt;
+      if (e.st === 'parado') {
+        const SPD = 30;
+        e.vx = e.dir * SPD;
+        const wantVx = e.vx;
+        FG.engine.moveAndCollide(e, dt);
+        if ((wantVx !== 0 && e.vx === 0) ||
+            (e.dir > 0 && e.x > e.spawnX + e.range) ||
+            (e.dir < 0 && e.x < e.spawnX - e.range)) {
+          e.dir = -e.dir;
+        }
+        if (Math.random() < 0.015) {
+          spawnParticle(e.x + e.w / 2 + rand(-8, 8), e.y,
+            rand(-6, 6), -26, 0.9, 2.5, 'rgba(200,245,250,0.7)', -35);
+        }
+        e.timer -= dt;
+        if (e.onGround && e.timer <= 0) {
+          e.st = 'tele';       // levanta as pinças e treme
+          e.timer = 0.5;
+        }
+      } else if (e.st === 'tele') {
+        e.vx = 0;
+        FG.engine.moveAndCollide(e, dt);
+        e.timer -= dt;
+        if (e.timer <= 0) {
+          e.st = 'bote';
+          e.vy = -630;         // sqrt(2*GRAV*90) ≈ 90px de subida
+        }
+      } else { // bote: sobe com as pinças abertas e cai de volta
+        e.vx = 0;
+        FG.engine.moveAndCollide(e, dt);
+        if (e.onGround && e.vy >= 0) {
+          e.st = 'parado';
+          e.timer = rand(1.8, 2.6);   // ~2.2s até a próxima pinçada
+        }
       }
     }
 
@@ -426,6 +528,169 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  function drawPiranha(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const ericada = e.st === 'erica';
+    const dando = e.st === 'bote';
+    // cauda bate sempre; freneticamente quando eriçada ou no bote
+    const wob = Math.sin(t * (ericada || dando ? 26 : 8) + e.phase) * (dando ? 5 : 3);
+    ctx.save();
+    ctx.translate(cx + (ericada ? Math.sin(t * 60) * 1.5 : 0), cy);
+    ctx.scale(e.dir, 1);                        // olha para onde vai
+    if (dando) ctx.scale(1.15, 0.9);            // esticada no avanço
+
+    // caudinha em leque, atrás
+    ctx.fillStyle = '#7a4a3a';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.28, 0);
+    ctx.lineTo(-e.w * 0.60, -8 + wob);
+    ctx.lineTo(-e.w * 0.48, 0);
+    ctx.lineTo(-e.w * 0.60, 8 + wob);
+    ctx.closePath();
+    ctx.fill();
+    // nadadeira dorsal
+    ctx.fillStyle = '#5f6a4a';
+    ctx.beginPath();
+    ctx.moveTo(-6, -e.h * 0.34);
+    ctx.quadraticCurveTo(0, -e.h * 0.85 - wob * 0.4, 9, -e.h * 0.3);
+    ctx.closePath(); ctx.fill();
+
+    // corpo oval: dorso cinza-esverdeado, flanco vermelho-acastanhado (tons do
+    // pântano ocre)
+    const g = ctx.createRadialGradient(-2, -3, 2, 0, 0, e.w * 0.5);
+    g.addColorStop(0, '#8a9468');
+    g.addColorStop(0.5, '#6d6248');
+    g.addColorStop(1, '#7a3a2a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, e.w * 0.46, e.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // barriga clara
+    ctx.fillStyle = 'rgba(230,214,180,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(1, e.h * 0.24, e.w * 0.34, e.h * 0.2, 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    // boca aberta com dentinhos triangulares brancos — a assinatura
+    const abre = dando || ericada ? 5.5 : 3.5 + Math.sin(t * 5 + e.phase) * 1.2;
+    ctx.fillStyle = '#5a1616';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.46, 0);
+    ctx.lineTo(e.w * 0.16, -abre);
+    ctx.lineTo(e.w * 0.16, abre);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 3; i++) {
+      const tx = e.w * (0.20 + i * 0.08);
+      const th = abre * (1 - i * 0.22);
+      // dente de cima
+      ctx.beginPath();
+      ctx.moveTo(tx, -th); ctx.lineTo(tx + 3, -th); ctx.lineTo(tx + 1.5, -th + 3);
+      ctx.closePath(); ctx.fill();
+      // dente de baixo
+      ctx.beginPath();
+      ctx.moveTo(tx + 3, th); ctx.lineTo(tx + 6, th); ctx.lineTo(tx + 4.5, th - 3);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // olho raivoso: sobrancelha caída sobre olho amarelo
+    const ex = e.w * 0.18, ey = -e.h * 0.2;
+    ctx.fillStyle = '#ffd23a';
+    ctx.beginPath(); ctx.arc(ex, ey, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a0d08';
+    ctx.beginPath(); ctx.arc(ex + 1.4, ey + 0.6, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ex - 5, ey - 6); ctx.lineTo(ex + 5, ey - 2.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCarango(ctx, e, t) {
+    const cx = e.x + e.w / 2;
+    const tele = e.st === 'tele';
+    const bote = e.st === 'bote';
+    const andando = e.st === 'parado';
+    const passo = Math.sin(t * 10 + e.phase);   // ritmo das perninhas
+    // pinças: abrem/fecham devagar andando; erguidas e escancaradas no bote
+    const abre = bote ? 0.9 : tele ? 0.5 : 0.3 + Math.abs(Math.sin(t * 3 + e.phase)) * 0.25;
+    const ergue = (tele || bote) ? 1 : 0;       // pinças para cima
+    ctx.save();
+    ctx.translate(cx + (tele ? Math.sin(t * 50) * 1.5 : 0), e.y + e.h);
+    ctx.scale(e.dir, 1);
+
+    // perninhas dos lados (3 de cada), mexem ao andar
+    ctx.strokeStyle = '#6a2a1a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const lx = -e.w * 0.32 + i * e.w * 0.18;
+      const lw = andando ? passo * 3 * (i % 2 === 0 ? 1 : -1) : 0;
+      ctx.beginPath();
+      ctx.moveTo(lx, -e.h * 0.3);
+      ctx.lineTo(lx - 5 + lw, -1);
+      ctx.moveTo(-lx - e.w * 0.05, -e.h * 0.3);
+      ctx.lineTo(-lx - e.w * 0.05 + 5 - lw, -1);
+      ctx.stroke();
+    }
+
+    // pinças na frente: dois braços com garras que abrem/fecham
+    for (let s = 0; s < 2; s++) {
+      const px = e.w * (0.30 + s * 0.12);
+      const py = ergue ? -e.h * (0.9 + s * 0.15) : -e.h * 0.30;
+      ctx.strokeStyle = '#8a3a22'; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.22, -e.h * 0.35);
+      ctx.quadraticCurveTo(px, ergue ? -e.h * 0.7 : -e.h * 0.2, px, py);
+      ctx.stroke();
+      // garra: duas meias-luas que se afastam com "abre"
+      ctx.fillStyle = '#a04828';
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(ergue ? -0.5 : 0.15);
+      ctx.beginPath();
+      ctx.ellipse(2, -3 - abre * 4, 6, 3.4, -0.5 - abre * 0.6, 0, Math.PI * 2);
+      ctx.ellipse(2, 3 + abre * 4, 6, 3.4, 0.5 + abre * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // casco oval avermelhado-lamacento
+    const g = ctx.createRadialGradient(-3, -e.h * 0.6, 3, 0, -e.h * 0.45, e.w * 0.55);
+    g.addColorStop(0, '#b8623a');
+    g.addColorStop(0.6, '#8a3a22');
+    g.addColorStop(1, '#5a2414');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, -e.h * 0.42, e.w * 0.46, e.h * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // textura do casco: sulcos e pintas de lama
+    ctx.strokeStyle = 'rgba(60,24,12,0.45)'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, -e.h * 0.42, e.w * 0.3, -2.6, -0.55);
+    ctx.moveTo(-e.w * 0.18, -e.h * 0.62); ctx.lineTo(-e.w * 0.1, -e.h * 0.3);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(90,74,40,0.5)';
+    ctx.beginPath();
+    ctx.arc(-e.w * 0.22, -e.h * 0.5, 2.2, 0, Math.PI * 2);
+    ctx.arc(e.w * 0.1, -e.h * 0.64, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // olhinhos em pedúnculo, em cima
+    for (let s = -1; s <= 1; s += 2) {
+      const ox = s * e.w * 0.12 + e.w * 0.08;
+      ctx.strokeStyle = '#6a2a1a'; ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(ox, -e.h * 0.78);
+      ctx.lineTo(ox + 1.5, -e.h * 1.05);
+      ctx.stroke();
+      ctx.fillStyle = '#f2e8d0';
+      ctx.beginPath(); ctx.arc(ox + 1.5, -e.h * 1.12, 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a0d08';
+      ctx.beginPath(); ctx.arc(ox + 2.4, -e.h * 1.12, 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // Registro de chefões
   // Cada boss vive no seu arquivo (boss1.js, boss2.js, boss3.js) e regista-se
@@ -502,6 +767,8 @@ window.FG = window.FG || {};
         if (e.type === 'espinhoco') drawEspinhoco(ctx, e, t);
         else if (e.type === 'voadeira') drawVoadeira(ctx, e, t);
         else if (e.type === 'peixe') drawPeixe(ctx, e, t);
+        else if (e.type === 'piranha') drawPiranha(ctx, e, t);
+        else if (e.type === 'carango') drawCarango(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();

@@ -167,10 +167,22 @@ window.FG = window.FG || {};
     FG.audio.music('overworld');
   }
 
+  // Atalho de teste: abrir index.html?fase=N começa direto na fase N
+  // (1-based, como o HUD mostra). Sem o parâmetro, fase 1 como sempre.
+  function faseInicial() {
+    try {
+      if (typeof location === 'undefined') return 0;
+      const q = new URLSearchParams(location.search).get('fase');
+      if (!q) return 0;
+      const n = (parseInt(q, 10) || 1) - 1;
+      return Math.max(0, Math.min(FG.levels.length - 1, n));
+    } catch (e) { return 0; }
+  }
+
   function startGame() {
     playStart = engine.time;
     engine.lumis = 0;       // as lumis só zeram em jogo novo; entre fases acumulam
-    loadLevel(0);
+    loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
 

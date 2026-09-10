@@ -48,6 +48,10 @@ for (let x = 0; x <= L.W; x += 500) {
   out.push(`<text x="${sx + 2}" y="10" fill="#ffffff55" font-size="9" font-family="monospace">${x}</text>`);
 }
 
+// água mergulhável (antes dos sólidos: leito e pilares aparecem por cima)
+for (const w of L.waters || []) {
+  out.push(`<rect x="${w.x * SC}" y="${w.y * SC}" width="${w.w * SC}" height="${w.h * SC}" fill="#3b82c4" opacity="0.35"/>`);
+}
 // sólidos
 for (const s of L.solids) {
   const cor = CORES[s.k] || '#888';
@@ -98,6 +102,7 @@ out.push(`<line x1="${L.bossTriggerX * SC}" y1="0" x2="${L.bossTriggerX * SC}" y
 let lx = 6;
 const legenda = [];
 for (const k of Object.keys(NOMES)) if (L.solids.some((s) => s.k === k)) legenda.push([NOMES[k], CORES[k]]);
+if ((L.waters || []).length) legenda.push(['água', '#3b82c4']);
 for (const t of Object.keys(OB)) if ((L.obstacleDefs || []).some((o) => o.type === t)) legenda.push([t, OB[t]]);
 const ly = L.H * SC + 18;
 for (const [nome, cor] of legenda) {

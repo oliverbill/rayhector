@@ -40,6 +40,40 @@ const GLIDE_TIME = 1.0;    // espelha player.js
 
 const solids = level.solids;
 
+// ---------- nado: conectividade por água ----------
+// player.js deixa o player nadar livremente dentro de level.waters (sobe,
+// desce e anda em qualquer direção), então um retângulo de água liga tudo o
+// que ele toca: quem entra na água sai em qualquer sólido molhado por ela.
+// Modelamos isso como grupos de conectividade, não como simulação — nadar não
+// exige timing nem habilidade, todo mundo nada.
+const waters = level.waters || [];
+const FOLGA_AGUA = 6;   // expansão do sólido: pega leito ('h' conta), pilares
+                        // submersos, ilhas com base na água e margens laterais
+const QUEDA_AGUA = 40;  // borda até esta altura acima da água ainda "cai dentro"
+
+function molhadoPor(s, w) {
+  return s.x - FOLGA_AGUA < w.x + w.w && s.x + s.w + FOLGA_AGUA > w.x &&
+         s.y - FOLGA_AGUA < w.y + w.h && s.y + s.h + FOLGA_AGUA > w.y;
+}
+// por retângulo de água: os sólidos molhados (nenhum tipo é ignorado)
+const MOLHA = waters.map((w) => {
+  const g = [];
+  for (let i = 0; i < solids.length; i++) if (molhadoPor(solids[i], w)) g.push(i);
+  return g;
+});
+// quem ABRE o grupo: os próprios molhados, mais quem tem a borda logo acima
+// da água (dá para simplesmente pular/cair dentro dela)
+const ENTRADA = waters.map((w, k) => {
+  const e = new Set(MOLHA[k]);
+  for (let i = 0; i < solids.length; i++) {
+    const s = solids[i];
+    const horizontal = s.x - FOLGA_AGUA < w.x + w.w && s.x + s.w + FOLGA_AGUA > w.x;
+    if (horizontal && s.y <= w.y && w.y - s.y <= QUEDA_AGUA) e.add(i);
+  }
+  return e;
+});
+const MOLHADOS = new Set([].concat(...MOLHA));
+
 function overlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -177,8 +211,17 @@ const PAREDES = arestasDeParede();
 function bfs(st, comParede) {
   const seen = new Set([start]);
   const queue = [start];
+  // nado: alcançar quem abre um retângulo de água libera TODOS os sólidos
+  // molhados por ele — o player nada até qualquer um
+  const abreAgua = (i) => {
+    for (let k = 0; k < waters.length; k++) {
+      if (!ENTRADA[k].has(i)) continue;
+      for (const j of MOLHA[k]) if (!seen.has(j)) { seen.add(j); queue.push(j); }
+    }
+  };
   while (queue.length) {
     const i = queue.shift();
+    abreAgua(i);
     for (const j of reachableFrom(i, st)) if (!seen.has(j)) { seen.add(j); queue.push(j); }
     if (comParede) {
       for (const e of PAREDES) {
@@ -232,7 +275,8 @@ for (let i = 0; i < solids.length; i++) {
   if (from >= 0) degraus.push({ i, from, rise: min, s: solids[i] });
 }
 degraus.sort((a, b) => b.rise - a.rise);
-const duros = degraus.filter((d) => d.rise > CONFORTO);
+// sólido molhado tem entrada confortável nadando — não conta como degrau duro
+const duros = degraus.filter((d) => d.rise > CONFORTO && !MOLHADOS.has(d.i));
 console.log('DEGRAUS ACIMA DE %dpx (toda entrada exige pulo duplo no limite): %d', CONFORTO, duros.length);
 for (const d of duros) {
   console.log('  [%d] %s x=%d y=%d — sobe %dpx vindo de [%d] (y=%d)',
