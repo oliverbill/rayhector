@@ -117,7 +117,7 @@ window.FG = window.FG || {};
     // ---------- campos do contrato ----------
     x: 0, y: 0, w: 30, h: 44,
     vx: 0, vy: 0,
-    hp: 6, maxHp: 6,
+    hp: 12, maxHp: 12,
     facing: 1,
     onGround: false,
     wallDir: 0,               // preenchido pelo engine: parede à direita (+1) / esquerda (-1)
