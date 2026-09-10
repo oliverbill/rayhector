@@ -1,11 +1,23 @@
 // Fagulho: Lendas do Bosque — boss2.js
-// Chefão da fase 2: SANDROLA BAFO DE SAPO. Bruxa do pântano meio-sapo,
-// atolada na poça do fundo da arena e virada para a esquerda (de onde o
-// jogador chega). Ela é o mesmo tipo de criatura que o antigo LODÃO — uma
-// cabeçorra na frente, um corpanzil/robe atrás, e uma bolsa de garganta
-// pendurada sob o queixo que é o ponto fraco — só reautorada: rosto de
-// bruxa loira com manchas de sapo, robe verde comprido no lugar do lodo
-// puro, punhos de manga azul-marinho.
+// Chefão da fase 2: SANDROLA BAFO DE SAPO. Reconstruída do zero para deixar
+// de parecer o antigo LODÃO deitado/atolado (uma corcova de lesma e uma
+// cabeçorra lado a lado, na mesma altura) e virar uma figura HUMANOIDE EM PÉ,
+// fiel à referência: zumbi loira de frente, pernas retas, tronco ereto,
+// cabeça no topo do pescoço, braços caídos ao lado do corpo. Pele pálida,
+// olhos pretos quadrados de estática com quadradinho branco descentralizado,
+// boca aberta com dentes em grade + toque vermelho no canto, cabelo liso
+// amarelo-ouro repartido no meio caindo dos dois lados até o peito, gola alta
+// verde-escura, casaco/blusa teal de manga comprida com 2 botões, calça jeans
+// azul, botas azuis. Ela continua com os pés na lama do pântano — isso é
+// tema, não postura.
+//
+// A técnica de corpo é a MESMA do boss3.js (Patriçola): um RIG DE JUNTAS com
+// duas poses (P_STAND ereta, P_KNEEL curvada/exposta) interpoladas por lerp,
+// membros desenhados como troncos de cone entre juntas (shapeLimb). A ÚNICA
+// diferença deliberada é o tronco: em vez da silhueta facetada tipo pedra
+// (shapeBlob/"jags", que lê como armadura de cristal), o casaco dela usa a
+// elipse LISA com gradiente (`blob()`, o mesmo tijolo do boss1.js) — pano de
+// zumbi, não rocha.
 // A forma vem inteira do boss1.js — 8 de vida, 4 ataques ciclando, telegraph
 // longo em todos e uma janela de dano depois de CADA um. O que muda são os
 // ataques e o desenho: aqui não há sprite nenhum, tudo é canvas puro.
@@ -27,40 +39,70 @@ window.FG = window.FG || {};
   const goldBurst = (cx, cy, n, lumiCount) => FG.enemies.fx.goldBurst(cx, cy, n, lumiCount);
   const groundYAt = (x, yMin) => FG.enemies.fx.groundYAt(x, yMin);
   const rand = (a, b) => FG.enemies.fx.rand(a, b);
+  const lerp = (a, b, k) => a + (b - a) * k;
 
   // ==================================================================
-  // GEOMETRIA — tudo em coordenadas locais, em px, relativas ao eixo do
-  // bicho (boss.x) e à linha do corpo (boss.bodyY, que é o chão menos o
-  // salto). x negativo é para a esquerda, na direção do jogador; y negativo
-  // é para cima. Sem sprite, sem matriz: um número aqui é o mesmo número no
-  // desenho e na hitbox, e por isso caixa nenhuma escapa de debaixo do bicho.
+  // ARMAÇÃO — as juntas da zumbi, EM PÉ. Coordenadas locais: x cresce para a
+  // direita, y sobe negativo a partir da planta dos pés (que assenta em
+  // boss.groundY). Ela encara a ESQUERDA, de onde o jogador chega — "front" é
+  // o lado dos x negativos, sem espelhamento nenhum no desenho. Mesma técnica
+  // de rig do boss3.js (duas poses, lerp), números próprios desta figura.
   // ==================================================================
-  const BODY = { cx: 10, cy: -104, rx: 198, ry: 116 };   // robe/corpo de sapo-lesma
-  const HEAD = { cx: -196, cy: -138, rx: 126, ry: 98 };  // cabeça de bruxa-sapo
-  const EYE_L = { cx: -258, cy: -226, r: 30 };           // olho da frente
-  const EYE_R = { cx: -158, cy: -244, r: 32 };           // olho de trás
-  const MOUTH = { x: -300, y: -74 };                     // canto da boca
+  const P_STAND = {
+    hip:       { x:   0, y: -110 },
+    chest:     { x:  -6, y: -200 },   // base do pescoço/gola — perto da papada
+    head:      { x: -10, y: -290 },
+    shBack:    { x:  46, y: -240 },
+    shFront:   { x: -58, y: -236 },
+    handBack:  { x:  50, y: -108 },
+    handFront: { x: -62, y: -106 },
+    kneeBack:  { x:  24, y:  -56 },
+    kneeFront: { x: -30, y:  -56 },
+    footBack:  { x:  26, y:    0 },
+    footFront: { x: -34, y:    0 },
+  };
+  // Curvada para a frente, ofegante: pescoço/peito avançam e descem, expondo
+  // a bolsa de garganta na altura do soco — mesma lógica do coração do
+  // boss3.js, só que aqui é a papada.
+  const P_KNEEL = {
+    hip:       { x:  12, y:  -82 },
+    chest:     { x: -40, y: -156 },   // <- perto de 156px do chão, o contrato.
+    head:      { x: -78, y: -202 },
+    shBack:    { x:  16, y: -190 },
+    shFront:   { x: -82, y: -172 },
+    handBack:  { x: -12, y:  -28 },
+    handFront: { x:-118, y:  -24 },
+    kneeBack:  { x:  40, y:  -30 },
+    kneeFront: { x: -40, y:  -56 },
+    footBack:  { x:  36, y:    0 },
+    footFront: { x: -68, y:    0 },
+  };
+  const JOINTS = ['hip', 'chest', 'head', 'shBack', 'shFront',
+    'handBack', 'handFront', 'kneeBack', 'kneeFront', 'footBack', 'footFront'];
+  const POSE = {};
+  for (let i = 0; i < JOINTS.length; i++) POSE[JOINTS[i]] = { x: 0, y: 0 };
 
   // O ponto fraco: a bolsa de garganta pendurada sob o queixo (o "bafo de
-  // sapo" que ela solta). Na janela de dano ela incha de veneno e AFUNDA — é
-  // isso que a traz para a altura do soco. Os dois números abaixo são o
-  // coração do balanceamento e estão medidos, não chutados — MANTIDOS iguais
-  // ao antigo LODÃO para não desbalancear a luta:
+  // sapo" que ela solta, mesmo sem cara de sapo mais). Na janela de dano ela
+  // incha de veneno e AFUNDA — é isso que a traz para a altura do soco. Os
+  // dois números abaixo são o coração do balanceamento e estão medidos, não
+  // chutados — MANTIDOS iguais ao antigo LODÃO para não desbalancear a luta:
   //   centro a 100px do chão, caixa de 96 de altura  →  52..148 acima do chão.
   // O attackBox do player (34x30, no meio de um corpo de 44) cobre
   // [alturaDoPulo+7 .. alturaDoPulo+37] acima do chão, logo qualquer pulo
   // entre ~15px e ~141px acerta: o pulo simples é 118px e o pulo cortado no
   // primeiro frame é ~30px — os dois entram, que é o que o contrato exige.
-  const PAPADA_X = -214;
+  // Diferente do LODÃO: em vez de fixa num x deslocado do rosto, ela agora
+  // acompanha o x do peito/pescoço da pose (POSE.chest.x), centrada na
+  // figura em pé — não mais jogada para o lado.
   const PAPADA_HIGH = 156;   // altura do centro com a bolsa recolhida
   const PAPADA_LOW = 100;    // ... e com ela pendurada na janela de dano
   const WEAK_W = 104, WEAK_H = 96;
 
-  // Massas que machucam no contato fora da janela. Repare que a caixa da
-  // cabeça começa 60px acima do chão: o vão debaixo do queixo é de propósito,
-  // é onde o jogador se planta para socar a bolsa de garganta.
-  const HEAD_HULL = { x: -322, y: -246, w: 252, h: 186 };
-  const BODY_HULL = { x: -170, y: -220, w: 380, h: 220 };
+  // Massas que machucam no contato fora da janela, calculadas por frame a
+  // partir da pose atual (ver refreshPose): dos pés até acima da cabeça.
+  const HEAD_HULL_W = 168, HEAD_HULL_H = 150;   // em volta da cabeça
+  const BODY_HULL_PAD = 66;                     // folga lateral do tronco/braços
 
   const TONGUE_H = 30;       // língua rasteira: topo a 38px do chão
   const TONGUE_Y = 38;
@@ -98,15 +140,6 @@ window.FG = window.FG || {};
     return _rect;
   }
 
-  // Caixa local → caixa de mundo. `hop` já está embutido em bodyY.
-  function localBox(r, box) {
-    box.x = boss.x + r.x;
-    box.y = boss.bodyY + r.y;
-    box.w = r.w;
-    box.h = r.h;
-    return box;
-  }
-
   const boss = {
     // --- identidade (o engine lê o nome para a barra de vida) ---
     id: 'sandrola',
@@ -128,6 +161,7 @@ window.FG = window.FG || {};
     hopV: 0,
 
     // --- animação / telegraphs ---
+    kneel: 0,        // 0..1 — ereta -> curvada (interpola P_STAND -> P_KNEEL)
     sag: 0,          // 0..1 — bolsa de garganta pendurada (a janela de dano)
     puff: 0,         // 0..1 — bolsa inflada (telegraph da língua)
     charge: 0,       // 0..1 — goela acesa de veneno (telegraph do bafo)
@@ -165,11 +199,12 @@ window.FG = window.FG || {};
       const a = FG.level.arena;
       this.groundY = groundYAt(a.x + a.w * 0.75, 300);
       // Atolada no fundo: o eixo dela fica a 230px da parede direita, o que
-      // deixa a bolsa de garganta por volta de x-214 e a metade esquerda da
+      // deixa a bolsa de garganta por volta de x-260 e a metade esquerda da
       // arena livre para o jogador desviar.
       this.homeX = a.x + a.w - 230;
       this.x = this.homeX;
       this.bodyY = this.groundY;
+      this.refreshPose();
     },
 
     reset() {
@@ -184,6 +219,7 @@ window.FG = window.FG || {};
       this.attackIndex = 0;
       this.stunHit = false;
       this.flash = 0;
+      this.kneel = 0;
       this.sag = 0;
       this.puff = 0;
       this.charge = 0;
@@ -204,6 +240,37 @@ window.FG = window.FG || {};
     },
 
     isPhase2() { return this.hp <= 3; },
+
+    // Recalcula a pose (P_STAND <-> P_KNEEL por `kneel`) e as caixas vivas.
+    // Fica numa função porque o desenho também precisa dela enquanto a
+    // SANDROLA dorme (antes do primeiro update).
+    refreshPose() {
+      const k = this.kneel;
+      for (let i = 0; i < JOINTS.length; i++) {
+        const j = JOINTS[i];
+        POSE[j].x = lerp(P_STAND[j].x, P_KNEEL[j].x, k);
+        POSE[j].y = lerp(P_STAND[j].y, P_KNEEL[j].y, k);
+      }
+      // cabeça: caixa de contato em volta da cabeça da pose atual
+      const hb = this.headBox;
+      hb.w = HEAD_HULL_W; hb.h = HEAD_HULL_H;
+      hb.x = this.x + POSE.head.x - hb.w / 2;
+      hb.y = this.bodyY + POSE.head.y - hb.h * 0.55;
+      // corpo: do quadril até acima da cabeça, com folga lateral pros braços
+      const bb = this.bodyBox;
+      const xLo = Math.min(POSE.hip.x, POSE.head.x, POSE.handFront.x) - BODY_HULL_PAD;
+      const xHi = Math.max(POSE.hip.x, POSE.head.x, POSE.handBack.x) + BODY_HULL_PAD;
+      bb.x = this.x + xLo;
+      bb.w = xHi - xLo;
+      bb.y = this.bodyY + POSE.head.y - 30;
+      bb.h = this.bodyY - bb.y;
+      // ponto fraco: acompanha o x do peito/pescoço, sobe e desce com sag
+      const papadaY = this.bodyY - (PAPADA_HIGH - (PAPADA_HIGH - PAPADA_LOW) * this.sag);
+      this.weakBox.x = this.x + POSE.chest.x - WEAK_W / 2;
+      this.weakBox.y = papadaY - WEAK_H / 2;
+      this.weakBox.w = WEAK_W;
+      this.weakBox.h = WEAK_H;
+    },
 
     // Fim de ataque: ela arqueja, a bolsa de garganta incha de veneno e desce
     // até a altura do soco. Vem depois de TODOS os ataques — é o que dá ritmo
@@ -253,15 +320,17 @@ window.FG = window.FG || {};
         this.charge = Math.max(0, 0.4 - k);
         this.sag = Math.min(1, this.sag + dt * 2);
         this.puff = Math.max(0, this.puff - dt);
+        this.kneel = Math.min(1, this.kneel + dt * 1.6);
         this.bodyY = this.groundY;
+        this.refreshPose();
         // lodo do robe espirrando enquanto ela desmancha
         if (Math.random() < 0.6) {
-          spawnParticle(this.x + rand(-260, 180), this.groundY - rand(0, 200),
+          spawnParticle(this.x + rand(-140, 100), this.groundY - rand(0, 260),
             rand(-140, 140), rand(-280, -60), 0.8, 4 + Math.random() * 5, '#9fbf3a', 340);
         }
         if (this.dieTimer >= 2.5 && !this.victoryFired) {
           this.victoryFired = true;
-          goldBurst(this.x - 120, this.groundY - 120, 40, 5); // estouro final + lumis
+          goldBurst(this.x - 40, this.groundY - 150, 40, 5); // estouro final + lumis
           FG.audio.sfx('victory');
           FG.engine.setState('victory');
         }
@@ -274,13 +343,7 @@ window.FG = window.FG || {};
       // Calculadas antes de qualquer `return` para nunca ficarem velhas: o
       // ponto fraco acompanha a bolsa de garganta, e ela acompanha sag/salto.
       this.bodyY = this.groundY - this.hop;
-      localBox(HEAD_HULL, this.headBox);
-      localBox(BODY_HULL, this.bodyBox);
-      const papadaY = this.bodyY - (PAPADA_HIGH - (PAPADA_HIGH - PAPADA_LOW) * this.sag);
-      this.weakBox.x = this.x + PAPADA_X - WEAK_W / 2;
-      this.weakBox.y = papadaY - WEAK_H / 2;
-      this.weakBox.w = WEAK_W;
-      this.weakBox.h = WEAK_H;
+      this.refreshPose();
 
       // ---------- intro ----------
       if (this.state === 'intro') {
@@ -304,11 +367,12 @@ window.FG = window.FG || {};
       this.timer -= dt;
 
       if (this.state === 'idle') {
-        // acomoda-se no atoleiro: bolsa recolhida, goela apagada
+        // fica em pé no atoleiro: bolsa recolhida, goela apagada
         this.charge += (0 - this.charge) * Math.min(1, dt * 5);
         this.puff += (0 - this.puff) * Math.min(1, dt * 5);
         this.squash += (0 - this.squash) * Math.min(1, dt * 6);
         this.sag += (0 - this.sag) * Math.min(1, dt * 6);
+        this.kneel += (0 - this.kneel) * Math.min(1, dt * 6);
         this.x += (this.homeX - this.x) * Math.min(1, dt * 4);
         this.glow = 0;
         if (this.timer <= 0) {
@@ -321,17 +385,19 @@ window.FG = window.FG || {};
         }
 
       } else if (this.state === 'exposto') {
-        // arquejando: a bolsa de garganta enche de veneno, desce e acende
-        // até levar o soco
+        // arquejando, curvada para a frente: a bolsa de garganta enche de
+        // veneno, desce e acende até levar o soco
+        this.kneel = Math.min(1, this.kneel + dt * 6);
         this.sag = Math.min(1, this.sag + dt * 5);
         this.charge += (0 - this.charge) * Math.min(1, dt * 6);
         this.puff += (0 - this.puff) * Math.min(1, dt * 4);
         this.squash += (0 - this.squash) * Math.min(1, dt * 6);
         this.x += (this.homeX - this.x) * Math.min(1, dt * 3);
         this.glow = 0.6 + 0.4 * Math.sin(FG.engine.time * 12);
+        this.refreshPose();
         // gotas escorrendo da bolsa, para o alvo saltar aos olhos
         if (Math.random() < 0.4) {
-          spawnParticle(this.x + PAPADA_X + rand(-40, 40), this.weakBox.y + this.weakBox.h,
+          spawnParticle(this.weakBox.x + this.weakBox.w / 2 + rand(-40, 40), this.weakBox.y + this.weakBox.h,
             rand(-20, 20), rand(20, 70), 0.5, 3.5, '#c8e86a', 500);
         }
         // soco na bolsa de garganta
@@ -348,6 +414,7 @@ window.FG = window.FG || {};
           this.timer = 1.1 * speedMul;
           this.glow = 0;
         }
+        return;   // curvada nada machuca no contato: sai antes do teste
 
       } else if (this.state === 'bafo') {
         // ---- 1. BAFO VENENOSO ----
@@ -362,17 +429,18 @@ window.FG = window.FG || {};
           this.charge = Math.min(1, this.charge + dt * 1.3);
           this.x += (this.homeX + 26 - this.x) * Math.min(1, dt * 3);  // recua
           if (Math.random() < 0.35) {
-            spawnParticle(this.x + MOUTH.x, this.bodyY + MOUTH.y, rand(-40, 10), rand(-70, -20),
+            spawnParticle(this.x + POSE.head.x - 30, this.bodyY + POSE.head.y + 30, rand(-40, 10), rand(-70, -20),
               0.4, 3, 'rgba(190,230,90,0.85)', 200);
           }
           if (this.timer <= 0) {
             const n = p2 ? 4 : 3;   // fase 2: um jorro a mais, o vão aperta
+            const mx = this.x + POSE.head.x - 30, my = this.bodyY + POSE.head.y + 30;
             for (let i = 0; i < n; i++) {
               const s = this.acquireSpit();
               if (!s) break;
               s.active = true;
-              s.x = this.x + MOUTH.x;
-              s.y = this.bodyY + MOUTH.y;
+              s.x = mx;
+              s.y = my;
               s.px = s.x; s.py = s.y;
               s.vx = SPITS[i].vx + rand(-12, 12);
               s.vy = SPITS[i].vy;
@@ -409,8 +477,7 @@ window.FG = window.FG || {};
         } else if (this.phase === 2) {
           // desenrola e recolhe; a bolsa de garganta esvazia junto com o disparo
           const outV = p2 ? 2500 : 2200;
-          const inV = p2 ? 2200 : 2000;
-          tongue.x = this.x + MOUTH.x;
+          tongue.x = this.x + POSE.head.x - 30;
           tongue.y = this.bodyY - TONGUE_Y;
           if (tongue.out) {
             tongue.len += outV * dt;
@@ -422,11 +489,11 @@ window.FG = window.FG || {};
             }
           }
         } else if (this.phase === 3) {
-          tongue.x = this.x + MOUTH.x;
+          tongue.x = this.x + POSE.head.x - 30;
           tongue.y = this.bodyY - TONGUE_Y;
           if (this.timer <= 0) { tongue.out = false; this.phase = 4; this.timer = 1.0; }
         } else if (this.phase === 4) {
-          tongue.x = this.x + MOUTH.x;
+          tongue.x = this.x + POSE.head.x - 30;
           tongue.y = this.bodyY - TONGUE_Y;
           tongue.len -= (p2 ? 2200 : 2000) * dt;
           if (tongue.len <= 0) {
@@ -439,8 +506,8 @@ window.FG = window.FG || {};
       } else if (this.state === 'baque') {
         // ---- 3. BAQUE DE CAJADO ----
         // Telegraph de 0.9s: AGACHA E TREME. Depois salta ~160px e cai
-        // batendo o corpo/cajado no chão; o impacto solta duas ondas
-        // rasteiras, uma para cada lado.
+        // batendo os pés no chão; o impacto solta duas ondas rasteiras, uma
+        // para cada lado.
         if (this.phase === 0) {
           this.phase = 1;
           this.timer = 0.9;
@@ -448,7 +515,7 @@ window.FG = window.FG || {};
           this.squash = Math.min(1, this.squash + dt * 2);
           this.x = this.homeX + Math.sin(FG.engine.time * 46) * 4;
           if (Math.random() < 0.3) {
-            spawnParticle(this.x + rand(-200, 160), this.groundY, rand(-60, 60), rand(-90, -20),
+            spawnParticle(this.x + rand(-80, 60), this.groundY, rand(-60, 60), rand(-90, -20),
               0.35, 3.5, 'rgba(150,180,70,0.8)', 400);
           }
           if (this.timer <= 0) {
@@ -466,17 +533,17 @@ window.FG = window.FG || {};
             this.hop = 0;
             this.hopV = 0;
             FG.audio.sfx('bossRoar');
-            // duas ondas, uma para cada lado, saindo de debaixo do robe
+            // duas ondas, uma para cada lado, saindo de debaixo dos pés
             const wv = p2 ? 340 : 300;
             for (let i = 0; i < 2; i++) {
               const w = waves[i];
               w.active = true;
-              w.x = this.x - 200 - w.w / 2;
+              w.x = this.x - 36 - w.w / 2;
               w.vx = i === 0 ? -wv : wv;
               w.y = groundYAt(w.x + w.w / 2, 300) - w.h;
             }
             for (let k = 0; k < 14; k++) {
-              spawnParticle(this.x + rand(-240, 200), this.groundY, rand(-220, 220), rand(-320, -80),
+              spawnParticle(this.x + rand(-80, 60), this.groundY, rand(-220, 220), rand(-320, -80),
                 0.6, 4 + Math.random() * 4, '#8fae35', 460);
             }
             this.phase = 3;
@@ -524,9 +591,9 @@ window.FG = window.FG || {};
       }
 
       // ---------- contato com a SANDROLA ----------
-      // Encostar na cabeça ou no robe/corpo machuca. Assim que a bolsa de
-      // garganta começa a descer (sag), tudo fica inofensivo: é justamente
-      // aí que o jogador precisa se plantar debaixo do queixo para socar.
+      // Encostar na cabeça ou no corpo machuca. Assim que a bolsa de garganta
+      // começa a descer (sag), tudo fica inofensivo: é justamente aí que o
+      // jogador precisa se plantar debaixo do queixo para socar.
       if (this.sag <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
         p.hurt(1, this.x - 100);
       }
@@ -671,206 +738,28 @@ window.FG = window.FG || {};
   }
 
   // ==================================================================
-  // DESENHO — canvas puro, sem asset nenhum. A bruxa é um monte de elipses:
-  // o robe verde comprido atrás (mesma silhueta do corpanzil de lesma que
-  // já era), a cabeça de pele de sapo com cabelo loiro solto à frente, a
-  // bolsa de garganta pendurada sob o queixo e dois olhos bulbosos em cima.
+  // DESENHO — canvas puro, sem asset nenhum. A ordem de desenho segue a
+  // mesma lógica de profundidade do boss3.js: perna de trás, pernas, tronco/
+  // blusa, cabeça, braço da frente — o que dá volume sem sombra falsa.
   // ==================================================================
-  function drawBoss(ctx, cam) {
-    const VIEW_W = FG.enemies.fx.VIEW_W;
-    const a = FG.level.arena;
-    if (cam.x + VIEW_W < a.x - 200 || cam.x > a.x + a.w + 200) return;
-    if (!boss.started) boss.resolveGeometry();   // dormindo, geometria já certa
 
-    const t = FG.engine.time;
-    const p2 = boss.isPhase2();
-    const dying = boss.state === 'dying';
-    if (dying && boss.dieTimer >= 2.5) return;   // já desmanchou
-
-    // tremor: fase 2 sempre vibra um pouco; morrendo, muito
-    let shX = 0, shY = 0;
-    if (dying) { shX = rand(-4, 4); shY = rand(-3, 3); }
-    else if (p2 && boss.active) { shX = rand(-1.4, 1.4); shY = rand(-1, 1); }
-
-    // parado, respira: a corcova sobe e desce
-    const breathe = (boss.active || dying) ? Math.sin(t * 2.2) * 2 : Math.sin(t * 1.5) * 4;
-    const melt = boss.melt;
-    const X = boss.x - cam.x + shX;
-    const BY = boss.bodyY - cam.y + shY + breathe + melt * 74;
-    const GY = boss.groundY - cam.y;
-
-    // achata e alarga ao derreter; agacha no telegraph do baque
-    const sqz = 1 - 0.2 * boss.squash - 0.72 * melt;
-    const wide = 1 + 0.12 * boss.squash + 0.3 * melt;
-
-    ctx.save();
-    // Nada da SANDROLA passa da linha do lodo: ela está ATOLADA, e o que
-    // sobraria por baixo do chão fica escondido em vez de flutuar.
+  // Membro: um tronco de cone entre duas juntas — braço, perna. Mesma função
+  // do boss3.js: suave, sem vértices pontudos.
+  function shapeLimb(ctx, ax, ay, bx, by, w0, w1) {
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / len, ny = dx / len;
     ctx.beginPath();
-    ctx.rect(-200, -1000, VIEW_W + 400, GY + 30 + 1000);
-    ctx.clip();
-
-    // ---- o atoleiro: poça de lodo em que ela está enfiada ----
-    ctx.fillStyle = '#3b4416';
-    ctx.beginPath();
-    ctx.ellipse(X - 30, GY + 4, 300, 26, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(140,172,60,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(X - 30, GY - 2 + Math.sin(t * 2) * 2, 274, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.translate(X, BY);
-    ctx.scale(wide, sqz);
-
-    // robe: verde comprido fluindo pra baixo, mais escuro na fase 2
-    const robeDark = p2 ? '#294016' : '#33501e';
-    const robeMid = p2 ? '#4c7327' : '#5c8a34';
-    // pele de sapo do rosto: mais pálida e fria que o robe, para ler como pele
-    const skinDark = p2 ? '#4a6b3e' : '#587e4c';
-    const skinMid = p2 ? '#7ea468' : '#93bd7c';
-    const lit = p2 ? '#a8c246' : '#9fb845';
-
-    // ---- robe/corpo (o corpanzil atrás, virando poça de sapo-lesma embaixo) ----
-    blob(ctx, BODY.cx, BODY.cy, BODY.rx, BODY.ry, robeDark, robeMid);
-    // dobras do robe (onde antes eram verrugas do lombo)
-    ctx.strokeStyle = 'rgba(20,32,10,0.4)';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    for (let i = 0; i < 6; i++) {
-      const ang = -2.5 + i * 0.36;
-      const fx = BODY.cx + Math.cos(ang) * BODY.rx * 0.72;
-      const fy = BODY.cy + Math.sin(ang) * BODY.ry * 0.78;
-      ctx.beginPath();
-      ctx.moveTo(fx, fy - 16);
-      ctx.quadraticCurveTo(fx + 4, fy, fx, fy + 16);
-      ctx.stroke();
-    }
-    // punhos de manga azul-marinho, saindo do robe como se os braços dela
-    // estivessem cruzados/apoiados no lodo — a última pincelada de bruxa
-    ctx.fillStyle = p2 ? '#131e38' : '#1b2a4a';
-    ctx.beginPath();
-    ctx.ellipse(BODY.cx - BODY.rx * 0.46, BODY.cy + BODY.ry * 0.5, 38, 22, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(BODY.cx + BODY.rx * 0.4, BODY.cy + BODY.ry * 0.62, 40, 24, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(140,164,220,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(BODY.cx - BODY.rx * 0.46 - 4, BODY.cy + BODY.ry * 0.5 - 6, 30, 8, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ---- cabelo loiro solto, atrás da cabeça ----
-    const hairLit = '#e8d27a', hairDark = '#b89a3e';
-    ctx.fillStyle = hairDark;
-    ctx.beginPath();
-    ctx.moveTo(HEAD.cx - HEAD.rx * 0.9, HEAD.cy - HEAD.ry * 0.3);
-    ctx.quadraticCurveTo(HEAD.cx - HEAD.rx * 1.5, HEAD.cy + HEAD.ry * 0.6,
-      HEAD.cx - HEAD.rx * 0.6, HEAD.cy + HEAD.ry * 1.7);
-    ctx.quadraticCurveTo(HEAD.cx - HEAD.rx * 0.2, HEAD.cy + HEAD.ry * 1.2,
-      HEAD.cx + HEAD.rx * 0.1, HEAD.cy + HEAD.ry * 1.5);
-    ctx.quadraticCurveTo(HEAD.cx + HEAD.rx * 0.5, HEAD.cy + HEAD.ry * 0.4,
-      HEAD.cx + HEAD.rx * 0.75, HEAD.cy - HEAD.ry * 0.5);
-    ctx.quadraticCurveTo(HEAD.cx + HEAD.rx * 0.2, HEAD.cy - HEAD.ry * 1.1,
-      HEAD.cx - HEAD.rx * 0.9, HEAD.cy - HEAD.ry * 0.3);
+    ctx.moveTo(ax + nx * w0, ay + ny * w0);
+    ctx.lineTo(bx + nx * w1, by + ny * w1);
+    ctx.lineTo(bx - nx * w1, by - ny * w1);
+    ctx.lineTo(ax - nx * w0, ay - ny * w0);
     ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = hairLit;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    for (let i = 0; i < 5; i++) {
-      const a0 = -0.8 + i * 0.5;
-      const bx = HEAD.cx + Math.cos(a0) * HEAD.rx * 0.7;
-      const by = HEAD.cy + Math.sin(a0) * HEAD.ry * 0.9;
-      const sway = Math.sin(t * 1.4 + i) * 6;
-      ctx.beginPath();
-      ctx.moveTo(bx, by);
-      ctx.quadraticCurveTo(bx - 20 + sway, by + 60, bx - 10 + sway, by + 130 + i * 8);
-      ctx.stroke();
-    }
-
-    // ---- cabeça: base de pele de sapo (mesma silhueta da cabeçorra) ----
-    blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, skinDark, skinMid);
-    // manchas/verrugas de sapo em grade, espalhadas pelo rosto
-    ctx.fillStyle = 'rgba(40,64,24,0.5)';
-    for (let gx = -2; gx <= 2; gx++) {
-      for (let gy = -1; gy <= 1; gy++) {
-        if ((gx + gy) % 2 === 0) continue;
-        const mx = HEAD.cx + gx * HEAD.rx * 0.34;
-        const my = HEAD.cy + gy * HEAD.ry * 0.4;
-        ctx.beginPath();
-        ctx.ellipse(mx, my, 11, 8, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    // marca vermelha na bochecha/testa — a assinatura dela
-    ctx.fillStyle = p2 ? '#e0503a' : '#c8402c';
-    ctx.beginPath();
-    ctx.ellipse(HEAD.cx - HEAD.rx * 0.1, HEAD.cy - HEAD.ry * 0.55, 16, 22, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.beginPath();
-    ctx.ellipse(HEAD.cx - HEAD.rx * 0.1 - 4, HEAD.cy - HEAD.ry * 0.55 - 6, 6, 9, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ---- boca larga, atravessando a frente da cabeça ----
-    ctx.strokeStyle = '#2a1830';
-    ctx.lineWidth = 9;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(MOUTH.x, MOUTH.y);
-    ctx.quadraticCurveTo(-220, MOUTH.y + 26, -110, MOUTH.y - 6);
-    ctx.stroke();
-    // goela acesa de veneno: telegraph do bafo e das bolhas
-    if (boss.charge > 0.02) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createRadialGradient(-220, MOUTH.y + 8, 2, -220, MOUTH.y + 8, 60 + 40 * boss.charge);
-      g.addColorStop(0, 'rgba(220,255,150,0.9)');
-      g.addColorStop(0.5, 'rgba(150,220,60,0.55)');
-      g.addColorStop(1, 'rgba(90,160,20,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(-220, MOUTH.y + 8, 60 + 40 * boss.charge, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // ---- bolsa de garganta: o ponto fraco ----
-    drawPapada(ctx, t, lit);
-
-    // ---- olhos bulbosos de sapo ----
-    drawEye(ctx, EYE_L, t, p2, 0);
-    drawEye(ctx, EYE_R, t, p2, 1.7);
-
-    // ---- baba/veneno escorrendo do queixo e da barra do robe ----
-    ctx.fillStyle = 'rgba(200,235,120,0.4)';
-    for (let i = 0; i < 5; i++) {
-      const dx = -300 + i * 70;
-      const dy = Math.abs(Math.sin(t * 1.3 + i * 1.7)) * 26;
-      ctx.beginPath();
-      ctx.ellipse(dx, -34 + dy, 5, 9 + dy * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // flash ao levar dano: clarão por cima das duas massas
-    if (boss.flash > 0) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.5;
-      ctx.fillStyle = '#e8ffb0';
-      ctx.beginPath();
-      ctx.ellipse(BODY.cx, BODY.cy, BODY.rx, BODY.ry, 0, 0, Math.PI * 2);
-      ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    ctx.restore();
   }
 
-  // Elipse com gradiente vertical: escura embaixo (dentro do lodo), clara em
-  // cima (onde bate a luz coada do pântano). É o tijolo do bicho inteiro.
+  // Elipse com gradiente vertical: escura embaixo, clara em cima. É o tijolo
+  // do casaco/cabeça inteiros — LISO, de propósito (ver nota no topo do
+  // arquivo: nada de silhueta facetada tipo pedra para o tronco dela).
   function blob(ctx, cx, cy, rx, ry, dark, mid) {
     const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
     g.addColorStop(0, mid);
@@ -887,28 +776,341 @@ window.FG = window.FG || {};
     ctx.fill();
   }
 
+  function drawBoss(ctx, cam) {
+    const VIEW_W = FG.enemies.fx.VIEW_W;
+    const a = FG.level.arena;
+    if (cam.x + VIEW_W < a.x - 200 || cam.x > a.x + a.w + 200) return;
+    if (!boss.started) { boss.resolveGeometry(); }   // dormindo, geometria já certa
+    boss.refreshPose();
+
+    const t = FG.engine.time;
+    const p2 = boss.isPhase2();
+    const dying = boss.state === 'dying';
+    if (dying && boss.dieTimer >= 2.5) return;   // já desmanchou
+
+    // tremor: fase 2 sempre vibra um pouco; morrendo, muito
+    let shX = 0, shY = 0;
+    if (dying) { shX = rand(-4, 4); shY = rand(-3, 3); }
+    else if (p2 && boss.active) { shX = rand(-1.4, 1.4); shY = rand(-1, 1); }
+
+    // parada, respira: o peito sobe e desce
+    const breathe = (boss.active || dying) ? Math.sin(t * 2.2) * 2 : Math.sin(t * 1.5) * 4;
+    const melt = boss.melt;
+    const X = boss.x - cam.x + shX;
+    const BY = boss.bodyY - cam.y + shY + melt * 74;
+    const GY = boss.groundY - cam.y;
+
+    // agacha no telegraph do baque; afunda ao derreter
+    const sqz = 1 - 0.12 * boss.squash - 0.6 * melt;
+    const wide = 1 + 0.08 * boss.squash + 0.22 * melt;
+
+    ctx.save();
+    // Nada da SANDROLA passa da linha do lodo: ela está com os pés atolados,
+    // e o que sobraria por baixo do chão fica escondido em vez de flutuar.
+    ctx.beginPath();
+    ctx.rect(-200, -1000, VIEW_W + 400, GY + 30 + 1000);
+    ctx.clip();
+
+    // ---- o atoleiro: poça de lodo em que os pés dela estão enfiados ----
+    ctx.fillStyle = '#3b4416';
+    ctx.beginPath();
+    ctx.ellipse(X - 6, GY + 4, 150, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(140,172,60,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(X - 6, GY - 2 + Math.sin(t * 2) * 2, 132, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(X, BY);
+    ctx.scale(wide, sqz);
+
+    // casaco teal, mais escuro e frio na fase 2
+    const jacketDark = p2 ? '#123a30' : '#1c5346';
+    const jacketMid = p2 ? '#1f6d5a' : '#2f8a72';
+    const jacketHigh = p2 ? '#0c2a22' : '#153f34';   // gola alta, mais escura
+    // pele pálida/creme — uniforme, sem manchas de sapo
+    const skinDark = p2 ? '#d8c1a8' : '#e7cdb2';
+    const skinMid = p2 ? '#efdcc6' : '#f6e4cd';
+    const lit = p2 ? '#f0b0a4' : '#f6c4b6';
+    // jeans azul e botas
+    const jeansMid = '#3f5fb0', jeansDark = '#2c4488';
+    const bootDark = '#1c2a58';
+
+    const hip = POSE.hip, chest = POSE.chest, head = POSE.head;
+    const shB = POSE.shBack, shF = POSE.shFront;
+    const handB = POSE.handBack, handF = POSE.handFront;
+    const kneeB = POSE.kneeBack, kneeF = POSE.kneeFront;
+    const footB = POSE.footBack, footF = POSE.footFront;
+
+    // ---- perna de trás primeiro (fica atrás de tudo) ----
+    ctx.fillStyle = jeansDark;
+    shapeLimb(ctx, hip.x + 10, hip.y, kneeB.x, kneeB.y, 22, 19);
+    ctx.fill();
+    shapeLimb(ctx, kneeB.x, kneeB.y, footB.x, footB.y, 19, 17);
+    ctx.fill();
+    ctx.fillStyle = bootDark;
+    ctx.beginPath();
+    ctx.ellipse(footB.x + 6, footB.y - 6, 22, 14, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- perna da frente ----
+    ctx.fillStyle = jeansMid;
+    shapeLimb(ctx, hip.x - 10, hip.y, kneeF.x, kneeF.y, 24, 20);
+    ctx.fill();
+    shapeLimb(ctx, kneeF.x, kneeF.y, footF.x, footF.y, 20, 18);
+    ctx.fill();
+    // costura central das calças
+    ctx.strokeStyle = 'rgba(15,25,60,0.4)';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(hip.x - 10, hip.y + 10);
+    ctx.lineTo(kneeF.x, kneeF.y);
+    ctx.lineTo(footF.x, footF.y - 4);
+    ctx.stroke();
+    ctx.fillStyle = bootDark;
+    ctx.beginPath();
+    ctx.ellipse(footF.x - 6, footF.y - 7, 24, 15, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- braço de trás (atrás do tronco) ----
+    ctx.fillStyle = jacketDark;
+    shapeLimb(ctx, shB.x, shB.y + breathe, handB.x, handB.y, 20, 15);
+    ctx.fill();
+    ctx.fillStyle = skinMid;
+    ctx.beginPath();
+    ctx.ellipse(handB.x, handB.y, 15, 12, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- tronco/blusa: elipse LISA com gradiente (ver blob()) ----
+    const tcx = lerp(hip.x, chest.x, 0.55);
+    const tcy = lerp(hip.y, chest.y, 0.55) + breathe;
+    const trx = 78, tryy = 108;
+    blob(ctx, tcx, tcy, trx, tryy, jacketDark, jacketMid);
+    // costura central do casaco + 2 botões escuros descendo pela frente
+    ctx.strokeStyle = 'rgba(10,20,16,0.45)';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(tcx - trx * 0.05, tcy - tryy * 0.72);
+    ctx.lineTo(tcx - trx * 0.05, tcy + tryy * 0.78);
+    ctx.stroke();
+    // curva decorativa tipo bolso, como na referência
+    ctx.beginPath();
+    ctx.arc(tcx + trx * 0.16, tcy - tryy * 0.1, trx * 0.22, 0.3, Math.PI - 0.5);
+    ctx.stroke();
+    ctx.fillStyle = p2 ? '#0c1a16' : '#122824';
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.arc(tcx - trx * 0.05, tcy - tryy * 0.05 + i * tryy * 0.42, 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // ombreiras do casaco
+    ctx.fillStyle = jacketDark;
+    ctx.beginPath();
+    ctx.ellipse(shB.x, shB.y + breathe, 30, 24, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(shF.x, shF.y + breathe, 32, 26, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+    // gola alta, teal escuro, subindo do casaco até a base do pescoço
+    ctx.fillStyle = jacketHigh;
+    ctx.beginPath();
+    ctx.moveTo(head.x - 34, head.y + 90);
+    ctx.lineTo(head.x + 40, head.y + 78);
+    ctx.lineTo(chest.x + trx * 0.3, chest.y - tryy * 0.3);
+    ctx.lineTo(chest.x - trx * 0.35, chest.y - tryy * 0.1);
+    ctx.closePath();
+    ctx.fill();
+
+    // ---- cabelo liso amarelo-ouro, calota de trás (por trás da cabeça) ----
+    const hairLit = '#f6d33a', hairDark = '#d9ad0e';
+    ctx.fillStyle = hairDark;
+    ctx.beginPath();
+    ctx.ellipse(head.x, head.y - 30, 82, 66, 0, Math.PI, 0, false);
+    ctx.fill();
+
+    // ---- cabeça: pele pálida uniforme ----
+    blob(ctx, head.x, head.y, 66, 78, skinDark, skinMid);
+
+    // duas cortinas lisas de cabelo, uma de cada lado do rosto, até o peito —
+    // desenhadas DEPOIS da cabeça para caírem por cima, como na referência
+    ctx.fillStyle = hairLit;
+    for (const side of [-1, 1]) {
+      const sway = Math.sin(t * 0.9 + side) * 3;
+      const bx = head.x + side * 62;
+      const by = head.y - 20;
+      ctx.beginPath();
+      ctx.moveTo(bx - side * 14, by - 14);
+      ctx.quadraticCurveTo(bx + side * (20 + sway), by + 90, bx + side * (8 + sway), by + 200);
+      ctx.lineTo(bx - side * (20 + sway), by + 196);
+      ctx.quadraticCurveTo(bx - side * (26 + sway), by + 82, bx - side * 24, by - 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(160,120,4,0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + side * (12 + sway), by + 96, bx + side * 5, by + 184);
+      ctx.stroke();
+    }
+    // repartição central do cabelo, por cima da testa
+    ctx.fillStyle = hairDark;
+    ctx.beginPath();
+    ctx.moveTo(head.x - 3, head.y - 68);
+    ctx.lineTo(head.x + 3, head.y - 68);
+    ctx.lineTo(head.x + 2, head.y - 30);
+    ctx.lineTo(head.x - 2, head.y - 30);
+    ctx.closePath();
+    ctx.fill();
+
+    // sobrancelhas finas arqueadas
+    ctx.strokeStyle = 'rgba(70,50,20,0.7)';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(head.x - 20, head.y - 22, 22, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(head.x + 22, head.y - 24, 22, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+
+    // ---- boca aberta com dentes brancos em grade + canto vermelho ----
+    drawMouth(ctx, head, t);
+    // goela acesa: telegraph do bafo e das bolhas, por trás dos dentes
+    if (boss.charge > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(head.x, head.y + 26, 2, head.x, head.y + 26, 60 + 40 * boss.charge);
+      g.addColorStop(0, 'rgba(220,255,150,0.9)');
+      g.addColorStop(0.5, 'rgba(150,220,60,0.55)');
+      g.addColorStop(1, 'rgba(90,160,20,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y + 26, 60 + 40 * boss.charge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ---- olhos pretos quadrados de estática, com quadradinho branco ----
+    // Antes ficavam a só 42px uma da outra com r=30/32 (lado do quadrado =
+    // r*1.8 ≈ 54-58px) — as duas se fundiam numa barra preta única. Agora
+    // separadas o bastante (72px) e um pouco menores pra caber dentro da
+    // cabeça sem se tocar.
+    drawEye(ctx, head.x - 30, head.y - 8, 22, t, p2, 0);
+    drawEye(ctx, head.x + 26, head.y - 10, 23, t, p2, 1.7);
+
+    // ---- bolsa de garganta: o ponto fraco, agora centrada no peito/pescoço ----
+    drawPapada(ctx, chest, t, lit);
+
+    // ---- braço da frente (por cima do tronco) ----
+    ctx.fillStyle = jacketMid;
+    shapeLimb(ctx, shF.x, shF.y + breathe, handF.x, handF.y, 22, 16);
+    ctx.fill();
+    ctx.fillStyle = skinMid;
+    ctx.beginPath();
+    ctx.ellipse(handF.x, handF.y, 16, 13, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    for (let f = -1; f <= 1; f++) {
+      ctx.beginPath();
+      ctx.ellipse(handF.x + f * 8, handF.y - 12, 4.5, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ---- baba/veneno escorrendo do queixo e da barra do casaco ----
+    ctx.fillStyle = 'rgba(200,235,120,0.4)';
+    for (let i = 0; i < 4; i++) {
+      const dx = tcx - trx * 0.7 + i * (trx * 1.4 / 3);
+      const dy = Math.abs(Math.sin(t * 1.3 + i * 1.7)) * 20;
+      ctx.beginPath();
+      ctx.ellipse(dx, tcy + tryy * 0.85 + dy, 5, 8 + dy * 0.25, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // flash ao levar dano: clarão por cima do tronco e da cabeça
+    if (boss.flash > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.5;
+      ctx.fillStyle = '#e8ffb0';
+      ctx.beginPath();
+      ctx.ellipse(tcx, tcy, trx, tryy, 0, 0, Math.PI * 2);
+      ctx.ellipse(head.x, head.y, 66, 78, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // Boca aberta com dentes brancos em grade (cima e embaixo) e um toque de
+  // vermelho de gengiva/língua no canto — a mesma leitura da referência.
+  function drawMouth(ctx, head, t) {
+    const cx = head.x, cy = head.y + 30;
+    const x0 = cx - 46, x1 = cx + 46;
+    const yTop = cy - 22, yBot = cy + 18;
+    // cavidade da boca
+    ctx.fillStyle = '#2a1414';
+    ctx.beginPath();
+    ctx.moveTo(x0, cy - 6);
+    ctx.quadraticCurveTo(cx, yTop, x1, cy - 8);
+    ctx.lineTo(x1, cy + 6);
+    ctx.quadraticCurveTo(cx, yBot, x0, cy + 10);
+    ctx.closePath();
+    ctx.fill();
+    // grade de dentes brancos, fileira de cima e de baixo
+    const cols = 6;
+    const span = x1 - x0 - 10;
+    const toothW = span / cols;
+    ctx.fillStyle = '#f4f1e6';
+    for (let i = 0; i < cols; i++) {
+      const tx = x0 + 6 + i * toothW;
+      ctx.fillRect(tx, yTop + 2, toothW - 3, 14);
+      ctx.fillRect(tx, yBot - 14, toothW - 3, 14);
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i <= cols; i++) {
+      const tx = x0 + 6 + i * toothW;
+      ctx.beginPath();
+      ctx.moveTo(tx, yTop + 2);
+      ctx.lineTo(tx, yTop + 16);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(tx, yBot - 14);
+      ctx.lineTo(tx, yBot);
+      ctx.stroke();
+    }
+    // gengiva/língua vermelha no canto aberto
+    ctx.fillStyle = '#c23a2e';
+    ctx.beginPath();
+    ctx.ellipse(x1 - 12, cy + 2, 15, 10, 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // A bolsa de garganta. Ela infla no telegraph da língua e AFUNDA na janela
   // de dano — as duas coisas são o mesmo saco, e é isso que ensina o jogador
-  // onde bater.
-  function drawPapada(ctx, t, lit) {
+  // onde bater. Agora centrada no x do peito/pescoço (chest), não mais jogada
+  // para o lado do rosto.
+  function drawPapada(ctx, chest, t, lit) {
+    const cx = chest.x;
     const cy = -(PAPADA_HIGH - (PAPADA_HIGH - PAPADA_LOW) * boss.sag);
-    const rx = 56 + 16 * boss.puff + 10 * boss.sag;
-    const ry = 42 + 15 * boss.puff + 12 * boss.sag;
+    const rx = 44 + 14 * boss.puff + 8 * boss.sag;
+    const ry = 34 + 13 * boss.puff + 10 * boss.sag;
     const wobble = Math.sin(t * (boss.puff > 0.2 ? 22 : 4)) * (1 + 2 * boss.puff);
 
     const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
     g.addColorStop(0, lit);
-    g.addColorStop(1, '#c8dc70');
+    g.addColorStop(1, '#c76a5c');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(PAPADA_X, cy + wobble, rx, ry, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + wobble, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
-    // pregas da papada
-    ctx.strokeStyle = 'rgba(70,90,20,0.35)';
+    // pregas da papada inchada
+    ctx.strokeStyle = 'rgba(120,50,40,0.35)';
     ctx.lineWidth = 3;
     for (let i = 0; i < 3; i++) {
       ctx.beginPath();
-      ctx.arc(PAPADA_X, cy + wobble - ry * 0.3, rx * (0.45 + i * 0.22), 0.5, Math.PI - 0.5);
+      ctx.arc(cx, cy + wobble - ry * 0.3, rx * (0.45 + i * 0.22), 0.5, Math.PI - 0.5);
       ctx.stroke();
     }
     // alvo pulsando durante a janela de dano
@@ -916,12 +1118,12 @@ window.FG = window.FG || {};
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const r = rx * 1.25 + Math.sin(t * 12) * 5;
-      const gg = ctx.createRadialGradient(PAPADA_X, cy, r * 0.2, PAPADA_X, cy, r);
+      const gg = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
       gg.addColorStop(0, 'rgba(240,255,160,' + (0.55 * boss.glow).toFixed(3) + ')');
       gg.addColorStop(1, 'rgba(180,255,60,0)');
       ctx.fillStyle = gg;
       ctx.beginPath();
-      ctx.arc(PAPADA_X, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       ctx.save();
@@ -929,32 +1131,33 @@ window.FG = window.FG || {};
       ctx.strokeStyle = '#f2ffb0';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(PAPADA_X, cy, rx * 0.95, 0, Math.PI * 2);
+      ctx.arc(cx, cy, rx * 0.95, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
   }
 
-  // Olho bulboso com pupila horizontal de sapo. Na fase 2 fica alaranjado —
-  // é o único aviso visual de que ela acelerou.
-  function drawEye(ctx, e, t, p2, off) {
-    const blink = Math.sin(t * 0.8 + off) > 0.985 ? 0.15 : 1;
-    ctx.fillStyle = '#5d7522';
-    ctx.beginPath();
-    ctx.ellipse(e.cx, e.cy + 6, e.r * 1.1, e.r * 0.9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = p2 ? '#ffb04a' : '#ffe08a';
-    ctx.beginPath();
-    ctx.ellipse(e.cx, e.cy, e.r, e.r * blink, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1a1206';
-    ctx.beginPath();
-    ctx.ellipse(e.cx - e.r * 0.2, e.cy, e.r * 0.62, e.r * 0.24 * blink, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.beginPath();
-    ctx.arc(e.cx - e.r * 0.35, e.cy - e.r * 0.4, e.r * 0.16, 0, Math.PI * 2);
-    ctx.fill();
+  // Olho preto quadrado/blocado, tipo estática de TV, com um quadradinho
+  // branco descentralizado dentro — o efeito "olhos de zumbi/glitch" da
+  // referência. Na fase 2 o quadradinho pisca vermelho de vez em quando, o
+  // único aviso visual de que ela acelerou.
+  function drawEye(ctx, ex, ey, r, t, p2, off) {
+    const blink = Math.sin(t * 0.8 + off) > 0.985 ? 0.12 : 1;
+    const side = r * 1.8;
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.scale(1, blink);
+    // quadrado preto
+    ctx.fillStyle = '#0c0c0c';
+    ctx.fillRect(-side / 2, -side / 2, side, side);
+    // quadradinho branco descentralizado, dá o efeito de estática/glitch
+    const glitch = p2 && Math.sin(t * 20 + off * 3) > 0.92;
+    const wsize = side * 0.34;
+    const wx = -side * 0.16 + Math.sin(t * 3 + off) * side * 0.06;
+    const wy = -side * 0.12;
+    ctx.fillStyle = glitch ? '#e03a2a' : '#f4f1e6';
+    ctx.fillRect(wx - wsize / 2, wy - wsize / 2, wsize, wsize);
+    ctx.restore();
   }
 
   function drawBossStuff(ctx, cam) {

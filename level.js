@@ -583,25 +583,34 @@ window.FG = window.FG || {};
     var r = makeRand(101);
     var base = LAYER_H;
 
-    // roda-gigante parada, torta, ao fundo do parque
+    // arco/pórtico de entrada do parque, logo no início (x pequeno) — a
+    // primeira coisa que se reconhece como "parque de diversões"
+    paintArch(g, r, 140, base);
+
+    // roda-gigante parada, torta, ao fundo do parque — aro e cabines em tom
+    // claro/vivo para se destacar do céu escuro (silhueta pura não lia bem)
     (function () {
       var wx = 340, wy = base - 40 - 260, wr = 210;
-      g.strokeStyle = 'rgba(40,20,54,0.85)';
+      g.strokeStyle = 'rgba(196,178,224,0.9)';
       g.lineWidth = 7;
       g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.stroke();
       g.lineWidth = 4;
+      g.strokeStyle = 'rgba(160,142,196,0.55)';
       for (var i = 0; i < 10; i++) {
         var ang = (i / 10) * Math.PI * 2;
         g.beginPath();
         g.moveTo(wx, wy);
         g.lineTo(wx + Math.cos(ang) * wr, wy + Math.sin(ang) * wr);
         g.stroke();
-        // cabines penduradas, tortas
-        g.fillStyle = 'rgba(30,14,42,0.9)';
+        // cabines penduradas, tortas — vermelho vivo, alterna com verde-doentio
         var cx = wx + Math.cos(ang) * wr, cy = wy + Math.sin(ang) * wr;
+        g.fillStyle = (i % 2 === 0) ? '#c8304c' : '#7a9a3c';
         g.fillRect(cx - 9, cy - 4, 18, 16);
+        // pontinho de luz na cabine
+        g.fillStyle = 'rgba(255,230,140,0.8)';
+        g.beginPath(); g.arc(cx, cy + 4, 2, 0, Math.PI * 2); g.fill();
       }
-      g.strokeStyle = 'rgba(40,20,54,0.85)';
+      g.strokeStyle = 'rgba(196,178,224,0.9)';
       g.lineWidth = 10;
       g.beginPath();
       g.moveTo(wx, wy + wr);
@@ -611,21 +620,23 @@ window.FG = window.FG || {};
       g.stroke();
     })();
 
-    // tendas de circo pontudas (silhueta), com bandeirola torta no topo
+    // tendas de circo pontudas (silhueta), com bandeirola torta no topo —
+    // pano em roxo/violeta claro e listras vermelho-vivo, bem acima do
+    // contraste quase-preto de antes
     for (var c = 0; c < 5; c++) {
       var cw = 150 + r() * 150;
       var cx = 760 + c * 420 + r() * 120;
       var ch = 200 + r() * 140;
       var top = base - 40 - ch;
-      g.fillStyle = 'rgba(48,20,60,0.85)';
+      g.fillStyle = 'rgba(104,52,132,0.92)';
       g.beginPath();
       g.moveTo(cx, base);
       g.lineTo(cx + cw * 0.5, top);
       g.lineTo(cx + cw, base);
       g.closePath();
       g.fill();
-      // listras verticais da lona
-      g.strokeStyle = 'rgba(20,8,30,0.5)';
+      // listras verticais da lona, vermelho vivo
+      g.strokeStyle = 'rgba(200,40,60,0.75)';
       g.lineWidth = 3;
       for (var lx = cx + cw * 0.12; lx < cx + cw * 0.9; lx += cw * 0.16) {
         g.beginPath();
@@ -634,30 +645,40 @@ window.FG = window.FG || {};
         g.stroke();
       }
       // bandeirola torta no mastro
-      g.strokeStyle = 'rgba(20,8,30,0.7)';
+      g.strokeStyle = 'rgba(230,210,240,0.8)';
       g.lineWidth = 2;
       g.beginPath();
       g.moveTo(cx + cw * 0.5, top);
       g.lineTo(cx + cw * 0.5 + 4, top - 22);
       g.stroke();
-      g.fillStyle = 'rgba(70,20,30,0.8)';
+      g.fillStyle = '#c8324a';
       g.beginPath();
       g.moveTo(cx + cw * 0.5 + 4, top - 22);
       g.lineTo(cx + cw * 0.5 + 22, top - 16);
       g.lineTo(cx + cw * 0.5 + 4, top - 10);
       g.closePath();
       g.fill();
-      // entrada escura da tenda
-      var kx = cx + cw * 0.5, ky = base - r() * 20;
-      var kg = g.createRadialGradient(kx, ky - 40, 3, kx, ky - 40, 50);
-      kg.addColorStop(0, 'rgba(6,2,12,0.9)');
-      kg.addColorStop(0.6, 'rgba(12,5,20,0.6)');
-      kg.addColorStop(1, 'rgba(12,5,20,0)');
-      g.fillStyle = kg;
-      g.beginPath();
-      g.ellipse(kx, ky - 40, 26, 46, 0, 0, Math.PI * 2);
-      g.fill();
+      // a tenda do meio vira casa de espelhos: rosto de palhaço com a boca
+      // como entrada; as demais mantêm a entrada escura simples
+      if (c === 2) {
+        paintFunhouseFace(g, cx + cw * 0.5, base, cw);
+      } else {
+        var kx = cx + cw * 0.5, ky = base - r() * 20;
+        var kg = g.createRadialGradient(kx, ky - 40, 3, kx, ky - 40, 50);
+        kg.addColorStop(0, 'rgba(6,2,12,0.9)');
+        kg.addColorStop(0.6, 'rgba(12,5,20,0.6)');
+        kg.addColorStop(1, 'rgba(12,5,20,0)');
+        g.fillStyle = kg;
+        g.beginPath();
+        g.ellipse(kx, ky - 40, 26, 46, 0, 0, Math.PI * 2);
+        g.fill();
+      }
     }
+
+    // carrossel-fantasma: cúpula cônica listrada, colunas e cavalinhos
+    // pendurados tortos — dois pelo mundo, em posições/tamanhos diferentes
+    paintCarousel(g, makeRand(707), 1180, base, 1);
+    paintCarousel(g, makeRand(808), 2020, base, 0.82);
 
     // dois cordões de morros mortiços por trás das tendas
     g.fillStyle = 'rgba(30,42,26,0.85)';
@@ -718,6 +739,191 @@ window.FG = window.FG || {};
     g.fill();
   }
 
+  // --- arco/pórtico de entrada do parque: dois postes tortos, um arco
+  // curvo por cima e um letreiro torto de "letras" estilizadas + uma
+  // caveira no topo — a primeira coisa que estabelece o tema ---
+  function paintArch(g, r, cx, base) {
+    var half = 130, postH = 260, archTop = base - postH;
+    g.save();
+    g.strokeStyle = '#241a2c';
+    g.lineWidth = 20;
+    g.lineCap = 'round';
+    g.beginPath(); g.moveTo(cx - half, base); g.lineTo(cx - half + 6, archTop + 18); g.stroke();
+    g.beginPath(); g.moveTo(cx + half, base); g.lineTo(cx + half - 6, archTop + 18); g.stroke();
+    // arco curvo por cima, contorno claro para destacar do céu escuro
+    g.strokeStyle = 'rgba(212,190,230,0.85)';
+    g.lineWidth = 12;
+    g.beginPath();
+    g.moveTo(cx - half + 4, archTop + 22);
+    g.quadraticCurveTo(cx, archTop - 34, cx + half - 4, archTop + 22);
+    g.stroke();
+    g.strokeStyle = '#3a2848';
+    g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(cx - half + 4, archTop + 22);
+    g.quadraticCurveTo(cx, archTop - 34, cx + half - 4, archTop + 22);
+    g.stroke();
+    // letreiro torto de blocos, um por letra de "PARQUE" — só a silhueta,
+    // não precisa ser tipografia real, mas lê como palavra à distância
+    var word = 'PARQUE';
+    var lw = (half * 2 - 20) / word.length;
+    g.fillStyle = '#e8d8b8';
+    for (var i = 0; i < word.length; i++) {
+      var lx = cx - half + 14 + i * lw;
+      var ly = archTop - 30 + Math.sin(i * 1.3) * 6;
+      var tilt = (i % 2 === 0 ? -1 : 1) * 0.08;
+      g.save();
+      g.translate(lx + lw * 0.3, ly);
+      g.rotate(tilt);
+      g.fillRect(-lw * 0.28, -12, lw * 0.56, 24);
+      g.restore();
+    }
+    // caveira torta no topo do arco
+    g.save();
+    g.translate(cx, archTop - 48);
+    g.rotate(-0.12);
+    g.fillStyle = '#e8e2d0';
+    g.beginPath(); g.arc(0, 0, 16, 0, Math.PI * 2); g.fill();
+    g.fillRect(-9, 10, 18, 8);
+    g.fillStyle = '#241a2c';
+    g.beginPath(); g.arc(-6, -1, 4, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(6, -1, 4, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(-3, 6); g.lineTo(0, 11); g.lineTo(3, 6); g.closePath(); g.fill();
+    g.restore();
+    g.restore();
+  }
+
+  // --- casa de espelhos: rosto de palhaço/caveira gigante na fachada da
+  // tenda, a boca aberta serve de porta (entrada escura reaproveitada) ---
+  function paintFunhouseFace(g, cx, base, cw) {
+    var faceY = base - 96, faceR = Math.min(70, cw * 0.32);
+    g.save();
+    // rosto pálido doentio
+    g.fillStyle = 'rgba(210,200,180,0.85)';
+    g.beginPath(); g.ellipse(cx, faceY, faceR, faceR * 1.12, 0, 0, Math.PI * 2); g.fill();
+    // bochechas rosadas descascadas
+    g.fillStyle = 'rgba(180,50,70,0.35)';
+    g.beginPath(); g.ellipse(cx - faceR * 0.55, faceY + faceR * 0.15, faceR * 0.28, faceR * 0.2, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(cx + faceR * 0.55, faceY + faceR * 0.15, faceR * 0.28, faceR * 0.2, 0, 0, Math.PI * 2); g.fill();
+    // olhos vazados e escuros
+    g.fillStyle = '#100a14';
+    g.beginPath(); g.ellipse(cx - faceR * 0.4, faceY - faceR * 0.15, faceR * 0.16, faceR * 0.22, 0.2, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(cx + faceR * 0.4, faceY - faceR * 0.15, faceR * 0.16, faceR * 0.22, -0.2, 0, Math.PI * 2); g.fill();
+    // sobrancelhas tortas, maldosas
+    g.strokeStyle = '#100a14';
+    g.lineWidth = 4;
+    g.lineCap = 'round';
+    g.beginPath(); g.moveTo(cx - faceR * 0.62, faceY - faceR * 0.42); g.lineTo(cx - faceR * 0.2, faceY - faceR * 0.3); g.stroke();
+    g.beginPath(); g.moveTo(cx + faceR * 0.62, faceY - faceR * 0.42); g.lineTo(cx + faceR * 0.2, faceY - faceR * 0.3); g.stroke();
+    // boca escancarada = a entrada escura da tenda
+    var mg = g.createRadialGradient(cx, faceY + faceR * 0.55, 4, cx, faceY + faceR * 0.55, faceR * 0.62);
+    mg.addColorStop(0, 'rgba(4,2,6,0.96)');
+    mg.addColorStop(0.65, 'rgba(10,4,10,0.75)');
+    mg.addColorStop(1, 'rgba(10,4,10,0)');
+    g.fillStyle = mg;
+    g.beginPath();
+    g.ellipse(cx, faceY + faceR * 0.55, faceR * 0.55, faceR * 0.62, 0, 0, Math.PI * 2);
+    g.fill();
+    // dentes tortos ao redor da boca
+    g.fillStyle = '#e8e2d0';
+    for (var ti = -2; ti <= 2; ti++) {
+      g.fillRect(cx + ti * faceR * 0.2 - 5, faceY + faceR * 0.18, 10, 14);
+    }
+    g.restore();
+  }
+
+  // --- carrossel-fantasma: cúpula cônica listrada, colunas de suporte e
+  // silhuetas de cavalinhos pendurados tortos nas hastes ---
+  function paintCarousel(g, r, cx, base, scale) {
+    var postH = 150 * scale, domeR = 120 * scale, domeH = 60 * scale;
+    var topY = base - postH - domeH;
+    g.save();
+    // colunas de suporte
+    g.strokeStyle = 'rgba(200,182,220,0.55)';
+    g.lineWidth = 6 * scale;
+    g.lineCap = 'round';
+    for (var p = -1; p <= 1; p += 2) {
+      g.beginPath();
+      g.moveTo(cx + p * domeR * 0.72, base);
+      g.lineTo(cx + p * domeR * 0.5, base - postH);
+      g.stroke();
+    }
+    g.beginPath();
+    g.moveTo(cx, base);
+    g.lineTo(cx, base - postH);
+    g.stroke();
+    // cúpula cônica listrada vermelho/violeta claro, torta
+    var tilt = domeR * 0.12;
+    g.beginPath();
+    g.moveTo(cx - domeR, base - postH);
+    g.lineTo(cx + tilt, topY);
+    g.lineTo(cx + domeR, base - postH);
+    g.closePath();
+    var stripeCols = ['#c8304c', '#8a4aa0'];
+    g.save();
+    g.clip();
+    var nStripe = 9;
+    for (var si = 0; si < nStripe; si++) {
+      g.fillStyle = stripeCols[si % 2];
+      g.globalAlpha = 0.88;
+      var sx0 = cx - domeR + si * (domeR * 2 / nStripe);
+      g.beginPath();
+      g.moveTo(sx0, base - postH);
+      g.lineTo(sx0 + domeR * 2 / nStripe, base - postH);
+      g.lineTo(cx + tilt, topY);
+      g.closePath();
+      g.fill();
+    }
+    g.restore();
+    g.globalAlpha = 1;
+    // bandeirola no topo do mastro central
+    g.strokeStyle = 'rgba(230,210,240,0.8)';
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(cx + tilt, topY); g.lineTo(cx + tilt + 4, topY - 20); g.stroke();
+    g.fillStyle = '#e8d8b8';
+    g.beginPath();
+    g.moveTo(cx + tilt + 4, topY - 20);
+    g.lineTo(cx + tilt + 20, topY - 14);
+    g.lineTo(cx + tilt + 4, topY - 8);
+    g.closePath();
+    g.fill();
+    // hastes com cavalinhos pendurados tortos, embaixo da cúpula
+    var nHorse = 5;
+    for (var hi = 0; hi < nHorse; hi++) {
+      var hAng = (hi / nHorse) * Math.PI * 2;
+      var hx = cx + Math.cos(hAng) * domeR * 0.7;
+      var hTopY = base - postH + 6;
+      var sway = (r() * 2 - 1) * 10;
+      g.strokeStyle = 'rgba(160,150,140,0.6)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(hx, hTopY);
+      g.lineTo(hx + sway, hTopY + 34 * scale);
+      g.stroke();
+      // silhueta torta de cavalinho: corpo + pescoço/cabeça inclinados
+      g.save();
+      g.translate(hx + sway, hTopY + 34 * scale);
+      g.rotate((r() * 2 - 1) * 0.3);
+      g.fillStyle = 'rgba(224,214,196,0.78)';
+      g.beginPath();
+      g.ellipse(0, 10 * scale, 16 * scale, 9 * scale, 0, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.moveTo(10 * scale, 4 * scale);
+      g.quadraticCurveTo(20 * scale, -4 * scale, 16 * scale, -14 * scale);
+      g.lineTo(9 * scale, -8 * scale);
+      g.closePath();
+      g.fill();
+      // pernas finas
+      g.strokeStyle = 'rgba(224,214,196,0.6)';
+      g.lineWidth = 2 * scale;
+      g.beginPath(); g.moveTo(-10 * scale, 16 * scale); g.lineTo(-12 * scale, 30 * scale); g.stroke();
+      g.beginPath(); g.moveTo(8 * scale, 16 * scale); g.lineTo(10 * scale, 30 * scale); g.stroke();
+      g.restore();
+    }
+    g.restore();
+  }
+
   // --- camada média: mastros de tenda listrados e postes de luz tortos
   // (só decoração) ---
   function paintMid(g) {
@@ -733,21 +939,22 @@ window.FG = window.FG || {};
       var top = base - sh;
       g.fillStyle = '#2a2020';
       g.fillRect(sx, top, sw, sh);
-      // listras
-      g.fillStyle = 'rgba(140,30,30,0.6)';
+      // listras vermelho vivo — bem mais claras/saturadas que o poste, para
+      // não sumir contra o céu
+      g.fillStyle = '#c8324a';
       for (var ly = top; ly < base; ly += 26) {
         g.fillRect(sx, ly, sw, 13);
       }
-      g.fillStyle = 'rgba(255,255,255,0.1)';
+      g.fillStyle = 'rgba(255,255,255,0.22)';
       g.fillRect(sx + 2, top, 3, sh);
       // bandeirola torta
-      g.strokeStyle = 'rgba(20,8,10,0.7)';
+      g.strokeStyle = 'rgba(230,210,240,0.7)';
       g.lineWidth = 2;
       g.beginPath();
       g.moveTo(sx + sw / 2, top);
       g.lineTo(sx + sw / 2 + 6, top - 26);
       g.stroke();
-      g.fillStyle = 'rgba(140,30,30,0.85)';
+      g.fillStyle = '#d8384f';
       g.beginPath();
       g.moveTo(sx + sw / 2 + 6, top - 26);
       g.lineTo(sx + sw / 2 + 30, top - 18);
@@ -780,12 +987,31 @@ window.FG = window.FG || {};
       g.moveTo(mx + lean, top);
       g.lineTo(mx + lean + 26, top - 14);
       g.stroke();
-      // globo da lâmpada, quase apagado
-      g.fillStyle = 'rgba(150,190,110,0.22)';
+      // globo da lâmpada — algumas quase apagadas, outras ainda vivas e bem
+      // mais claras/contrastadas contra o céu escuro
+      var lit2 = (i % 3 !== 1);
+      g.save();
+      if (lit2) {
+        g.shadowColor = 'rgba(220,255,150,0.9)';
+        g.shadowBlur = 10;
+        g.fillStyle = 'rgba(230,255,170,0.85)';
+      } else {
+        g.fillStyle = 'rgba(150,190,110,0.22)';
+      }
       g.beginPath();
       g.arc(mx + lean + 30, top - 18, 10, 0, Math.PI * 2);
       g.fill();
+      g.restore();
+      // cacho de balões preso no poste — cada dois postes
+      if (i % 2 === 0) {
+        paintBalloonCluster(g, r, mx + lean - 4, top + 4);
+      }
     }
+
+    // barraca de pipoca/algodão-doce, com toldo listrado e balcão
+    paintPopcornStand(g, r, 900, base);
+    paintPopcornStand(g, r, 1980, base);
+
     // arbustos retorcidos e ressecados entre os mastros
     g.strokeStyle = '#1c241a';
     g.fillStyle = '#1c241a';
@@ -799,6 +1025,67 @@ window.FG = window.FG || {};
       g.closePath();
       g.fill();
     }
+  }
+
+  // --- cacho de balões tortos presos por barbantes, cores vivas dentro da
+  // paleta sombria (vermelho/roxo/verde-doente) ---
+  function paintBalloonCluster(g, r, x, y) {
+    var cols = ['#c8304c', '#8a4aa0', '#6a9a3c'];
+    var n = 3;
+    g.save();
+    g.strokeStyle = 'rgba(200,200,190,0.5)';
+    g.lineWidth = 1.2;
+    for (var i = 0; i < n; i++) {
+      var bx = x + (i - 1) * 9 + (r() * 2 - 1) * 4;
+      var by = y - 18 - i * 6;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + (bx - x) * 0.5, y - 10, bx, by + 8);
+      g.stroke();
+      g.fillStyle = cols[i % cols.length];
+      g.globalAlpha = 0.85;
+      g.beginPath();
+      g.ellipse(bx, by, 7, 9, 0, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 1;
+    }
+    g.restore();
+  }
+
+  // --- barraca de pipoca/algodão-doce: toldo listrado vermelho-branco
+  // sobre um balcão de madeira, tipo barraca de feira ---
+  function paintPopcornStand(g, r, cx, base) {
+    var w = 130, h = 70, topY = base - h;
+    g.save();
+    // balcão
+    g.fillStyle = '#3a2a1c';
+    g.fillRect(cx - w / 2, topY + 30, w, h - 30);
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.fillRect(cx - w / 2, topY + 30, w, 6);
+    // postes do toldo
+    g.strokeStyle = '#241a12';
+    g.lineWidth = 5;
+    g.beginPath(); g.moveTo(cx - w / 2 + 6, base); g.lineTo(cx - w / 2 + 6, topY); g.stroke();
+    g.beginPath(); g.moveTo(cx + w / 2 - 6, base); g.lineTo(cx + w / 2 - 6, topY); g.stroke();
+    // toldo listrado, pontas em zigue-zague
+    var nz = 6, zw = w / nz;
+    g.fillStyle = '#c8324a';
+    g.beginPath();
+    g.moveTo(cx - w / 2, topY);
+    for (var zi = 0; zi < nz; zi++) {
+      var zx0 = cx - w / 2 + zi * zw, zx1 = zx0 + zw;
+      g.lineTo(zx0 + zw / 2, topY + (zi % 2 === 0 ? -18 : -10));
+      g.lineTo(zx1, topY);
+    }
+    g.lineTo(cx + w / 2, topY - 26);
+    g.lineTo(cx - w / 2, topY - 26);
+    g.closePath();
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    for (var si2 = 0; si2 < nz; si2 += 2) {
+      g.fillRect(cx - w / 2 + si2 * zw, topY - 26, zw, 26);
+    }
+    g.restore();
   }
 
   // --- névoa entre os níveis: duas faixas frias e densas que separam os
@@ -937,6 +1224,47 @@ window.FG = window.FG || {};
         g.stroke();
       }
     }
+
+    // varal de luzes penduradas atravessando o topo do campo de visão, de
+    // poste a poste — a assinatura mais reconhecível de parque de diversões
+    // em primeiro plano; alpha baixo pra não competir com o gameplay, mas
+    // com cor viva o bastante pra ler como luz
+    var postsX = [10, 460, 910, 1360, 1800];
+    g.save();
+    for (var pi = 0; pi < postsX.length - 1; pi++) {
+      var ax = postsX[pi], bx2 = postsX[pi + 1];
+      var ay = 46 + (r() * 2 - 1) * 8, by2 = 46 + (r() * 2 - 1) * 8;
+      var sagY = 30 + r() * 18;
+      var midx = (ax + bx2) / 2, midy = Math.max(ay, by2) + sagY;
+      // o fio do cordão
+      g.strokeStyle = 'rgba(30,26,18,0.6)';
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(ax, ay);
+      g.quadraticCurveTo(midx, midy, bx2, by2);
+      g.stroke();
+      // bulbos ao longo da curva, alternando aceso/apagado
+      var nb2 = 9;
+      for (var bi = 0; bi <= nb2; bi++) {
+        var tt = bi / nb2;
+        var bx3 = ax + (bx2 - ax) * tt;
+        var by3 = (1 - tt) * (1 - tt) * ay + 2 * (1 - tt) * tt * midy + tt * tt * by2;
+        var on = (bi + pi) % 3 !== 0;
+        g.save();
+        if (on) {
+          g.shadowColor = 'rgba(255,205,90,0.9)';
+          g.shadowBlur = 8;
+          g.fillStyle = 'rgba(255,214,120,0.55)';
+        } else {
+          g.fillStyle = 'rgba(120,90,50,0.3)';
+        }
+        g.beginPath();
+        g.arc(bx3, by3 + 5, 3.4, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      }
+    }
+    g.restore();
   }
 
   // desenha uma camada com wrap horizontal + parallax vertical
@@ -993,18 +1321,21 @@ window.FG = window.FG || {};
     drawLayer(ctx, midL, 0.45, cam);
 
     // faíscas de abóbora flutuando (chama de vela tremeluzindo, não vaga-lume)
+    // — a maioria laranja, um terço fogo-fátuo verde-doentio, pra reforçar
+    // a atmosfera de parque assombrado
     ctx.save();
-    for (var i = 0; i < 20; i++) {
+    for (var i = 0; i < 26; i++) {
       var fx = (((i * 397 + Math.sin(t * 0.3 + i) * 40) - cam.x * 0.55) % 1040 + 1040) % 1040 - 40;
       var fy = 90 + (i * 211) % 330 + Math.sin(t * 0.9 + i * 1.7) * 22 - cam.y * 0.5;
       var flicker = Math.sin(t * 9 + i * 3.1) * 0.5 + 0.5;
       var a = (0.28 + 0.26 * Math.sin(t * 2.1 + i * 2.3)) * (0.6 + 0.4 * flicker);
       if (a <= 0.05) continue;
+      var green = (i % 3 === 0);
       ctx.globalAlpha = a * 0.4;
-      ctx.fillStyle = '#ff9a2e';
+      ctx.fillStyle = green ? '#4aff8a' : '#ff9a2e';
       ctx.beginPath(); ctx.arc(fx, fy, 5, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = a;
-      ctx.fillStyle = '#ffe07a';
+      ctx.fillStyle = green ? '#d8ffc8' : '#ffe07a';
       ctx.beginPath(); ctx.arc(fx, fy, 1.8, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();

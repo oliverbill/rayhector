@@ -46,8 +46,10 @@ window.FG = window.FG || {};
     head:      { x:  -4, y: -286 },
     shBack:    { x:  50, y: -238 },
     shFront:   { x: -62, y: -232 },
-    handBack:  { x:  98, y: -140 },
-    handFront: { x:-114, y: -130 },
+    // Mãos caídas QUASE RETAS ao lado do corpo, como no desenho de
+    // referência (antes ficavam bem abertas pros lados, pose de golem).
+    handBack:  { x:  74, y: -118 },
+    handFront: { x: -88, y: -112 },
     kneeBack:  { x:  32, y:  -58 },
     kneeFront: { x: -42, y:  -58 },
     footBack:  { x:  34, y:    0 },
@@ -396,9 +398,12 @@ window.FG = window.FG || {};
             spawnParticle(this.x + rand(-50, 50), this.groundY - rand(10, 120),
               rand(-60, 60), rand(-120, -40), 0.5, 4, 'rgba(20,10,16,0.6)', -60);
           }
-          if (this.timer <= 0) { this.curl = 1; this.phase = 2; this.timer = 0; }
+          // Antes fechava em curl=1 (bola cega); agora para em 0.7 — corpo,
+          // asas e garras continuam parcialmente visíveis durante o voo, é
+          // ela VOANDO E ARRANHANDO, não uma bola de morcegos anônima.
+          if (this.timer <= 0) { this.curl = 0.7; this.phase = 2; this.timer = 0; }
         } else if (this.phase === 2) {
-          // atravessa a arena para a esquerda
+          // voa rasante atravessando a arena para a esquerda, garras à frente
           this.x -= ROLL_SPEED * dt;
           this.ballSpin -= (ROLL_SPEED / BALL_R) * dt;
           this.rollDust();
@@ -533,7 +538,7 @@ window.FG = window.FG || {};
       // colar no peito para socar o coração. E entre um e outro há a carência
       // `safe`, em que ela empurra em vez de machucar: sem isso, quem acerta o
       // soco levava dano de graça só por estar onde o soco exige estar.
-      if (this.curl > 0.9) {
+      if (this.curl > 0.5) {
         if (ov(p, this.ballBox)) p.hurt(1, this.x);
       } else if (this.safe > 0) {
         // Levantando-se: quem acabou de socar o coração está colado no peito
@@ -827,26 +832,62 @@ window.FG = window.FG || {};
     const handFx = lerp(POSE.handFront.x, shF.x - 20, rise);
     const handFy = lerp(POSE.handFront.y, shF.y - 100, rise);
 
-    // pele pálida para braços/pernas/cabeça
+    // pele bege clara, igual ao desenho (era um cinza-pálido acinzentado
+    // que deixava a cara dela suja/escura)
     const pele = ctx.createLinearGradient(0, -300, 0, 0);
-    pele.addColorStop(0, '#e6d6d2');
-    pele.addColorStop(0.55, '#cbb4b2');
-    pele.addColorStop(1, '#8f6e6e');
+    pele.addColorStop(0, '#f6ddb8');
+    pele.addColorStop(0.55, '#eccaa0');
+    pele.addColorStop(1, '#cfa87e');
+    // punho creme das mangas
+    const CUFF = '#f2e3c8';
 
     // capa vermelha: a massa visual principal, ocupa o lugar da armadura do golem
+    // Vermelho bem mais vivo/claro que antes (era quase bordô escuro,
+    // '#7a0c1c'/'#3d0510' — no fundo escuro do jogo isso lia como "escura
+    // demais", longe do vermelho vivo do desenho de referência).
     const capa = ctx.createLinearGradient(0, -300, 0, 0);
-    capa.addColorStop(0, '#a41326');
-    capa.addColorStop(0.55, '#7a0c1c');
-    capa.addColorStop(1, '#3d0510');
+    capa.addColorStop(0, '#e8503a');
+    capa.addColorStop(0.55, '#d4382a');
+    capa.addColorStop(1, '#a8201c');
 
-    // ---- braço de trás (pele fina, garra comprida) ----
-    ctx.fillStyle = pele;
-    shapeLimb(ctx, shB.x, shB.y + breathe, handBx, handBy, 13, 9);
+    // ---- asas de morcego, saindo das costas: camada mais ao fundo de tudo.
+    // DOIS pares, como no desenho: o de cima grande, e um par menor logo
+    // abaixo, meio caído — quatro asas no total. ----
+    const flap = 0.15 * Math.sin(t * 2.2) + (boss.curl > 0.02 ? boss.curl * 0.5 * Math.sin(boss.ballSpin * 3) : 0);
+    // par de baixo (menor, inclinado pra baixo) — desenhado primeiro, fica atrás
+    ctx.save();
+    ctx.translate(shB.x + 10, shB.y + breathe + 42);
+    ctx.scale(0.62, 0.62);
+    ctx.rotate(0.5);
+    drawWing(ctx, 0, 0, 1, flap * 0.7, heat);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(shF.x - 6, shF.y + breathe + 46);
+    ctx.scale(0.62, 0.62);
+    ctx.rotate(-0.5);
+    drawWing(ctx, 0, 0, -1, flap * 0.7, heat);
+    ctx.restore();
+    // par de cima (grande)
+    drawWing(ctx, shB.x + 14, shB.y + breathe - 6, 1, flap, heat);
+    drawWing(ctx, shF.x - 10, shF.y + breathe - 6, -1, flap, heat);
+
+    // ---- braço de trás: manga VERMELHA do casaco com punho creme, e a
+    // garra preta saindo do punho (como no desenho) ----
+    ctx.fillStyle = capa;
+    shapeLimb(ctx, shB.x, shB.y + breathe, handBx, handBy, 16, 12);
+    ctx.fill();
+    ctx.fillStyle = CUFF;
+    ctx.beginPath();
+    ctx.ellipse(handBx, handBy - 6, 14, 11, 0.2, 0, Math.PI * 2);
     ctx.fill();
     drawClaw(ctx, handBx, handBy, 0.55, false);
 
-    // ---- pernas (magras, botas escuras) ----
-    ctx.fillStyle = pele;
+    // ---- pernas: calça azul por baixo da capa, botas escuras ----
+    const calca = ctx.createLinearGradient(0, -180, 0, 0);
+    calca.addColorStop(0, '#3454a8');
+    calca.addColorStop(0.6, '#28407e');
+    calca.addColorStop(1, '#1a2c58');
+    ctx.fillStyle = calca;
     shapeLimb(ctx, POSE.hip.x + 12, POSE.hip.y, POSE.kneeBack.x, POSE.kneeBack.y, 15, 12);
     ctx.fill();
     shapeLimb(ctx, POSE.hip.x - 12, POSE.hip.y, POSE.kneeFront.x, POSE.kneeFront.y, 16, 13);
@@ -862,94 +903,180 @@ window.FG = window.FG || {};
     shapeBlob(ctx, POSE.footFront.x, POSE.footFront.y - 8, 22, 11, 1.1);
     ctx.fill();
 
-    // ---- capa: a massa principal do tronco, fluida e comprida ----
+    // ---- casaco: tronco ESGUIO, quase retangular, alargando de leve na
+    // barra — a silhueta do desenho de referência (a versão anterior era um
+    // ovo largo que engolia os braços) ----
     const tcx = lerp(POSE.hip.x, POSE.chest.x, 0.55);
     const tcy = lerp(POSE.hip.y, POSE.chest.y, 0.55) + breathe;
-    const trx = 68, tryy = 92;
+    const trx = 52, tryy = 96;         // meia-largura/meia-altura de referência
+    const wTop = 44, wBot = 58;        // ombro estreito, barra um pouco mais larga
     ctx.fillStyle = capa;
-    shapeBlob(ctx, tcx, tcy, trx, tryy, 0.35);
+    ctx.beginPath();
+    ctx.moveTo(tcx - wTop, tcy - tryy);
+    ctx.lineTo(tcx + wTop, tcy - tryy);
+    ctx.quadraticCurveTo(tcx + wTop + 6, tcy, tcx + wBot, tcy + tryy);
+    ctx.lineTo(tcx - wBot, tcy + tryy);
+    ctx.quadraticCurveTo(tcx - wTop - 6, tcy, tcx - wTop, tcy - tryy);
+    ctx.closePath();
     ctx.fill();
-    // forro escarlate mais claro por dentro, onde a capa se abre
-    ctx.save();
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = '#e02540';
-    shapeBlob(ctx, tcx - 6, tcy - 14, trx * 0.68, tryy * 0.58, 0.35);
+    // gola em V vermelho-escura no alto do peito, como no desenho
+    ctx.fillStyle = '#8e1414';
+    ctx.beginPath();
+    ctx.moveTo(tcx - 26, tcy - tryy);
+    ctx.lineTo(tcx + 26, tcy - tryy);
+    ctx.lineTo(tcx, tcy - tryy + 30);
+    ctx.closePath();
     ctx.fill();
-    ctx.restore();
+    // costura central descendo do V, discreta
+    ctx.strokeStyle = 'rgba(60,8,8,0.5)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(tcx, tcy - tryy + 30);
+    ctx.lineTo(tcx, tcy + tryy - 8);
+    ctx.stroke();
 
     // veias sombrias pulsando pelo peito (equivalente das rachaduras acesas)
     drawVeins(ctx, tcx, tcy, trx, tryy, heat, t);
 
-    // ---- ombreiras da capa (gola alta) ----
+    // ---- ombros do casaco: bufantes arredondados, lisos (sem facetas) ----
     ctx.fillStyle = capa;
-    shapeBlob(ctx, shB.x, shB.y + breathe, 26, 22, 0.9);
+    ctx.beginPath();
+    ctx.ellipse(shB.x, shB.y + breathe, 24, 20, 0.2, 0, Math.PI * 2);
     ctx.fill();
-    shapeBlob(ctx, shF.x, shF.y + breathe, 28, 24, 2.1);
+    ctx.beginPath();
+    ctx.ellipse(shF.x, shF.y + breathe, 26, 22, -0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // ---- cabeça: pele pálida, cabelo preto espetado, olhos vermelhos, boca
-    // aberta rosnando com presas à mostra ----
+    // ---- cabeça: GRANDE como no desenho (rosto comprido, olhos pretos
+    // enormes de pupila vermelha, sorrisão de dentes retos), desenhada num
+    // espaço escalado — os números locais continuam pequenos, só o carimbo
+    // final é ampliado. Nada disso mexe em hitbox (visual puro). ----
     const hx = POSE.head.x, hy = POSE.head.y + breathe;
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.scale(1.45, 1.5);
+    // mechas lisas caindo retas dos dois lados, até a altura do peito
+    ctx.fillStyle = '#241f26';
+    ctx.beginPath();
+    ctx.moveTo(-30, -26);
+    ctx.lineTo(-31, 52);
+    ctx.lineTo(-16, 52);
+    ctx.lineTo(-15, -10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(26, -26);
+    ctx.lineTo(28, 52);
+    ctx.lineTo(14, 52);
+    ctx.lineTo(13, -10);
+    ctx.closePath();
+    ctx.fill();
+    // chifrinhos cinza (mesmo material das asas), um de cada lado do topo
+    ctx.fillStyle = '#4a4650';
+    ctx.beginPath();
+    ctx.moveTo(-16, -22);
+    ctx.lineTo(-24, -40);
+    ctx.lineTo(-8, -25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(14, -22);
+    ctx.lineTo(22, -40);
+    ctx.lineTo(6, -25);
+    ctx.closePath();
+    ctx.fill();
+    // rosto comprido (mais alto que largo, como o desenho)
     ctx.fillStyle = pele;
-    shapeBlob(ctx, hx, hy, 26, 27, 0.4);
-    ctx.fill();
-    // queixo/maxilar aberto, saliente para a frente
     ctx.beginPath();
-    ctx.moveTo(hx - 24, hy + 6);
-    ctx.lineTo(hx + 10, hy + 8);
-    ctx.lineTo(hx + 6, hy + 24);
-    ctx.lineTo(hx - 20, hy + 22);
+    ctx.ellipse(-1, 2, 25, 30, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // calota de cabelo preto liso, terminando reto na testa
+    ctx.fillStyle = '#241f26';
+    ctx.beginPath();
+    ctx.ellipse(-1, -14, 26, 15, 0, Math.PI, 0);
+    ctx.lineTo(25, -12);
+    ctx.lineTo(-27, -12);
     ctx.closePath();
     ctx.fill();
-    // boca escancarada rosnando: fenda escura com presas brancas
-    ctx.fillStyle = '#180509';
+    // sobrancelhas finas arqueadas
+    ctx.strokeStyle = '#241f26';
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(hx - 18, hy + 12);
-    ctx.lineTo(hx + 4, hy + 13);
-    ctx.lineTo(hx + 2, hy + 21);
-    ctx.lineTo(hx - 15, hy + 20);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#fff8ee';
+    ctx.arc(-12, -2, 8, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(hx - 14, hy + 13);
-    ctx.lineTo(hx - 10, hy + 13);
-    ctx.lineTo(hx - 12, hy + 19);
-    ctx.closePath();
+    ctx.arc(11, -2, 8, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+    // olhos: círculos PRETOS grandes com pupila vermelha viva no centro
+    ctx.fillStyle = '#0a0509';
+    ctx.beginPath();
+    ctx.arc(-12, 4, 10, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(hx - 2, hy + 13.5);
-    ctx.lineTo(hx + 2, hy + 13.5);
-    ctx.lineTo(hx, hy + 19.5);
-    ctx.closePath();
+    ctx.arc(11, 4, 10, 0, Math.PI * 2);
     ctx.fill();
-    // cabelo preto espetado/desgrenhado: mechas triangulares por cima da cabeça
-    ctx.fillStyle = '#0c0710';
-    const nMechas = 6;
-    for (let i = 0; i < nMechas; i++) {
-      const ang = -Math.PI * 0.72 + (i / (nMechas - 1)) * Math.PI * 0.62;
-      const bx = hx + Math.cos(ang) * 6, by = hy - 6 + Math.sin(ang) * 6;
-      const tipx = hx + Math.cos(ang) * (30 + (i % 2) * 10);
-      const tipy = hy - 6 + Math.sin(ang) * (30 + (i % 2) * 10) - 8;
-      ctx.beginPath();
-      ctx.moveTo(bx - 5, by);
-      ctx.lineTo(tipx, tipy);
-      ctx.lineTo(bx + 5, by);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // olhos: fendas de brasa vermelha viva, sempre acesos (não só no heat)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const eg = 0.7 + 0.3 * heat;
-    ctx.fillStyle = 'rgba(255,20,40,' + eg.toFixed(3) + ')';
-    ctx.fillRect(hx - 20, hy - 5, 13, 5);
-    ctx.fillRect(hx - 2, hy - 4, 11, 4.5);
+    const eg = 0.75 + 0.25 * heat;
+    ctx.fillStyle = 'rgba(230,30,30,' + eg.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(-12, 4, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(11, 4, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // narizinho
+    ctx.strokeStyle = 'rgba(120,80,50,0.6)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-1, 9);
+    ctx.lineTo(-1, 15);
+    ctx.stroke();
+    // SORRISÃO: bloco de dentes retos ocupando quase a largura do rosto
+    ctx.fillStyle = '#180509';
+    ctx.beginPath();
+    ctx.moveTo(-20, 17);
+    ctx.quadraticCurveTo(-1, 13.5, 18, 17);
+    ctx.quadraticCurveTo(19, 28, -1, 29);
+    ctx.quadraticCurveTo(-21, 28, -20, 17);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(-18.5, 18);
+    ctx.quadraticCurveTo(-1, 15, 16.5, 18);
+    ctx.quadraticCurveTo(17.5, 26.5, -1, 27.5);
+    ctx.quadraticCurveTo(-19.5, 26.5, -18.5, 18);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#fff8ee';
+    ctx.fillRect(-20, 14, 40, 15);
+    ctx.strokeStyle = 'rgba(30,10,12,0.55)';
+    ctx.lineWidth = 1.1;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 7 - 1, 14);
+      ctx.lineTo(i * 7 - 1, 29);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // queixo pequeno abaixo do sorriso
+    ctx.fillStyle = pele;
+    ctx.beginPath();
+    ctx.ellipse(-1, 33, 8, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
 
-    // ---- braço da frente (por cima do tronco), garra comprida e afiada ----
-    ctx.fillStyle = pele;
-    shapeLimb(ctx, shF.x, shF.y + breathe, handFx, handFy, 15, 10);
+    // ---- braço da frente: manga vermelha do casaco, punho creme e a
+    // garra preta comprida (por cima do tronco) ----
+    ctx.fillStyle = capa;
+    shapeLimb(ctx, shF.x, shF.y + breathe, handFx, handFy, 17, 13);
+    ctx.fill();
+    ctx.fillStyle = CUFF;
+    ctx.beginPath();
+    ctx.ellipse(handFx, handFy - 6, 15, 12, -0.2, 0, Math.PI * 2);
     ctx.fill();
     drawClaw(ctx, handFx, handFy, 1.7, true);
     // a garra arrancada da sombra, presa na mão da frente
@@ -976,27 +1103,30 @@ window.FG = window.FG || {};
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.5;
       ctx.fillStyle = '#fff';
-      shapeBlob(ctx, tcx, tcy, trx, tryy, 0.35);
+      ctx.beginPath();
+      ctx.ellipse(tcx, tcy, trx, tryy, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
   }
 
   // Mão com garras longas e afiadas na ponta.
+  // Garras PRETAS, compridas — igual ao desenho de referência (antes eram
+  // quase da cor da mão, curtas, e mal davam pra ver contra o punho claro).
   function drawClaw(ctx, x, y, rot, front) {
     ctx.save();
     ctx.fillStyle = front ? '#dcc8c4' : '#c8b0ac';
     ctx.beginPath();
-    ctx.arc(x, y, front ? 14 : 12, 0, Math.PI * 2);
+    ctx.arc(x, y, front ? 15 : 13, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#f4ece6';
-    const n = 4;
+    ctx.fillStyle = '#0c0a0a';
+    const n = 5;
     for (let i = 0; i < n; i++) {
-      const ang = rot + (i / (n - 1) - 0.5) * 1.1;
-      const bx = x + Math.cos(ang) * 6, by = y + Math.sin(ang) * 6;
-      const len = front ? 22 : 17;
-      const tipx = x + Math.cos(ang) * (6 + len), tipy = y + Math.sin(ang) * (6 + len);
-      const nx = -Math.sin(ang) * 2.2, ny = Math.cos(ang) * 2.2;
+      const ang = rot + (i / (n - 1) - 0.5) * 1.3;
+      const bx = x + Math.cos(ang) * 7, by = y + Math.sin(ang) * 7;
+      const len = front ? 38 : 30;
+      const tipx = x + Math.cos(ang) * (7 + len), tipy = y + Math.sin(ang) * (7 + len);
+      const nx = -Math.sin(ang) * 3.2, ny = Math.cos(ang) * 3.2;
       ctx.beginPath();
       ctx.moveTo(bx + nx, by + ny);
       ctx.lineTo(tipx, tipy);
@@ -1007,10 +1137,78 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Asa de morcego grande e texturizada (membrana com nervuras), saindo do
+  // ombro. `side` é -1 (asa da frente, abre para a esquerda, o lado de onde o
+  // jogador vem) ou +1 (asa de trás, abre para a direita). `flap` é -0.3..0.3,
+  // um leve bater contínuo que fica mais forte durante o rodopio.
+  function drawWing(ctx, x, y, side, flap, heat) {
+    ctx.save();
+    ctx.translate(x, y);
+    const sx = side;
+    const spread = 1 + flap;
+    // membrana: silhueta cinza-escura com "dedos" pontudos, igual à referência
+    ctx.fillStyle = '#4a4650';
+    ctx.beginPath();
+    ctx.moveTo(0, -4);
+    ctx.lineTo(sx * 40 * spread, -58 * spread);
+    ctx.lineTo(sx * 30 * spread, -30 * spread);
+    ctx.lineTo(sx * 92 * spread, -34 * spread);
+    ctx.lineTo(sx * 58 * spread, -6 * spread);
+    ctx.lineTo(sx * 96 * spread, 8 * spread);
+    ctx.lineTo(sx * 50 * spread, 14 * spread);
+    ctx.lineTo(sx * 62 * spread, 46 * spread);
+    ctx.lineTo(sx * 24 * spread, 20 * spread);
+    ctx.lineTo(sx * 10, 30);
+    ctx.closePath();
+    ctx.fill();
+    // nervuras mais escuras, do ombro até cada ponta — é o que dá leitura de
+    // membrana em vez de silhueta chapada
+    ctx.strokeStyle = '#2c2830';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    const tips = [
+      [sx * 40 * spread, -58 * spread],
+      [sx * 92 * spread, -34 * spread],
+      [sx * 96 * spread, 8 * spread],
+      [sx * 62 * spread, 46 * spread],
+    ];
+    for (let i = 0; i < tips.length; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, -2);
+      ctx.lineTo(tips[i][0], tips[i][1]);
+      ctx.stroke();
+    }
+    // aresta superior mais clara, dando volume à membrana
+    ctx.strokeStyle = 'rgba(150,145,160,0.5)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, -4);
+    ctx.lineTo(sx * 40 * spread, -58 * spread);
+    ctx.stroke();
+    // brilho sombrio nas nervuras quando ela carrega/aquece
+    if (heat > 0.05) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,20,50,' + (heat * 0.4).toFixed(3) + ')';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < tips.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, -2);
+        ctx.lineTo(tips[i][0], tips[i][1]);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function drawVeins(ctx, cx, cy, rx, ry, heat, t) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const pulse = 0.35 + 0.65 * heat * (0.75 + 0.25 * Math.sin(t * 7));
+    // Antes tinha piso de 0.35 sempre ligado — as veias ficavam visíveis mesmo
+    // com heat=0 (parada, fora de qualquer telegraph). Agora somem de verdade
+    // em repouso e só aparecem quando heat sobe.
+    const pulse = heat * (0.75 + 0.25 * Math.sin(t * 7));
     ctx.strokeStyle = 'rgba(255,20,50,' + pulse.toFixed(3) + ')';
     ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
@@ -1043,11 +1241,19 @@ window.FG = window.FG || {};
   function drawCore(ctx, cx, cy, t, heat) {
     const open = boss.kneel;                  // abre junto com o curvar-se
     const glow = boss.eyeGlow;
-    const r = 20 + 12 * open;
+    // Em repouso é só uma luz vermelha tênue por trás do tecido — quase
+    // invisível. Só cresce e acende de verdade dentro da janela de dano
+    // (`eyeGlow > 0`, estado 'exposto'), que é a única vez que deve chamar
+    // atenção como alvo.
+    const r = 9 + 4 * open + 22 * glow;
 
-    // pregas da capa, afastando-se ao abrir
+    // pregas da capa, afastando-se ao abrir. Translúcida (era sólida quase
+    // preta, '#2a0d16' — perto do fundo escuro do jogo isso apagava a capa
+    // vermelha inteira por baixo, como se o tronco nem tivesse sido
+    // desenhado). Com alpha baixo, a sombra da dobra aparece sem engolir a cor.
     ctx.save();
-    ctx.fillStyle = '#2a0d16';
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#3d0510';
     const off = 6 + 16 * open;
     ctx.beginPath();
     ctx.moveTo(cx - 46, cy - 30 - off * 0.4);
@@ -1071,9 +1277,10 @@ window.FG = window.FG || {};
     const beat = 1 + 0.08 * Math.sin(t * (open > 0.5 ? 9 : 5));
     const rr = r * beat;
     const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, rr * 2.4);
-    // fechado é vermelho-rosado; aberto na janela ele acende para vermelho vivo
-    g.addColorStop(0, open > 0.5 ? 'rgba(255,220,225,0.95)' : 'rgba(255,200,205,0.9)');
-    g.addColorStop(0.35, open > 0.5 ? 'rgba(255,20,45,0.85)' : 'rgba(230,30,60,0.75)');
+    // fechado é uma brasa quase apagada, através do tecido; só na janela de
+    // dano (glow > 0) ele acende de verdade em vermelho vivo.
+    g.addColorStop(0, 'rgba(255,210,215,' + (0.1 + 0.85 * glow).toFixed(3) + ')');
+    g.addColorStop(0.35, 'rgba(230,20,50,' + (0.08 + 0.77 * glow).toFixed(3) + ')');
     g.addColorStop(1, 'rgba(200,10,30,0)');
     ctx.fillStyle = g;
     ctx.beginPath();

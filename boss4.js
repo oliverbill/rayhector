@@ -1,9 +1,14 @@
 // Fagulho: Lendas do Bosque — boss4.js
 // Chefão da fase 4, e o ÚLTIMO do jogo: SERGIOLA MUTANTE.
-// Lutador mascarado tipo luta-livre mexicana mutante: máscara de luchador
-// vermelha/branca, torso musculoso de roupa azul-marinho, punhos enormes
-// verde-radioativo tipo garras de mutante, cabelo escuro por baixo da
-// máscara. Nenhum sprite: o corpo é montado em canvas puro a partir de uma
+// Rosto exposto, sem máscara: cabelo preto curto espetado em tufos,
+// sobrancelhas grossas franzidas, barba/cavanhaque preto no queixo, boca
+// aberta rosnando com dentes quadriculados e uma faixa vermelha no meio.
+// Regata azul sem manga com textura de linhas horizontais, shorts
+// verde-azulados (teal) também riscados, botas verdes de duas faixas. Um
+// braço solto ao lado do corpo com a mão aberta, dedos separados; o outro
+// dobrado à altura do peito segurando um fragmento verde-limão de bordas
+// denteadas — o pedaço que ele arranca da arena no ataque de arremesso.
+// Nenhum sprite: o corpo é montado em canvas puro a partir de uma
 // armação de juntas que interpola entre duas poses — de pé, flexionando, e
 // ajoelhado, exausto, com o peito exposto (o "coração" vira um núcleo
 // radioativo verde no peito, mesmo contrato dos outros três chefões).
@@ -37,11 +42,14 @@ window.FG = window.FG || {};
   const P_STAND = {
     hip:       { x:  -4, y: -108 },
     chest:     { x: -12, y: -190 },   // centro do núcleo radioativo
-    head:      { x:  -2, y: -272 },
+    head:      { x:  -2, y: -290 },   // alta o bastante pro cavanhaque não afundar na regata
     shBack:    { x:  46, y: -228 },
     shFront:   { x: -58, y: -222 },
-    fistBack:  { x:  92, y: -136 },
-    fistFront: { x:-108, y: -126 },
+    // Braço de trás caído quase reto (mão aberta ao lado do corpo) e braço
+    // da frente DOBRADO à altura do peito segurando o pau de cacto na
+    // horizontal — as duas poses do desenho de referência.
+    fistBack:  { x:  68, y: -106 },
+    fistFront: { x: -76, y: -158 },
     kneeBack:  { x:  30, y:  -56 },
     kneeFront: { x: -40, y:  -56 },
     footBack:  { x:  32, y:    0 },
@@ -120,7 +128,8 @@ window.FG = window.FG || {};
     lean: 0,         // 0..1 — em pé -> inclinado para a corrida (investida)
     charge: 0,       // 0..1 — brilho radioativo nas veias (telegraph visível)
     armRaise: 0,     // 0..1 — punhos erguidos antes do soco duplo
-    holdRock: 0,     // 0..1 — destroço arrancado e segurado antes do arremesso
+    holdRock: 0,     // 0..1 — quanto ele aperta o cacto antes da paulada
+    swing: 0,        // 0..1 — cacto erguido acima do ombro (telegraph da paulada)
     shake: 0,        // tremor do próprio corpo (impacto)
 
     // --- máquina de estados ---
@@ -180,6 +189,7 @@ window.FG = window.FG || {};
       this.charge = 0;
       this.armRaise = 0;
       this.holdRock = 0;
+      this.swing = 0;
       this.shake = 0;
       this.dieTimer = 0;
       this.dieScale = 1;
@@ -401,32 +411,41 @@ window.FG = window.FG || {};
           if (this.timer <= 0) this.expose(2.6 * speedMul);
         }
 
-      // ================= 2. ARREMESSO DE DESTROÇOS =================
+      // ================= 2. PAULADA DE CACTO =================
+      // Ele ergue o pau de cacto bem alto (telegraph óbvio) e desce numa
+      // paulada corpo-a-corpo — não é mais um arremesso à distância, o
+      // cacto NUNCA sai da mão dele. Se o jogador estiver perto na hora do
+      // golpe, leva o dano; o alcance é generoso mas exige estar colado.
       } else if (this.state === 'arremesso') {
         if (this.phase === 0) {
-          // telegraph: agacha e arranca um pedaço da arena com o punho da frente
+          // telegraph: agacha e ergue o cacto acima do ombro
           this.phase = 1;
           this.timer = 0.9;
         } else if (this.phase === 1) {
           this.kneel = Math.min(0.35, this.kneel + dt * 1.2);   // agacha (sem expor)
           this.holdRock = Math.min(1, this.holdRock + dt * 1.6);
+          this.swing = Math.min(1, this.swing + dt * 2.2);      // ergue o cacto
           this.charge = Math.min(0.7, this.charge + dt * 1.0);
-          // pedra e areia saltando de onde ele arranca o destroço
-          if (Math.random() < 0.6) {
+          if (Math.random() < 0.4) {
             const fx = this.x + POSE.fistFront.x;
-            spawnParticle(fx + rand(-24, 24), this.groundY, rand(-90, 90), rand(-220, -60),
-              0.5, 3 + Math.random() * 3, '#a89060', 900);
+            spawnParticle(fx + rand(-16, 16), this.groundY - 140, rand(-40, 40), rand(-60, -10),
+              0.4, 3, '#8fe040', 300);
           }
           if (this.timer <= 0) {
-            this.throwRock(p.x + p.w / 2);
-            if (p2) this.throwRock(p.x + p.w / 2 - 150);  // fase 2: dois destroços
+            // a paulada desce: uma checagem de alcance, uma vez só
             FG.audio.sfx('bossSpit');
-            this.holdRock = 0;
+            const reach = { x: this.x - 260, y: this.groundY - 260, w: 240, h: 240 };
+            if (ov(p, reach)) p.hurt(1, this.x - 160);
+            for (let k = 0; k < 10; k++) {
+              spawnParticle(this.x - 160 + rand(-40, 40), this.groundY - 60, rand(-160, 160), rand(-220, -40),
+                0.5, 3 + Math.random() * 3, '#8fe040', 700);
+            }
             this.phase = 2;
             this.timer = 0.35;
           }
         } else if (this.phase === 2) {
           this.kneel += (0 - this.kneel) * Math.min(1, dt * 5);
+          this.swing = Math.max(0, this.swing - dt * 4);        // o cacto volta a descansar no peito
           this.charge = Math.max(0, this.charge - dt * 2);
           if (this.timer <= 0) this.expose(2.6 * speedMul);
         }
@@ -788,38 +807,54 @@ window.FG = window.FG || {};
     const shB = POSE.shBack, shF = POSE.shFront;
     const fistBx = lerp(POSE.fistBack.x, shB.x + 24, rise);
     const fistBy = lerp(POSE.fistBack.y, shB.y - 90, rise);
-    const fistFx = lerp(POSE.fistFront.x, shF.x - 18, rise);
-    const fistFy = lerp(POSE.fistFront.y, shF.y - 98, rise);
+    let fistFx = lerp(POSE.fistFront.x, shF.x - 18, rise);
+    let fistFy = lerp(POSE.fistFront.y, shF.y - 98, rise);
+    // paulada de cacto: o punho da frente sobe acima do ombro (telegraph)
+    // e desce na frente dele (golpe) — o cacto nunca solta a mão.
+    const sw = boss.swing;
+    if (sw > 0) {
+      fistFx = lerp(fistFx, shF.x - 8, Math.min(1, sw * 1.6));
+      fistFy = lerp(fistFy, shF.y - 86, Math.min(1, sw * 1.6));
+      if (sw < 0.35) {
+        const k = 1 - sw / 0.35; // últimos instantes: golpe descendo à frente
+        fistFx = lerp(fistFx, shF.x - 70, k);
+        fistFy = lerp(fistFy, shF.y + 40, k);
+      }
+    }
 
-    // pele/músculo (tom moreno, luz vinda de cima) e roupa azul-marinho
+    // pele clara/bege (luz vinda de cima), regata azul e shorts teal
     const skin = ctx.createLinearGradient(0, -300, 0, 0);
-    skin.addColorStop(0, '#c7936a');
-    skin.addColorStop(0.55, '#a5714c');
-    skin.addColorStop(1, '#7a4f34');
-    const navy = ctx.createLinearGradient(0, -260, 0, -60);
-    navy.addColorStop(0, '#2c3a66');
-    navy.addColorStop(0.6, '#1c2749');
-    navy.addColorStop(1, '#10182f');
-    // punhos/garras verde-radioativo
-    const claw = ctx.createLinearGradient(0, -1, 0, 1);
-    claw.addColorStop(0, '#c8ff9a');
-    claw.addColorStop(0.5, '#6de03e');
-    claw.addColorStop(1, '#2f8a1c');
+    skin.addColorStop(0, '#f0c9a0');
+    skin.addColorStop(0.55, '#e3ae7d');
+    skin.addColorStop(1, '#c88e5e');
+    const shirt = ctx.createLinearGradient(0, -260, 0, -60);
+    shirt.addColorStop(0, '#4a6fe0');
+    shirt.addColorStop(0.6, '#3555c4');
+    shirt.addColorStop(1, '#25409a');
+    const shorts = ctx.createLinearGradient(0, -90, 0, 10);
+    shorts.addColorStop(0, '#2f9a86');
+    shorts.addColorStop(0.6, '#237d6d');
+    shorts.addColorStop(1, '#175a4e');
+    // fragmento verde-limão que ele arranca e segura, de bordas denteadas
+    const shard = ctx.createLinearGradient(0, -1, 0, 1);
+    shard.addColorStop(0, '#d8ff9a');
+    shard.addColorStop(0.5, '#8fe040');
+    shard.addColorStop(1, '#4f9a1c');
 
-    // ---- braço de trás (pele + garra verde) ----
+    // ---- braço de trás (pele, solto ao lado do corpo, mão aberta) ----
     ctx.fillStyle = skin;
-    rockLimb(ctx, shB.x, shB.y + breathe, fistBx, fistBy, 19, 15);
+    rockLimb(ctx, shB.x, shB.y + breathe, fistBx, fistBy, 19, 14);
     ctx.fill();
     ctx.save();
     ctx.translate(fistBx, fistBy);
-    ctx.fillStyle = claw;
-    rockBlob(ctx, 0, 0, 24, 21, 0.6);
+    ctx.fillStyle = skin;
+    rockBlob(ctx, 0, 0, 15, 13, 0.6);
     ctx.fill();
-    drawClaws(ctx, boss.x < 0 ? -1 : 1, 24);
+    drawOpenHand(ctx, boss.x < 0 ? -1 : 1, 15, skin);
     ctx.restore();
 
-    // ---- pernas (calção azul-marinho até o joelho, pele depois) ----
-    ctx.fillStyle = navy;
+    // ---- pernas (shorts teal até o joelho, pele depois) ----
+    ctx.fillStyle = shorts;
     rockLimb(ctx, POSE.hip.x + 15, POSE.hip.y, POSE.kneeBack.x, POSE.kneeBack.y, 24, 18);
     ctx.fill();
     rockLimb(ctx, POSE.hip.x - 15, POSE.hip.y, POSE.kneeFront.x, POSE.kneeFront.y, 25, 19);
@@ -829,20 +864,63 @@ window.FG = window.FG || {};
     ctx.fill();
     rockLimb(ctx, POSE.kneeFront.x, POSE.kneeFront.y, POSE.footFront.x, POSE.footFront.y, 19, 22);
     ctx.fill();
-    // botas de lutador
-    ctx.fillStyle = '#7a1f26';
+    // linhas horizontais de textura nos shorts
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#0d3f36';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let ly = -6; ly >= -66; ly -= 15) {
+      ctx.moveTo(POSE.hip.x - 34, POSE.hip.y + ly);
+      ctx.lineTo(POSE.hip.x + 32, POSE.hip.y + ly);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // botas verdes de duas faixas
+    ctx.fillStyle = '#2f8a1c';
     rockBlob(ctx, POSE.footBack.x, POSE.footBack.y - 11, 26, 14, 0.2);
     ctx.fill();
     rockBlob(ctx, POSE.footFront.x, POSE.footFront.y - 11, 29, 15, 1.1);
     ctx.fill();
+    ctx.fillStyle = '#5fd23a';
+    rockBlob(ctx, POSE.footBack.x, POSE.footBack.y - 4, 22, 7, 0.2);
+    ctx.fill();
+    rockBlob(ctx, POSE.footFront.x, POSE.footFront.y - 4, 25, 7.5, 1.1);
+    ctx.fill();
 
-    // ---- torso (roupa azul-marinho, musculatura marcada) ----
+    // ---- torso: regata azul num TRAPÉZIO de ombros largos afunilando pra
+    // cintura — a silhueta parruda do desenho (a elipse-ovo anterior
+    // engolia os ombros e lia como barrigudo, não musculoso) ----
     const tcx = lerp(POSE.hip.x, POSE.chest.x, 0.55);
     const tcy = lerp(POSE.hip.y, POSE.chest.y, 0.55) + breathe;
     const trx = 70, tryy = 82;
-    ctx.fillStyle = navy;
-    rockBlob(ctx, tcx, tcy, trx, tryy, 0.35);
+    const wShoulder = 68, wWaist = 46;
+    ctx.fillStyle = shirt;
+    ctx.beginPath();
+    ctx.moveTo(tcx - wShoulder, tcy - tryy + 14);
+    ctx.quadraticCurveTo(tcx, tcy - tryy - 8, tcx + wShoulder, tcy - tryy + 14);
+    ctx.quadraticCurveTo(tcx + wShoulder - 4, tcy + 10, tcx + wWaist, tcy + tryy);
+    ctx.lineTo(tcx - wWaist, tcy + tryy);
+    ctx.quadraticCurveTo(tcx - wShoulder + 4, tcy + 10, tcx - wShoulder, tcy - tryy + 14);
+    ctx.closePath();
     ctx.fill();
+    // linhas horizontais de textura da regata + curva decorativa no peito
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = '#9fb4f2';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let ly = -60; ly <= 56; ly += 22) {
+      ctx.moveTo(tcx - 58, tcy + ly);
+      ctx.lineTo(tcx + 58, tcy + ly);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(tcx - 30, tcy + 4);
+    ctx.quadraticCurveTo(tcx, tcy - 14, tcx + 30, tcy + 2);
+    ctx.stroke();
+    ctx.restore();
     // definição do peitoral/abdômen (linhas claras)
     ctx.save();
     ctx.globalAlpha = 0.22;
@@ -859,38 +937,39 @@ window.FG = window.FG || {};
     // veias radioativas pulsando por cima da roupa, saindo do núcleo
     drawVeins(ctx, tcx, tcy, trx, tryy, heat, t);
 
-    // ---- ombreiras (pele) ----
-    ctx.fillStyle = skin;
-    rockBlob(ctx, shB.x, shB.y + breathe, 30, 24, 0.9);
-    ctx.fill();
-    rockBlob(ctx, shF.x, shF.y + breathe, 32, 26, 2.1);
-    ctx.fill();
+    // (as ombreiras de pele foram removidas: com o trapézio de ombros
+    // largos elas vazavam POR CIMA da regata e viravam manchas de pele no
+    // peito — os braços rockLimb saindo dos ombros já dão o volume)
 
-    // ---- cabeça com máscara de luchador ----
+    // ---- cabeça exposta, sem máscara ----
     drawHead(ctx, POSE.head.x, POSE.head.y + breathe, skin);
 
-    // ---- braço da frente (por cima do torso) ----
+    // ---- braço da frente (por cima do torso), dobrado no peito ----
     ctx.fillStyle = skin;
     rockLimb(ctx, shF.x, shF.y + breathe, fistFx, fistFy, 21, 16);
     ctx.fill();
+
+    // o PAU DE CACTO: uma folha/raquete de cacto grande, verde-limão, de
+    // bordas denteadas — segurada DIRETO pela mão (sem cabo de madeira
+    // nenhum, igual ao desenho de referência) e usada pra dar a paulada
+    // corpo-a-corpo.
+    // A raquete fica deslocada pra ESQUERDA da mão (apontando pro jogador),
+    // na horizontal, à altura do peito — como no desenho a mão agarra a
+    // borda direita dela, não o centro.
     ctx.save();
-    ctx.translate(fistFx, fistFy);
-    ctx.fillStyle = claw;
-    rockBlob(ctx, 0, 0, 27, 24, 1.7);
-    ctx.fill();
-    drawClaws(ctx, -1, 27);
+    ctx.translate(fistFx - 36, fistFy + 2);
+    const shardK = 0.8 + 0.2 * Math.min(1, boss.holdRock * 1.5);
+    drawShard(ctx, shard, shardK);
     ctx.restore();
 
-    // o destroço arrancado, preso no punho da frente
-    if (boss.holdRock > 0.02) {
-      const k = boss.holdRock;
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, k * 1.5);
-      ctx.fillStyle = '#8a7454';
-      rockBlob(ctx, fistFx - 6, fistFy - 24 * k, 20 * k, 18 * k, 0.8);
-      ctx.fill();
-      ctx.restore();
-    }
+    // mão fechada por cima do fragmento, segurando com os dedos
+    ctx.save();
+    ctx.translate(fistFx, fistFy);
+    ctx.fillStyle = skin;
+    rockBlob(ctx, 4, 6, 17, 15, 1.7);
+    ctx.fill();
+    drawGripFingers(ctx, -1, 17, skin);
+    ctx.restore();
 
     // ---- o núcleo do peito: o ponto fraco radioativo ----
     drawCore(ctx, POSE.chest.x, POSE.chest.y + breathe, t, heat);
@@ -901,83 +980,217 @@ window.FG = window.FG || {};
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = Math.min(1, boss.flash * 4) * 0.5;
       ctx.fillStyle = '#fff';
-      rockBlob(ctx, tcx, tcy, trx, tryy, 0.35);
+      ctx.beginPath();
+      ctx.ellipse(tcx, tcy, trx, tryy, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
   }
 
-  // Garrinhas do mutante: três pontas curtas saltando da mão verde.
-  function drawClaws(ctx, dir, r) {
-    ctx.fillStyle = '#eafccc';
-    for (let k = -1; k <= 1; k++) {
-      const a = k * 0.5;
-      const bx = Math.cos(a) * r * 0.7, by = Math.sin(a) * r * 0.7 - r * 0.15;
+  // Mão aberta e vazia, dedos separados: o braço que fica solto ao lado do
+  // corpo. Quatro dedos curtos em leque, sem garra nenhuma.
+  function drawOpenHand(ctx, dir, r, skinGrad) {
+    ctx.fillStyle = skinGrad;
+    for (let k = -1.5; k <= 1.5; k++) {
+      const a = k * 0.32;
+      const bx = Math.sin(a) * r * 0.55, by = Math.cos(a) * r * 0.85;
       ctx.beginPath();
-      ctx.moveTo(bx, by);
-      ctx.lineTo(bx + dir * r * 0.6, by - 4);
-      ctx.lineTo(bx + dir * r * 0.15, by + 8);
+      ctx.moveTo(bx - dir * 3, by);
+      ctx.lineTo(bx + dir * 3, by);
+      ctx.lineTo(bx + dir * 2.4, by + r * 0.55);
+      ctx.lineTo(bx - dir * 2.4, by + r * 0.55);
       ctx.closePath();
       ctx.fill();
     }
   }
 
-  // Cabeça: máscara de luchador vermelha/branca cobrindo o rosto inteiro,
-  // cabelo escuro escapando por baixo, viva na moldura do maxilar.
-  function drawHead(ctx, hx, hy, skinGrad) {
-    // cabelo escuro atrás/abaixo da máscara
-    ctx.fillStyle = '#160f0c';
-    ctx.beginPath();
-    ctx.ellipse(hx - 2, hy + 20, 22, 11, 0.1, 0, Math.PI);
-    ctx.fill();
-
-    // crânio/base (pele nas bordas onde a máscara não cobre)
+  // Dedos por cima do fragmento, segurando-o: só duas ou três pontas curtas
+  // fechando sobre a borda de cima do pedaço, não um leque aberto.
+  function drawGripFingers(ctx, dir, r, skinGrad) {
     ctx.fillStyle = skinGrad;
-    ctx.beginPath();
-    ctx.ellipse(hx, hy, 30, 30, 0, 0, Math.PI * 2);
-    ctx.fill();
+    for (let k = -1; k <= 1; k++) {
+      const a = k * 0.4;
+      const bx = Math.cos(a) * r * 0.6, by = Math.sin(a) * r * 0.6 - r * 0.1;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + dir * r * 0.5, by - 3);
+      ctx.lineTo(bx + dir * r * 0.15, by + 7);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 
-    // máscara: capuz vermelho com painel branco central, cobrindo tudo
-    ctx.fillStyle = '#c21f2c';
+  // O fragmento verde-limão de bordas irregulares/denteadas que ele arranca
+  // da arena e segura dobrado no peito — um zigue-zague fixo (não recalcula
+  // por frame) com uma nervura central, parecendo cristal quebrado ou folha
+  // rasgada.
+  const SHARD_PTS = [
+    [0, -1.0], [0.55, -0.55], [0.35, -0.15], [0.95, 0.05],
+    [0.5, 0.35], [0.7, 0.85], [0.05, 0.55], [-0.5, 0.9],
+    [-0.35, 0.3], [-0.9, 0.15], [-0.45, -0.2], [-0.65, -0.7],
+  ];
+  // Raquete comprida na HORIZONTAL (x bem mais largo que y), como a folha
+  // de cacto do desenho — não mais uma estrela compacta.
+  function drawShard(ctx, fillStyle, scale) {
+    const R = 52 * scale;
+    const RX = R * 1.5, RY = R * 0.62;
+    ctx.save();
+    ctx.rotate(-0.08);
+    ctx.fillStyle = fillStyle;
     ctx.beginPath();
-    ctx.ellipse(hx, hy - 2, 29, 29, 0, -0.15, Math.PI + 0.15);
-    ctx.fill();
-    ctx.fillStyle = '#f4ecdf';
-    ctx.beginPath();
-    ctx.moveTo(hx - 13, hy - 24);
-    ctx.lineTo(hx + 13, hy - 24);
-    ctx.lineTo(hx + 17, hy + 20);
-    ctx.lineTo(hx - 17, hy + 20);
+    for (let i = 0; i < SHARD_PTS.length; i++) {
+      const x = SHARD_PTS[i][0] * RX, y = SHARD_PTS[i][1] * RY;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
     ctx.closePath();
     ctx.fill();
-    // laço/renda no topo da máscara
-    ctx.strokeStyle = '#c21f2c';
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.moveTo(hx - 12, hy - 16); ctx.lineTo(hx + 12, hy - 16);
-    ctx.moveTo(hx - 12, hy - 6); ctx.lineTo(hx + 12, hy - 6);
+    ctx.strokeStyle = '#1c1410';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    // furos dos olhos (fenda escura com brilho)
-    ctx.fillStyle = '#140a08';
+    // nervuras compridas, como os riscos da folha do desenho
+    ctx.strokeStyle = 'rgba(60,120,20,0.55)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(hx - 9, hy - 4, 6, 4, -0.15, 0, Math.PI * 2);
-    ctx.ellipse(hx + 9, hy - 4, 6, 4, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffe27a';
-    ctx.beginPath();
-    ctx.arc(hx - 9, hy - 4, 1.8, 0, Math.PI * 2);
-    ctx.arc(hx + 9, hy - 4, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    // fenda da boca (queixo à mostra, pele)
+    ctx.moveTo(-0.75 * RX, 0.12 * RY);
+    ctx.quadraticCurveTo(0, -0.15 * RY, 0.8 * RX, -0.02 * RY);
+    ctx.moveTo(-0.6 * RX, 0.45 * RY);
+    ctx.quadraticCurveTo(0.1 * RX, 0.25 * RY, 0.65 * RX, 0.4 * RY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Cabeça exposta, sem máscara: cabelo preto curto espetado em tufos,
+  // sobrancelhas grossas franzidas, olhos com íris pequena, boca aberta
+  // rosnando com dentes quadriculados e faixa vermelha no meio, e um
+  // cavanhaque/barba preta curta só no queixo.
+  const HAIR_TUFTS = [-20, -13, -5, 4, 12, 20];
+  // Cabeça GRANDE, quase retangular de cantos arredondados — no desenho de
+  // referência a cabeça é enorme em relação ao corpo, com a boca ocupando
+  // quase toda a largura do rosto e o cavanhaque redondo descendo do queixo.
+  // Desenhada num espaço escalado: os números locais são pequenos, só o
+  // carimbo final é ampliado — visual puro, hitbox intacta.
+  function drawHead(ctx, hx, hy, skinGrad) {
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.scale(1.5, 1.5);
+
+    // crânio quase retangular (cantos arredondados), pele bege
     ctx.fillStyle = skinGrad;
     ctx.beginPath();
-    ctx.ellipse(hx, hy + 22, 15, 10, 0, 0, Math.PI);
+    ctx.moveTo(-26, -18);
+    ctx.quadraticCurveTo(-27, -30, -14, -30);
+    ctx.lineTo(13, -30);
+    ctx.quadraticCurveTo(26, -30, 26, -18);
+    ctx.lineTo(26, 16);
+    ctx.quadraticCurveTo(26, 30, 12, 31);
+    ctx.lineTo(-13, 31);
+    ctx.quadraticCurveTo(-26, 30, -26, 16);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#5a3a26';
-    ctx.lineWidth = 1.6;
+
+    // calota de cabelo preto reta na testa, descendo mais de um lado
+    ctx.fillStyle = '#120b09';
     ctx.beginPath();
-    ctx.arc(hx, hy + 16, 9, 0.2, Math.PI - 0.2);
-    ctx.stroke();
+    ctx.moveTo(-27, -8);
+    ctx.lineTo(-27, -20);
+    ctx.quadraticCurveTo(-27, -31, -14, -31);
+    ctx.lineTo(13, -31);
+    ctx.quadraticCurveTo(27, -31, 27, -20);
+    ctx.lineTo(27, -14);
+    ctx.lineTo(18, -12);
+    ctx.lineTo(-16, -12);
+    ctx.lineTo(-20, -6);
+    ctx.closePath();
+    ctx.fill();
+    // fios finos espetados saindo do topo
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = '#120b09';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < HAIR_TUFTS.length; i++) {
+      const tx = HAIR_TUFTS[i] * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(tx, -30);
+      ctx.lineTo(tx + (i % 2 === 0 ? -3 : 3), -42);
+      ctx.stroke();
+    }
+
+    // sobrancelhas grossas pretas, franzidas de raiva
+    ctx.fillStyle = '#120b09';
+    ctx.beginPath();
+    ctx.moveTo(-22, -6);
+    ctx.lineTo(-4, -10);
+    ctx.lineTo(-5, -3);
+    ctx.lineTo(-21, 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(22, -6);
+    ctx.lineTo(4, -10);
+    ctx.lineTo(5, -3);
+    ctx.lineTo(21, 1);
+    ctx.closePath();
+    ctx.fill();
+
+    // olhos pequenos: branco com íris preta
+    ctx.fillStyle = '#f4ecdf';
+    ctx.beginPath();
+    ctx.ellipse(-12, 3, 6, 4.5, -0.1, 0, Math.PI * 2);
+    ctx.ellipse(12, 3, 6, 4.5, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#140a08';
+    ctx.beginPath();
+    ctx.arc(-10, 3, 2.4, 0, Math.PI * 2);
+    ctx.arc(10, 3, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // BOCA ENORME: ocupa quase toda a largura do rosto, duas fileiras de
+    // dentes quadriculados com a faixa vermelha no meio — igual ao desenho
+    const my = 18, mw = 24, mh = 9;
+    ctx.fillStyle = '#160f0c';
+    ctx.beginPath();
+    ctx.moveTo(-mw, my - mh);
+    ctx.quadraticCurveTo(0, my - mh - 3, mw, my - mh);
+    ctx.quadraticCurveTo(mw + 3, my, mw, my + mh);
+    ctx.quadraticCurveTo(0, my + mh + 3, -mw, my + mh);
+    ctx.quadraticCurveTo(-mw - 3, my, -mw, my - mh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(-mw + 1.5, my - mh + 1.5);
+    ctx.quadraticCurveTo(0, my - mh - 1, mw - 1.5, my - mh + 1.5);
+    ctx.quadraticCurveTo(mw + 1, my, mw - 1.5, my + mh - 1.5);
+    ctx.quadraticCurveTo(0, my + mh + 1, -mw + 1.5, my + mh - 1.5);
+    ctx.quadraticCurveTo(-mw - 1, my, -mw + 1.5, my - mh + 1.5);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#f4ecdf';
+    ctx.fillRect(-mw, my - mh, mw * 2, mh);
+    ctx.fillRect(-mw, my, mw * 2, mh);
+    ctx.strokeStyle = '#2a1c14';
+    ctx.lineWidth = 1;
+    for (let i = -3; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * (mw / 3.5), my - mh);
+      ctx.lineTo(i * (mw / 3.5), my + mh);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#c8261e';
+    ctx.fillRect(-mw, my - mh * 0.3, mw * 2, mh * 0.6);
+    ctx.restore();
+
+    // cavanhaque preto redondo descendo do queixo, bem visível
+    ctx.fillStyle = '#140d0a';
+    ctx.beginPath();
+    ctx.moveTo(-11, 28);
+    ctx.quadraticCurveTo(-12, 40, 0, 44);
+    ctx.quadraticCurveTo(12, 40, 11, 28);
+    ctx.quadraticCurveTo(6, 32, 0, 32);
+    ctx.quadraticCurveTo(-6, 32, -11, 28);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
   }
 
   // Veias radioativas: fissuras verdes pulsando por cima da roupa, saindo do
@@ -992,7 +1205,10 @@ window.FG = window.FG || {};
   function drawVeins(ctx, cx, cy, rx, ry, heat, t) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const pulse = 0.35 + 0.65 * heat * (0.75 + 0.25 * Math.sin(t * 7));
+    // Antes tinha piso de 0.35 sempre ligado — as rachaduras ficavam visíveis
+    // mesmo com heat=0 (parado, fora de qualquer telegraph). Agora somem de
+    // verdade em repouso e só aparecem quando heat sobe.
+    const pulse = heat * (0.75 + 0.25 * Math.sin(t * 7));
     ctx.strokeStyle = 'rgba(120,255,90,' + pulse.toFixed(3) + ')';
     ctx.lineWidth = 3.2;
     ctx.lineCap = 'round';
@@ -1026,9 +1242,13 @@ window.FG = window.FG || {};
     const glow = boss.eyeGlow;
     const r = 19 + 11 * open;
 
-    // abas da roupa, afastando-se ao abrir
+    // abas da roupa, afastando-se ao abrir. Translúcida (era sólida
+    // '#15203e' em cima da regata azul — do mesmo tamanho do peito, cobria a
+    // regata quase inteira e parecia um cristal grudado no corpo em vez de
+    // uma dobra de pano). Com alpha baixo, a regata continua visível por trás.
     ctx.save();
-    ctx.fillStyle = '#15203e';
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#0c1428';
     const off = 6 + 16 * open;
     ctx.beginPath();
     ctx.moveTo(cx - 44, cy - 28 - off * 0.4);
@@ -1046,15 +1266,17 @@ window.FG = window.FG || {};
     ctx.fill();
     ctx.restore();
 
-    // o núcleo radioativo
+    // o núcleo radioativo: em repouso (fora da janela de dano) fica quase
+    // apagado por trás da regata; só cresce e acende de verdade quando
+    // `glow` > 0 (a janela real de exposição/dano, ver estado 'exposto').
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const beat = 1 + 0.08 * Math.sin(t * (open > 0.5 ? 9 : 5));
-    const rr = r * beat;
+    const beat = 1 + 0.08 * Math.sin(t * (glow > 0 ? 9 : 5));
+    const rr = r * beat * (0.5 + 0.5 * glow);
+    const baseAlpha = 0.1 + 0.8 * glow;
     const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, rr * 2.4);
-    // fechado é amarelo-esverdeado tênue; aberto na janela vira verde vivo
-    g.addColorStop(0, open > 0.5 ? 'rgba(220,255,200,0.95)' : 'rgba(230,255,190,0.9)');
-    g.addColorStop(0.35, open > 0.5 ? 'rgba(70,255,60,0.85)' : 'rgba(150,230,60,0.75)');
+    g.addColorStop(0, `rgba(220,255,200,${(0.95 * baseAlpha).toFixed(3)})`);
+    g.addColorStop(0.35, `rgba(90,240,60,${(0.78 * baseAlpha).toFixed(3)})`);
     g.addColorStop(1, 'rgba(40,220,20,0)');
     ctx.fillStyle = g;
     ctx.beginPath();

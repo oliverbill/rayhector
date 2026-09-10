@@ -1,9 +1,12 @@
 // RayHector: As Aventuras do Menino-gênio — boss1.js
-// Chefão da fase 1 (Parque do Terror): o ANÃOZINHO HUGO. Um anão de jardim
-// zangado, baixinho e atarracado, macacão sobre camisa xadrez vermelha e
-// branca, barba e cabelo ruivos cacheados, um braço erguido com um martelo
-// enorme. Desenhado 100% em canvas — sem sprite nenhum, ao contrário do
-// antigo Dragão Escarlate que morava neste arquivo.
+// Chefão da fase 1 (Parque do Terror): o ANÃOZINHO HUGO. Agora com cara de
+// palhaço sinistro — peruca amarela em meio-círculo bem curta, rosto pálido,
+// nariz vermelho redondo, sorriso vermelho largo e sólido, duas orelhas em
+// estrela vermelha saindo dos lados da cabeça, gola franzida vermelho-escura,
+// macacão xadrez vermelho-e-branco com botões ovais na frente, luvas e botas
+// vermelhas — e um estilete/faca erguido no lugar do velho martelo. Desenhado
+// 100% em canvas — sem sprite nenhum, ao contrário do antigo Dragão Escarlate
+// que morava neste arquivo.
 // Arquitetura copiada do LODÃO (boss2.js): máquina de estados, pools de
 // projétil pré-alocadas, reset() que limpa tudo, 8 de vida, 4 ataques
 // ciclando com telegraph + janela de exposição depois de cada um.
@@ -37,10 +40,10 @@ window.FG = window.FG || {};
   const EYE_L = { cx: -46, cy: -186, r: 9 };
   const EYE_R = { cx: -2, cy: -192, r: 9 };
 
-  // Ombro do braço que segura o martelo (o braço direito dele, atrás,
-  // erguido acima da cabeça no telegraph da martelada).
+  // Ombro do braço que segura o estilete (o braço direito dele, atrás,
+  // erguido acima da cabeça no telegraph da facada).
   const SHOULDER = { x: 54, y: -184 };
-  const ARM_LEN = 92, HAMMER_SHAFT = 96, HAMMER_HEAD_R = 34;
+  const ARM_LEN = 92, KNIFE_SHAFT = 96, KNIFE_BLADE_LEN = 58, KNIFE_BLADE_W = 22;
 
   // Mão de onde as pedras de jardim saem arremessadas.
   const HAND = { x: 44, y: -146 };
@@ -53,7 +56,8 @@ window.FG = window.FG || {};
   // cobre [alturaDoPulo+7 .. alturaDoPulo+37] acima do chão, logo qualquer
   // pulo entre ~15px e ~141px acerta: o pulo simples é 118px e o pulo
   // cortado no primeiro frame é ~30px — os dois entram.
-  const NOSE_X = -70;
+  const NOSE_X = -22;   // alinhado ao centro da cabeça (HEAD.cx=-18) — é o
+                        // nariz DA CARA dele, não uma bolha solta no ar
   const NOSE_HIGH = 156;   // altura do nariz em pé, empinado e fora de alcance
   const NOSE_LOW = 100;    // ... e curvado, na janela de dano
   const WEAK_W = 104, WEAK_H = 96;
@@ -121,7 +125,7 @@ window.FG = window.FG || {};
 
     // --- animação / telegraphs ---
     bent: 0,         // 0..1 — curvado ofegante (a janela de dano)
-    raise: 0,        // 0..1 — martelo erguido (telegraph da martelada)
+    raise: 0,        // 0..1 — estilete erguido (telegraph da facada/martelada)
     charge: 0,       // 0..1 — recuo/tensão (telegraph de pedras/investida)
     glow: 0,         // brilho do ponto fraco na janela
     dieScale: 1,      // encolhimento na morte
@@ -288,7 +292,7 @@ window.FG = window.FG || {};
       this.timer -= dt;
 
       if (this.state === 'idle') {
-        // busto erguido, martelo baixo, parado no posto
+        // busto erguido, estilete baixo, parado no posto
         this.charge += (0 - this.charge) * Math.min(1, dt * 5);
         this.raise += (0 - this.raise) * Math.min(1, dt * 5);
         this.bent += (0 - this.bent) * Math.min(1, dt * 6);
@@ -331,9 +335,9 @@ window.FG = window.FG || {};
         }
 
       } else if (this.state === 'martelada') {
-        // ---- 1. MARTELADA ----
-        // Telegraph de 0.9s: ergue o martelo bem alto (avisa óbvio) e depois
-        // bate no chão, soltando uma onda de choque rasteira pros dois lados
+        // ---- 1. FACADA DE ÁREA (estado interno segue chamado 'martelada') ----
+        // Telegraph de 0.9s: ergue o estilete bem alto (avisa óbvio) e depois
+        // crava no chão, soltando uma onda de choque rasteira pros dois lados
         // — pular por cima.
         if (this.phase === 0) {
           this.phase = 1;
@@ -361,7 +365,7 @@ window.FG = window.FG || {};
             this.timer = 0.5;
           }
         } else if (this.phase === 2) {
-          // martelo desce rápido de volta e a poeira baixa
+          // estilete desce rápido de volta e a poeira baixa
           this.raise = Math.max(0, this.raise - dt * 6);
           this.charge = Math.max(0, this.charge - dt * 3);
           if (this.timer <= 0) this.expose(2.6 * speedMul);
@@ -594,9 +598,10 @@ window.FG = window.FG || {};
   }
 
   // ==================================================================
-  // DESENHO — canvas puro, sem asset nenhum. O bicho é um monte de elipses:
-  // tronco atarracado com macacão sobre camisa xadrez, cabeçorra redonda com
-  // barba e cabelo ruivo cacheado, um braço erguido segurando um martelo.
+  // DESENHO — canvas puro, sem asset nenhum. O bicho é um monte de formas:
+  // tronco atarracado com macacão xadrez, cabeçorra redonda com peruca
+  // amarela, orelhas-estrela, nariz e sorriso de palhaço, um braço erguido
+  // segurando um estilete.
   // ==================================================================
   function drawBoss(ctx, cam) {
     const VIEW_W = FG.enemies.fx.VIEW_W;
@@ -651,67 +656,81 @@ window.FG = window.FG || {};
     ctx.translate(X, BY);
     ctx.scale(sc, sc);
 
-    // ---- pernas curtas/botas ----
-    ctx.fillStyle = '#241a14';
-    ctx.fillRect(-52, -34, 34, 34);
-    ctx.fillRect(6, -34, 34, 34);
+    // ---- pernas vermelhas sólidas + botas vermelho-escuras com punho creme ----
+    ctx.fillStyle = '#c41c1c';
+    ctx.fillRect(-52, -46, 34, 46);
+    ctx.fillRect(6, -46, 34, 46);
+    ctx.fillStyle = '#7a1010';
+    ctx.fillRect(-56, -22, 42, 22);
+    ctx.fillRect(2, -22, 42, 22);
+    ctx.fillStyle = '#f5ece0';
+    ctx.fillRect(-56, -22, 42, 8);
+    ctx.fillRect(2, -22, 42, 8);
 
-    // ---- tronco: macacão jeans com peito de camisa xadrez ----
-    blob(ctx, BODY.cx, BODY.cy, BODY.rx, BODY.ry, '#1c3350', '#2c4a6b');
-    drawPlaid(ctx, -6, BODY.cy - 6, 54, 58);
-    // alças do macacão
-    ctx.strokeStyle = '#16283f';
-    ctx.lineWidth = 14;
-    ctx.lineCap = 'round';
+    // ---- tronco: macacão xadrez vermelho e branco (gingham), igual a
+    // referência — mantido, com três botões ovais grandes na frente no
+    // lugar do antigo cinto de couro ----
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(-40, BODY.cy + 30);
-    ctx.lineTo(-30, BODY.cy - BODY.ry - 4);
-    ctx.stroke();
+    ctx.ellipse(BODY.cx, BODY.cy, BODY.rx, BODY.ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    drawPlaid(ctx, BODY.cx, BODY.cy, BODY.rx + 6, BODY.ry + 6);
+    ctx.restore();
+    // sombra de volume nas bordas do tronco (a xadrez sozinha fica chapada)
+    const bodyShade = ctx.createRadialGradient(BODY.cx - BODY.rx * 0.3, BODY.cy - BODY.ry * 0.4, 10,
+      BODY.cx, BODY.cy, BODY.rx * 1.15);
+    bodyShade.addColorStop(0, 'rgba(255,255,255,0.12)');
+    bodyShade.addColorStop(0.7, 'rgba(0,0,0,0)');
+    bodyShade.addColorStop(1, 'rgba(20,4,4,0.35)');
+    ctx.fillStyle = bodyShade;
     ctx.beginPath();
-    ctx.moveTo(38, BODY.cy + 30);
-    ctx.lineTo(30, BODY.cy - BODY.ry - 4);
-    ctx.stroke();
-    // botão dourado de cada alça
-    ctx.fillStyle = '#e0b84a';
-    ctx.beginPath(); ctx.arc(-30, BODY.cy - BODY.ry + 6, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(30, BODY.cy - BODY.ry + 6, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.ellipse(BODY.cx, BODY.cy, BODY.rx, BODY.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // três botões ovais grandes descendo pela frente, como no desenho
+    for (let bi = -1; bi <= 1; bi++) {
+      const byy = BODY.cy + bi * BODY.ry * 0.42;
+      ctx.fillStyle = bi === 0 ? '#7a1010' : '#f5ece0';
+      ctx.beginPath();
+      ctx.ellipse(BODY.cx + BODY.rx * 0.08, byy, 13, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60,10,10,0.5)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
 
-    // ---- braço parado (esquerdo, do lado do jogador) ----
-    ctx.strokeStyle = '#c88a5a';
+    // ---- braço parado (esquerdo, do lado do jogador) com luva vermelha
+    // de dedos, como na referência ----
+    ctx.strokeStyle = '#c41c1c';
     ctx.lineWidth = 22;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(-72, BODY.cy - 20);
-    ctx.quadraticCurveTo(-104, BODY.cy + 10, -96, BODY.cy + 46);
+    ctx.quadraticCurveTo(-104, BODY.cy + 10, -100, BODY.cy + 50);
     ctx.stroke();
+    drawGlove(ctx, -100, BODY.cy + 50, -0.35);
 
-    // ---- cabeça ----
-    blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, '#a8613a', '#c88a5a');
+    // ---- cabeça: rosto pálido/creme uniforme (nada de pele alaranjada) ----
+    blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, '#ecdfc8', '#faf3e6');
 
-    // cabelo/barba ruivos cacheados
+    // gola franzida vermelho-escura no pescoço, por baixo da cabeça
+    drawCollar(ctx);
+
+    // orelhas em estrela vermelha pontuda + peruca amarela em meio-círculo
+    drawEars(ctx);
     drawHair(ctx, t);
 
-    // ---- olhos zangados ----
+    // ---- olhos de palhaço (fechados, cílios finos) ----
     drawEye(ctx, EYE_L, t);
     drawEye(ctx, EYE_R, t);
-    // sobrancelhas franzidas
-    ctx.strokeStyle = '#6a2a12';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(EYE_L.cx - 14, EYE_L.cy - 14);
-    ctx.lineTo(EYE_L.cx + 10, EYE_L.cy - 6);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(EYE_R.cx - 10, EYE_R.cy - 6);
-    ctx.lineTo(EYE_R.cx + 14, EYE_R.cy - 14);
-    ctx.stroke();
 
-    // ---- nariz: o ponto fraco ----
+    // ---- sorriso vermelho largo e sólido ----
+    drawMouth(ctx);
+
+    // ---- nariz: o ponto fraco, agora literalmente o nariz de palhaço ----
     drawNose(ctx, t);
 
-    // ---- braço erguido + martelo ----
-    drawArmHammer(ctx, t);
+    // ---- braço erguido + estilete ----
+    drawArmKnife(ctx, t);
 
     // flash ao levar dano
     if (boss.flash > 0) {
@@ -747,73 +766,160 @@ window.FG = window.FG || {};
   }
 
   // Xadrez vermelho e branco da camisa, espiando por cima do macacão.
+  // Xadrez PREDOMINANTEMENTE VERMELHO com grade branca por cima — igual o
+  // desenho de referência (é pano vermelho com linhas brancas, não o
+  // contrário). Duas passadas de linha branca (grossa + fininha) para dar
+  // textura de tecido em vez de uma grade seca.
   function drawPlaid(ctx, cx, cy, w, h) {
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(cx, cy, w, h, 0, Math.PI, Math.PI * 2);
+    ctx.ellipse(cx, cy, w, h, 0, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#e8e0d0';
+    ctx.fillStyle = '#c41c1c';
     ctx.fillRect(cx - w, cy - h, w * 2, h * 2);
-    ctx.strokeStyle = '#b81c1c';
-    ctx.lineWidth = 6;
-    for (let i = -3; i <= 3; i++) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 9;
+    for (let i = -4; i <= 4; i++) {
       ctx.beginPath();
-      ctx.moveTo(cx - w, cy + i * 14);
-      ctx.lineTo(cx + w, cy + i * 14);
+      ctx.moveTo(cx - w, cy + i * 15);
+      ctx.lineTo(cx + w, cy + i * 15);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(cx + i * 14, cy - h);
-      ctx.lineTo(cx + i * 14, cy + h);
+      ctx.moveTo(cx + i * 15, cy - h);
+      ctx.lineTo(cx + i * 15, cy + h);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(140,10,10,0.5)';
+    ctx.lineWidth = 2;
+    for (let i = -4; i <= 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - w, cy + i * 15 + 5);
+      ctx.lineTo(cx + w, cy + i * 15 + 5);
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  // Cabelo e barba ruivos cacheados — uma coroa de cachos em volta da
-  // cabeça e uma barbicha farta pendurada no queixo.
+  // Peruca amarela em meio-círculo baixo, curtinha e raspada — nada de
+  // cachos selvagens, é o visual limpo de peruca de palhaço da referência.
   function drawHair(ctx, t) {
-    ctx.fillStyle = '#c8481e';
-    // cachos em volta da cabeça
-    const n = 9;
-    for (let i = 0; i < n; i++) {
-      const ang = Math.PI * 0.15 + (i / (n - 1)) * Math.PI * 1.05;
-      const cx = HEAD.cx + Math.cos(ang) * (HEAD.rx + 6);
-      const cy = HEAD.cy - HEAD.ry * 0.25 + Math.sin(ang) * (HEAD.ry + 10);
-      const r = 15 + (i % 3) * 3;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // barba farta cobrindo o queixo e descendo pro peito
-    ctx.fillStyle = '#b83e18';
+    ctx.fillStyle = '#f5d926';
     ctx.beginPath();
-    ctx.moveTo(HEAD.cx - HEAD.rx * 0.75, HEAD.cy + HEAD.ry * 0.2);
-    ctx.quadraticCurveTo(HEAD.cx - 30, HEAD.cy + HEAD.ry * 1.9, HEAD.cx - 4, HEAD.cy + HEAD.ry * 2.15);
-    ctx.quadraticCurveTo(HEAD.cx + 26, HEAD.cy + HEAD.ry * 1.9, HEAD.cx + HEAD.rx * 0.65, HEAD.cy + HEAD.ry * 0.25);
-    ctx.quadraticCurveTo(HEAD.cx, HEAD.cy + HEAD.ry * 0.75, HEAD.cx - HEAD.rx * 0.75, HEAD.cy + HEAD.ry * 0.2);
+    ctx.moveTo(HEAD.cx - HEAD.rx * 0.98, HEAD.cy - HEAD.ry * 0.08);
+    ctx.arc(HEAD.cx, HEAD.cy - HEAD.ry * 0.08, HEAD.rx * 0.98, Math.PI, 0, false);
+    ctx.quadraticCurveTo(HEAD.cx + HEAD.rx * 0.6, HEAD.cy - HEAD.ry * 0.52,
+      HEAD.cx, HEAD.cy - HEAD.ry * 0.58);
+    ctx.quadraticCurveTo(HEAD.cx - HEAD.rx * 0.6, HEAD.cy - HEAD.ry * 0.52,
+      HEAD.cx - HEAD.rx * 0.98, HEAD.cy - HEAD.ry * 0.08);
     ctx.closePath();
     ctx.fill();
-    // cachinhos na ponta da barba
-    ctx.fillStyle = '#c8481e';
-    for (let i = 0; i < 3; i++) {
-      const bx = HEAD.cx - 18 + i * 18;
-      const wob = Math.sin(t * 2 + i) * 2;
+    ctx.strokeStyle = 'rgba(20,20,20,0.5)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // Duas orelhas-estrela vermelhas pontudas, saindo pros lados da cabeça
+  // (pompom/orelha de bufão), igual a referência.
+  function drawEars(ctx) {
+    drawStarEar(ctx, HEAD.cx - HEAD.rx * 0.88, HEAD.cy - 6, -1);
+    drawStarEar(ctx, HEAD.cx + HEAD.rx * 0.88, HEAD.cy - 6, 1);
+  }
+  function drawStarEar(ctx, ex, ey, dir) {
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.fillStyle = '#d81f1f';
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(dir * 46, -30);
+    ctx.lineTo(dir * 30, -6);
+    ctx.lineTo(dir * 58, 8);
+    ctx.lineTo(dir * 24, 12);
+    ctx.lineTo(dir * 34, 34);
+    ctx.lineTo(0, 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20,4,4,0.5)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Gola franzida vermelho-escura em volta do pescoço, entre a cabeça e o
+  // tronco — feita de uma fileira de "pétalas" boboladas.
+  // Empurrada bem abaixo do queixo (HEAD.ry*2.0, não *1.25): a boca e o
+  // nariz já ocupam a faixa logo abaixo dos olhos, e a gola colada ali
+  // virava uma mancha escura fundida com a boca. Ela mora no pescoço/peito,
+  // separada por um vão visível.
+  function drawCollar(ctx) {
+    const cy = HEAD.cy + HEAD.ry * 2.05;
+    ctx.fillStyle = '#7a1010';
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      const cx = HEAD.cx - 52 + (i / (n - 1)) * 104;
+      const bump = Math.sin((i / (n - 1)) * Math.PI) * 6;
       ctx.beginPath();
-      ctx.arc(bx + wob, HEAD.cy + HEAD.ry * 2.1, 8, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 4 - bump * 0.2, 18, 14 + bump, 0, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(20,4,4,0.4)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Luva vermelha com dedos — mão livre (não segura o estilete) e mão que
+  // segura o estilete, ambas na mesma pose crispada da referência.
+  function drawGlove(ctx, hx, hy, ang) {
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(ang);
+    ctx.fillStyle = '#c41c1c';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 14, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#c41c1c';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 5, -2);
+      ctx.lineTo(i * 6, -16 - Math.abs(i) * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Olhos de palhaço: fechados, tipo cílio — arco fino com três traços de
+  // cílio por cima, igual a referência (não são globos oculares).
+  function drawEye(ctx, e, t) {
+    const wide = Math.sin(t * 0.7 + e.cx) > 0.985 ? 1.6 : 1;
+    ctx.strokeStyle = '#2a1c10';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(e.cx, e.cy, e.r * wide, Math.PI * 0.12, Math.PI * 0.88);
+    ctx.stroke();
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(e.cx + i * (e.r * 0.55), e.cy - e.r * wide + 2);
+      ctx.lineTo(e.cx + i * (e.r * 0.55), e.cy - e.r * wide - 7);
+      ctx.stroke();
     }
   }
 
-  function drawEye(ctx, e, t) {
-    const blink = Math.sin(t * 0.7 + e.cx) > 0.985 ? 0.15 : 1;
-    ctx.fillStyle = '#fff2e0';
+  // Sorriso vermelho largo e sólido — forma de lua crescente preenchida,
+  // sem dentes à mostra, igual a referência.
+  function drawMouth(ctx) {
+    const mx = HEAD.cx, my = HEAD.cy + HEAD.ry * 0.42;
+    ctx.fillStyle = '#c41c1c';
     ctx.beginPath();
-    ctx.ellipse(e.cx, e.cy, e.r, e.r * blink, 0, 0, Math.PI * 2);
+    ctx.moveTo(mx - HEAD.rx * 0.6, my - 6);
+    ctx.quadraticCurveTo(mx, my + 26, mx + HEAD.rx * 0.6, my - 6);
+    ctx.quadraticCurveTo(mx, my + 8, mx - HEAD.rx * 0.6, my - 6);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#1a1206';
-    ctx.beginPath();
-    ctx.arc(e.cx, e.cy, e.r * 0.5 * blink, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,4,4,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   // O nariz vermelho e bochechudo — o ponto fraco. Incha e ACENDE na janela
@@ -821,7 +927,7 @@ window.FG = window.FG || {};
   function drawNose(ctx, t) {
     const cy = -(NOSE_HIGH - (NOSE_HIGH - NOSE_LOW) * boss.bent);
     const r = 20 + 6 * boss.bent;
-    ctx.fillStyle = boss.glow > 0 ? '#ff5030' : '#d9563a';
+    ctx.fillStyle = boss.glow > 0 ? '#ff3020' : '#d81f1f';
     ctx.beginPath();
     ctx.arc(NOSE_X, cy, r, 0, Math.PI * 2);
     ctx.fill();
@@ -853,20 +959,24 @@ window.FG = window.FG || {};
     }
   }
 
-  // Braço erguido segurando o martelo: `raise` vai de 0 (descansando ao
-  // lado do corpo) a 1 (bem alto acima da cabeça, telegraph da martelada).
-  function drawArmHammer(ctx, t) {
-    const restAng = 0.62 * Math.PI;    // braço caído, martelo apontando pro chão
-    const upAng = -0.58 * Math.PI;     // braço erguido, martelo acima da cabeça
+  // Braço erguido segurando o estilete: `raise` vai de 0 (descansando ao
+  // lado do corpo) a 1 (bem alto acima da cabeça, telegraph da facada). A
+  // mecânica de jogo (ondas de choque, timings) continua a mesma da antiga
+  // martelada — só a silhueta da arma virou faca, como na referência.
+  function drawArmKnife(ctx, t) {
+    const restAng = 0.62 * Math.PI;    // braço caído, faca apontando pro chão
+    const upAng = -0.58 * Math.PI;     // braço erguido, faca acima da cabeça
     const ang = restAng + (upAng - restAng) * boss.raise;
     const sx = SHOULDER.x, sy = SHOULDER.y;
     const ex = sx + Math.cos(ang) * ARM_LEN;
     const ey = sy + Math.sin(ang) * ARM_LEN;
-    const hx = ex + Math.cos(ang) * HAMMER_SHAFT;
-    const hy = ey + Math.sin(ang) * HAMMER_SHAFT;
+    const hx = ex + Math.cos(ang) * (KNIFE_SHAFT - KNIFE_BLADE_LEN);
+    const hy = ey + Math.sin(ang) * (KNIFE_SHAFT - KNIFE_BLADE_LEN);
+    const tipx = ex + Math.cos(ang) * KNIFE_SHAFT;
+    const tipy = ey + Math.sin(ang) * KNIFE_SHAFT;
 
-    // braço
-    ctx.strokeStyle = '#c88a5a';
+    // braço (macacão xadrez desce até o punho, como na referência)
+    ctx.strokeStyle = '#c41c1c';
     ctx.lineWidth = 22;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -874,30 +984,39 @@ window.FG = window.FG || {};
     ctx.lineTo(ex, ey);
     ctx.stroke();
 
-    // cabo do martelo (prateado)
-    ctx.strokeStyle = '#c4c8d0';
-    ctx.lineWidth = 10;
+    // mão-luva vermelha empunhando o cabo
+    drawGlove(ctx, ex, ey, ang + Math.PI / 2);
+
+    // cabo vermelho do estilete
+    ctx.strokeStyle = '#8a1616';
+    ctx.lineWidth = 11;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(ex, ey);
     ctx.lineTo(hx, hy);
     ctx.stroke();
 
-    // marreta na ponta (vermelha com friso prateado)
+    // lâmina triangular cinza, ponta afiada
     ctx.save();
     ctx.translate(hx, hy);
-    ctx.rotate(ang + Math.PI / 2);
-    const hg = ctx.createLinearGradient(-HAMMER_HEAD_R, 0, HAMMER_HEAD_R, 0);
-    hg.addColorStop(0, '#8a1616');
-    hg.addColorStop(0.5, '#d43030');
-    hg.addColorStop(1, '#8a1616');
-    ctx.fillStyle = hg;
-    ctx.fillRect(-HAMMER_HEAD_R, -18, HAMMER_HEAD_R * 2, 36);
-    ctx.strokeStyle = '#c4c8d0';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(-HAMMER_HEAD_R, -18, HAMMER_HEAD_R * 2, 36);
+    ctx.rotate(ang);
+    const bg = ctx.createLinearGradient(0, -KNIFE_BLADE_W / 2, 0, KNIFE_BLADE_W / 2);
+    bg.addColorStop(0, '#e8ecf0');
+    bg.addColorStop(0.5, '#aab0ba');
+    bg.addColorStop(1, '#787e88');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.moveTo(0, -KNIFE_BLADE_W / 2);
+    ctx.lineTo(KNIFE_BLADE_LEN, 0);
+    ctx.lineTo(0, KNIFE_BLADE_W / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,44,50,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.restore();
 
-    // brilho de tensão no cabo quando ele está prestes a bater
+    // brilho de tensão na lâmina quando ele está prestes a golpear
     if (boss.charge > 0.3 && boss.raise > 0.7) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -905,8 +1024,8 @@ window.FG = window.FG || {};
       ctx.strokeStyle = '#fff2c0';
       ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(hx, hy);
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(tipx, tipy);
       ctx.stroke();
       ctx.restore();
     }
