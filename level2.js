@@ -1,5 +1,5 @@
 // Fagulho: Lendas do Bosque — level2.js
-// Fase 1, 'pantano': O Pântano Venenoso. Geometria, lumis, ninhos, perigos,
+// Fase 1, 'pantano': O Pântano. Geometria, lumis, ninhos, perigos,
 // inimigos e obstáculos (defs) mais todo o visual amarelo-esverdeado da bruma.
 // Registra-se em FG.levels na ordem do index.html — quem escolhe a fase
 // corrente é o engine. Nada aqui referencia FG.player/FG.engine/FG.audio no
@@ -709,6 +709,32 @@ window.FG = window.FG || {};
       g.fill();
     }
 
+    // choupana da bruxa do pântano, bem ao longe: só a silhueta — é a dona
+    // do lodo, e a fase agora tem cara dela mesmo antes de chegar ao chefão
+    (function () {
+      var hx = 1860, hb = base - 30, hw = 92, hh = 76;
+      g.fillStyle = 'rgba(60,58,28,0.62)';
+      g.beginPath();
+      g.moveTo(hx - hw / 2, hb);
+      g.lineTo(hx - hw / 2, hb - hh * 0.55);
+      g.lineTo(hx, hb - hh);
+      g.lineTo(hx + hw / 2, hb - hh * 0.55);
+      g.lineTo(hx + hw / 2, hb);
+      g.closePath();
+      g.fill();
+      g.fillStyle = 'rgba(46,44,20,0.7)';
+      g.beginPath();
+      g.moveTo(hx - hw * 0.62, hb - hh * 0.5);
+      g.lineTo(hx, hb - hh * 1.24);
+      g.lineTo(hx + hw * 0.62, hb - hh * 0.5);
+      g.closePath();
+      g.fill();
+      g.fillStyle = 'rgba(160,220,90,0.35)';
+      g.beginPath();
+      g.arc(hx - 6, hb - hh * 0.42, 8, 0, Math.PI * 2);
+      g.fill();
+    })();
+
     // duas fileiras de morros baixos
     g.fillStyle = 'rgba(120,118,58,0.5)';
     hillBand(g, r, base - 190, 70, 5);
@@ -1368,7 +1394,7 @@ window.FG = window.FG || {};
   FG.levels = FG.levels || [];
   FG.levels.push({
     id: 'pantano',
-    nome: 'O Pântano Venenoso',
+    nome: 'O Pântano',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },
@@ -1378,7 +1404,7 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     ninhos: ninhos,
-    bossId: 'lodo',
+    bossId: 'sandrola',
     bossTriggerX: 6350,
     arena: { x: 6200, w: 1000 },
     reset: reset,

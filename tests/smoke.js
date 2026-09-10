@@ -73,9 +73,9 @@ global.window.FG = {};
 // exercita as três. Só assets/audio/player/enemies/engine são obrigatórios.
 const order = [
   'assets.js', 'audio.js',
-  'levelkit.js', 'level.js', 'level2.js', 'level3.js',
+  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js',
   'obstacles.js', 'player.js',
-  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js',
+  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {

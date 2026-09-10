@@ -1,6 +1,6 @@
-// Fagulho: Lendas do Bosque — level.js
-// Fase 0, 'bosque': geometria do mundo, lumis, checkpoints, inimigos e
-// obstáculos (defs) e todo o visual pintado do bosque crepuscular.
+// RayHector: As Aventuras do Menino-gênio — level.js
+// Fase 0, 'parque': geometria do mundo, lumis, checkpoints, inimigos e
+// obstáculos (defs) e todo o visual pintado do Parque do Terror assombrado.
 // Registra-se em FG.levels; quem escolhe a fase corrente é o engine.
 // Nada aqui referencia FG.player/FG.engine/FG.audio no load — só em runtime.
 window.FG = window.FG || {};
@@ -35,7 +35,7 @@ window.FG = window.FG || {};
   //                   fenda de 80px entre a agulha de pedra e o desfiladeiro
   //  (5) x 5060..5420 DESFILADEIRO: duas paredes frente a frente, descida
   //                   controlada agarrando (fenda de 140px, 390px de queda)
-  //  (6) x 5420..7200 reta final e a clareira plana do dragão-chefe
+  //  (6) x 5420..7200 reta final e a clareira plana do chefão
   //
   // As duas escaladas: a chaminé do gorge (única saída de lá, 400px) e a
   // fenda do pântano (415px, única saída de quem cai do arquipélago).
@@ -90,7 +90,7 @@ window.FG = window.FG || {};
     S(5150, 620, 760, 100, 'g'),      // [25] fundo do desfiladeiro + reta final
     S(5290, 210, 130, 340, 'c'),      // [26] parede direita (arco de 70px, crista de espinhos)
 
-    // ---- (6) reta final e clareira do dragão-chefe ----
+    // ---- (6) reta final e clareira do chefão ----
     S(5560, 530, 130, 26, 'g'),       // [27] passa por cima dos espinhos
     S(5750, 480, 110, 22, 'g'),       // [28] bônus
     S(5910, 724, 120, 40, 'h'),       // [29] piso oculto da poça pré-clareira
@@ -276,19 +276,19 @@ window.FG = window.FG || {};
     if (built) return;
     built = true;
 
-    // céu crepúsculo: roxo profundo → âmbar dourado, com estrelas tímidas
+    // céu noturno doentio: roxo profundo → verde pântano, com estrelas frias
     skySpr = makeCanvas(VIEW_W, VIEW_H);
     (function (g) {
       var gr = g.createLinearGradient(0, 0, 0, VIEW_H);
-      gr.addColorStop(0, '#241048');
-      gr.addColorStop(0.35, '#5c2260');
-      gr.addColorStop(0.68, '#b2543f');
-      gr.addColorStop(0.88, '#e8933f');
-      gr.addColorStop(1, '#f0ad55');
+      gr.addColorStop(0, '#0e0620');
+      gr.addColorStop(0.35, '#2a1040');
+      gr.addColorStop(0.68, '#3c2a2a');
+      gr.addColorStop(0.88, '#4a6a2e');
+      gr.addColorStop(1, '#5c8a3a');
       g.fillStyle = gr;
       g.fillRect(0, 0, VIEW_W, VIEW_H);
       var r = makeRand(11);
-      g.fillStyle = 'rgba(255,240,220,0.7)';
+      g.fillStyle = 'rgba(210,230,255,0.7)';
       for (var i = 0; i < 40; i++) {
         var sx = r() * VIEW_W, sy = r() * 200, sr = 0.5 + r() * 1.1;
         g.globalAlpha = 0.15 + r() * 0.5;
@@ -297,28 +297,28 @@ window.FG = window.FG || {};
       g.globalAlpha = 1;
     })(skySpr.getContext('2d'));
 
-    // sol difuso do entardecer
+    // lua doentia, verde-pálida, meio velada
     sunSpr = makeCanvas(280, 280);
     (function (g) {
       var gr = g.createRadialGradient(140, 140, 8, 140, 140, 140);
-      gr.addColorStop(0, 'rgba(255,240,200,0.95)');
-      gr.addColorStop(0.18, 'rgba(255,205,130,0.8)');
-      gr.addColorStop(0.5, 'rgba(255,150,70,0.28)');
-      gr.addColorStop(1, 'rgba(255,130,60,0)');
+      gr.addColorStop(0, 'rgba(220,240,190,0.95)');
+      gr.addColorStop(0.18, 'rgba(190,220,150,0.8)');
+      gr.addColorStop(0.5, 'rgba(140,180,110,0.26)');
+      gr.addColorStop(1, 'rgba(120,160,90,0)');
       g.fillStyle = gr;
       g.fillRect(0, 0, 280, 280);
     })(sunSpr.getContext('2d'));
 
-    // raios de luz diagonais (translúcidos), repetem a cada 1200px
+    // feixes de luz verde-doentia coados pela névoa, repetem a cada 1200px
     raysL = makeCanvas(1200, LAYER_H);
     (function (g) {
       var r = makeRand(31);
       for (var i = 0; i < 3; i++) {
         var bx = 120 + i * 400 + r() * 120, bw = 60 + r() * 60, lean = 170 + r() * 60;
         var gr = g.createLinearGradient(0, 0, 0, LAYER_H);
-        gr.addColorStop(0, 'rgba(255,210,130,0.16)');
-        gr.addColorStop(0.7, 'rgba(255,180,100,0.05)');
-        gr.addColorStop(1, 'rgba(255,180,100,0)');
+        gr.addColorStop(0, 'rgba(150,210,120,0.14)');
+        gr.addColorStop(0.7, 'rgba(120,180,140,0.05)');
+        gr.addColorStop(1, 'rgba(120,180,140,0)');
         g.fillStyle = gr;
         g.beginPath();
         g.moveTo(bx, 0);
@@ -336,12 +336,12 @@ window.FG = window.FG || {};
     nearL = makeCanvas(2400, LAYER_H); paintNear(nearL.getContext('2d'));
     frontL = makeCanvas(1800, LAYER_H); paintFront(frontL.getContext('2d'));
 
-    // vinheta sutil
+    // vinheta sutil, mais fria e fechada — clima de mata-assombrada
     vig = makeCanvas(VIEW_W, VIEW_H);
     (function (g) {
-      var gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 240, VIEW_W / 2, VIEW_H / 2, 640);
-      gr.addColorStop(0, 'rgba(12,4,24,0)');
-      gr.addColorStop(1, 'rgba(12,4,24,0.5)');
+      var gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 220, VIEW_W / 2, VIEW_H / 2, 640);
+      gr.addColorStop(0, 'rgba(4,10,4,0)');
+      gr.addColorStop(1, 'rgba(4,10,4,0.58)');
       g.fillStyle = gr;
       g.fillRect(0, 0, VIEW_W, VIEW_H);
     })(vig.getContext('2d'));
@@ -365,8 +365,9 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // PENHASCO — rocha empilhada em camadas, bocas de caverna escuras ao
-  // fundo, face direita na sombra e topo com musgo claro (como nos prints).
+  // PENHASCO — rocha escura empilhada em camadas, bocas de caverna escuras
+  // ao fundo, face direita na sombra e topo com musgo doentio (o mesmo
+  // formato/tamanho de sempre, só a paleta virou parque abandonado).
   // ---------------------------------------------------------------
   function paintCliff(g, w, h, seed) {
     var r = makeRand(seed);
@@ -375,11 +376,11 @@ window.FG = window.FG || {};
     g.save();
     g.beginPath(); g.rect(P, P, w, h); g.clip();
 
-    // corpo em gradiente crepúsculo
+    // corpo em gradiente de pedra escura, doentia
     var gr = g.createLinearGradient(0, P, 0, P + h);
-    gr.addColorStop(0, '#6d5568');
-    gr.addColorStop(0.4, '#4a3a50');
-    gr.addColorStop(1, '#231a2b');
+    gr.addColorStop(0, '#3a4038');
+    gr.addColorStop(0.4, '#282e26');
+    gr.addColorStop(1, '#12160f');
     g.fillStyle = gr;
     g.fillRect(P, P, w, h);
 
@@ -410,16 +411,16 @@ window.FG = window.FG || {};
       for (var x = P - band + off; x < P + w + band; x += band * 0.9) {
         var rr = band * (0.5 + r() * 0.18);
         var px = x + rr, py = y - rr * 0.7;
-        g.fillStyle = 'rgba(126,104,126,' + tone.toFixed(3) + ')';
+        g.fillStyle = 'rgba(96,106,90,' + tone.toFixed(3) + ')';
         g.beginPath();
         g.ellipse(px, py, rr, rr * 0.72, 0, 0, Math.PI * 2);
         g.fill();
         g.lineWidth = 2;
-        g.strokeStyle = 'rgba(255,192,124,0.16)';   // aresta batida pelo sol
+        g.strokeStyle = 'rgba(150,200,110,0.12)';   // aresta com luar verde-doentio
         g.beginPath();
         g.ellipse(px, py, rr - 1, rr * 0.72 - 1, 0, Math.PI * 1.05, Math.PI * 1.78);
         g.stroke();
-        g.strokeStyle = 'rgba(9,4,15,0.34)';        // sombra por baixo
+        g.strokeStyle = 'rgba(4,6,3,0.4)';           // sombra por baixo
         g.beginPath();
         g.ellipse(px, py, rr - 1, rr * 0.72 - 1, 0, Math.PI * 0.14, Math.PI * 0.86);
         g.stroke();
@@ -427,7 +428,7 @@ window.FG = window.FG || {};
     }
 
     // rachaduras verticais: a parede pede para ser agarrada
-    g.strokeStyle = 'rgba(12,6,18,0.35)';
+    g.strokeStyle = 'rgba(4,6,3,0.4)';
     g.lineWidth = 2.5;
     g.lineCap = 'round';
     var ncr = 1 + Math.floor(w / 70);
@@ -440,36 +441,36 @@ window.FG = window.FG || {};
       g.stroke();
     }
 
-    // luz na face esquerda, sombra na direita (o sol vem do alto-esquerda)
+    // luar verde-pálido na face esquerda, sombra fechada na direita
     var sg = g.createLinearGradient(P, 0, P + w, 0);
-    sg.addColorStop(0, 'rgba(255,180,110,0.11)');
+    sg.addColorStop(0, 'rgba(150,200,120,0.10)');
     sg.addColorStop(0.45, 'rgba(0,0,0,0)');
-    sg.addColorStop(1, 'rgba(12,6,20,0.45)');
+    sg.addColorStop(1, 'rgba(4,8,4,0.5)');
     g.fillStyle = sg;
     g.fillRect(P, P, w, h);
 
     // base afundando na sombra da caverna
     var bh = Math.min(110, h * 0.45);
     var bg = g.createLinearGradient(0, P + h - bh, 0, P + h);
-    bg.addColorStop(0, 'rgba(10,5,18,0)');
-    bg.addColorStop(1, 'rgba(10,5,18,0.62)');
+    bg.addColorStop(0, 'rgba(4,6,4,0)');
+    bg.addColorStop(1, 'rgba(4,6,4,0.68)');
     g.fillStyle = bg;
     g.fillRect(P, P + h - bh, w, bh);
     g.restore();
 
-    // topo: musgo transbordando as bordas + fio claro de luz
-    g.fillStyle = '#3f7a2e';
+    // topo: musgo doentio transbordando as bordas + fio pálido de luar
+    g.fillStyle = '#3a4a22';
     g.fillRect(P - 3, P - 2, w + 6, 13);
-    g.fillStyle = '#6fb84a';
+    g.fillStyle = '#5a7a2e';
     g.fillRect(P - 3, P - 2, w + 6, 7);
-    g.fillStyle = 'rgba(255,238,196,0.6)';
+    g.fillStyle = 'rgba(200,220,180,0.45)';
     g.fillRect(P - 3, P - 3, w + 6, 3);
     // gotas de musgo escorrendo nas quinas
-    g.fillStyle = '#3f7a2e';
+    g.fillStyle = '#3a4a22';
     g.beginPath(); g.arc(P - 1, P + 16, 4, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.arc(P + w + 1, P + 19, 4.5, 0, Math.PI * 2); g.fill();
-    // tufos de capim no topo
-    g.strokeStyle = '#7cc850';
+    // tufos de capim ressecado no topo
+    g.strokeStyle = '#6a8a3a';
     g.lineWidth = 2;
     g.lineCap = 'round';
     var nt = Math.max(3, Math.floor(w / 44));
@@ -505,21 +506,21 @@ window.FG = window.FG || {};
     g.clip();
 
     var gr = g.createLinearGradient(0, P, 0, P + h + tip);
-    gr.addColorStop(0, '#6d5568');
-    gr.addColorStop(0.42, '#463848');
-    gr.addColorStop(1, '#1c1424');
+    gr.addColorStop(0, '#3a4038');
+    gr.addColorStop(0.42, '#242a20');
+    gr.addColorStop(1, '#0e120c');
     g.fillStyle = gr;
     g.fillRect(0, 0, P * 2 + w, P + h + tip + 8);
 
     // estratos horizontais de rocha
     for (var y = P + 16; y < P + h + tip; y += 20 + r() * 12) {
-      g.strokeStyle = 'rgba(12,6,18,0.3)';
+      g.strokeStyle = 'rgba(4,6,3,0.32)';
       g.lineWidth = 2 + r() * 2;
       g.beginPath();
       g.moveTo(P - 4, y);
       g.quadraticCurveTo(cx, y + (r() * 2 - 1) * 7, P + w + 4, y + (r() * 2 - 1) * 5);
       g.stroke();
-      g.strokeStyle = 'rgba(255,186,120,0.10)';
+      g.strokeStyle = 'rgba(150,200,120,0.08)';
       g.lineWidth = 1.5;
       g.beginPath();
       g.moveTo(P - 4, y - 3);
@@ -529,32 +530,32 @@ window.FG = window.FG || {};
     // pedras arredondadas soltas na barriga da ilha
     for (var b = 0; b < 4; b++) {
       var bx = P + 8 + r() * Math.max(1, w - 16), by = P + h * (0.3 + r() * 0.6), br = 8 + r() * 12;
-      g.fillStyle = 'rgba(126,104,126,0.16)';
+      g.fillStyle = 'rgba(96,106,90,0.16)';
       g.beginPath(); g.ellipse(bx, by, br, br * 0.75, 0, 0, Math.PI * 2); g.fill();
     }
     // sombra na face direita
     var sg = g.createLinearGradient(P, 0, P + w, 0);
-    sg.addColorStop(0, 'rgba(255,180,110,0.10)');
+    sg.addColorStop(0, 'rgba(150,200,120,0.09)');
     sg.addColorStop(0.5, 'rgba(0,0,0,0)');
-    sg.addColorStop(1, 'rgba(12,6,20,0.42)');
+    sg.addColorStop(1, 'rgba(4,8,4,0.48)');
     g.fillStyle = sg;
     g.fillRect(P, P, w, h + tip);
     g.restore();
     g.restore();
 
-    // topo com grama transbordando
-    g.fillStyle = '#3f7a2e';
+    // topo com musgo doentio transbordando
+    g.fillStyle = '#3a4a22';
     g.fillRect(P - 4, P - 2, w + 8, 15);
-    g.fillStyle = '#6fb84a';
+    g.fillStyle = '#5a7a2e';
     g.fillRect(P - 4, P - 2, w + 8, 8);
-    g.fillStyle = 'rgba(255,238,196,0.55)';
+    g.fillStyle = 'rgba(200,220,180,0.42)';
     g.fillRect(P - 4, P - 3, w + 8, 3);
-    // grama pendurada nas quinas
-    g.fillStyle = '#3f7a2e';
+    // musgo pendurado nas quinas
+    g.fillStyle = '#3a4a22';
     g.beginPath(); g.arc(P - 2, P + 18, 5, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.arc(P + w + 2, P + 21, 5.5, 0, Math.PI * 2); g.fill();
-    // tufos e raízes penduradas
-    g.strokeStyle = '#7cc850';
+    // tufos e raízes ressecadas penduradas
+    g.strokeStyle = '#6a8a3a';
     g.lineWidth = 2;
     g.lineCap = 'round';
     var nt = Math.max(3, Math.floor(w / 40));
@@ -565,7 +566,7 @@ window.FG = window.FG || {};
       g.quadraticCurveTo(tx + lean * 4, P - len * 0.7, tx + lean * 8, P - len);
       g.stroke();
     }
-    g.strokeStyle = 'rgba(74,120,58,0.7)';
+    g.strokeStyle = 'rgba(60,90,40,0.65)';
     g.lineWidth = 1.8;
     for (var v = 0; v < 4; v++) {
       var vx = P + 8 + r() * Math.max(1, w - 16), vl = 18 + r() * 34;
@@ -576,56 +577,97 @@ window.FG = window.FG || {};
     }
   }
 
-  // --- camada distante: penhascos em silhueta, morros e árvores retorcidas ---
+  // --- camada distante: silhuetas de parque assombrado — roda-gigante,
+  // tendas de circo pontudas, morros e árvores retorcidas mortas ---
   function paintFar(g) {
     var r = makeRand(101);
     var base = LAYER_H;
 
-    // paredões de pedra ao fundo, com bocas de caverna escuras
+    // roda-gigante parada, torta, ao fundo do parque
+    (function () {
+      var wx = 340, wy = base - 40 - 260, wr = 210;
+      g.strokeStyle = 'rgba(40,20,54,0.85)';
+      g.lineWidth = 7;
+      g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = 4;
+      for (var i = 0; i < 10; i++) {
+        var ang = (i / 10) * Math.PI * 2;
+        g.beginPath();
+        g.moveTo(wx, wy);
+        g.lineTo(wx + Math.cos(ang) * wr, wy + Math.sin(ang) * wr);
+        g.stroke();
+        // cabines penduradas, tortas
+        g.fillStyle = 'rgba(30,14,42,0.9)';
+        var cx = wx + Math.cos(ang) * wr, cy = wy + Math.sin(ang) * wr;
+        g.fillRect(cx - 9, cy - 4, 18, 16);
+      }
+      g.strokeStyle = 'rgba(40,20,54,0.85)';
+      g.lineWidth = 10;
+      g.beginPath();
+      g.moveTo(wx, wy + wr);
+      g.lineTo(wx - 50, base - 20);
+      g.moveTo(wx, wy + wr);
+      g.lineTo(wx + 50, base - 20);
+      g.stroke();
+    })();
+
+    // tendas de circo pontudas (silhueta), com bandeirola torta no topo
     for (var c = 0; c < 5; c++) {
-      var cw = 180 + r() * 190;
-      var cx = c * 480 + r() * 120;
-      var ch = 250 + r() * 170;
+      var cw = 150 + r() * 150;
+      var cx = 760 + c * 420 + r() * 120;
+      var ch = 200 + r() * 140;
       var top = base - 40 - ch;
-      g.fillStyle = 'rgba(58,30,78,0.8)';
+      g.fillStyle = 'rgba(48,20,60,0.85)';
       g.beginPath();
       g.moveTo(cx, base);
-      g.lineTo(cx + 12, top + 26);
-      g.quadraticCurveTo(cx + cw * 0.35, top - 14, cx + cw * 0.62, top + 10);
-      g.quadraticCurveTo(cx + cw * 0.85, top + 24, cx + cw, top + 60);
+      g.lineTo(cx + cw * 0.5, top);
       g.lineTo(cx + cw, base);
       g.closePath();
       g.fill();
-      // camadas horizontais de rocha
-      g.strokeStyle = 'rgba(30,14,44,0.55)';
+      // listras verticais da lona
+      g.strokeStyle = 'rgba(20,8,30,0.5)';
       g.lineWidth = 3;
-      for (var ly = top + 60; ly < base - 30; ly += 34 + r() * 22) {
+      for (var lx = cx + cw * 0.12; lx < cx + cw * 0.9; lx += cw * 0.16) {
         g.beginPath();
-        g.moveTo(cx + 6, ly);
-        g.quadraticCurveTo(cx + cw * 0.5, ly + (r() * 2 - 1) * 10, cx + cw - 6, ly + (r() * 2 - 1) * 8);
+        g.moveTo(lx, base);
+        g.lineTo(cx + cw * 0.5, top);
         g.stroke();
       }
-      // boca de caverna
-      var kx = cx + cw * (0.3 + r() * 0.4), ky = base - 60 - r() * 90;
-      var kg = g.createRadialGradient(kx, ky, 3, kx, ky, 60);
+      // bandeirola torta no mastro
+      g.strokeStyle = 'rgba(20,8,30,0.7)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(cx + cw * 0.5, top);
+      g.lineTo(cx + cw * 0.5 + 4, top - 22);
+      g.stroke();
+      g.fillStyle = 'rgba(70,20,30,0.8)';
+      g.beginPath();
+      g.moveTo(cx + cw * 0.5 + 4, top - 22);
+      g.lineTo(cx + cw * 0.5 + 22, top - 16);
+      g.lineTo(cx + cw * 0.5 + 4, top - 10);
+      g.closePath();
+      g.fill();
+      // entrada escura da tenda
+      var kx = cx + cw * 0.5, ky = base - r() * 20;
+      var kg = g.createRadialGradient(kx, ky - 40, 3, kx, ky - 40, 50);
       kg.addColorStop(0, 'rgba(6,2,12,0.9)');
       kg.addColorStop(0.6, 'rgba(12,5,20,0.6)');
       kg.addColorStop(1, 'rgba(12,5,20,0)');
       g.fillStyle = kg;
       g.beginPath();
-      g.ellipse(kx, ky, 34, 46, 0, 0, Math.PI * 2);
+      g.ellipse(kx, ky - 40, 26, 46, 0, 0, Math.PI * 2);
       g.fill();
     }
 
-    // dois cordões de morros por cima dos paredões
-    g.fillStyle = 'rgba(52,26,74,0.85)';
+    // dois cordões de morros mortiços por trás das tendas
+    g.fillStyle = 'rgba(30,42,26,0.85)';
     hillBand(g, r, base - 210, 90, 5);
-    g.fillStyle = 'rgba(38,17,58,0.95)';
+    g.fillStyle = 'rgba(20,30,18,0.95)';
     hillBand(g, r, base - 130, 70, 6);
 
-    // árvores retorcidas
-    g.strokeStyle = '#221034';
-    g.fillStyle = '#221034';
+    // árvores retorcidas e mortas
+    g.strokeStyle = '#151c14';
+    g.fillStyle = '#151c14';
     for (var i = 0; i < 11; i++) {
       var tx = 60 + i * 215 + r() * 90;
       var th = 150 + r() * 130;
@@ -646,17 +688,18 @@ window.FG = window.FG || {};
         g.moveTo(bx, by);
         g.quadraticCurveTo(bx + dir * 40, by - 18, bx + dir * (55 + r() * 30), by - 40 - r() * 25);
         g.stroke();
-      }
-      for (var cc = 0; cc < 3; cc++) {
+        // galhos secundários, sem folhagem — árvore morta, só osso
+        g.lineWidth = 2.5 + r() * 2;
         g.beginPath();
-        g.arc(tx + sway * 0.7 + (r() * 2 - 1) * 34, ty - th - r() * 26, 24 + r() * 22, 0, Math.PI * 2);
-        g.fill();
+        g.moveTo(bx + dir * (55 + r() * 30), by - 40 - r() * 25);
+        g.quadraticCurveTo(bx + dir * (65 + r() * 20), by - 55, bx + dir * (85 + r() * 20), by - 60 - r() * 18);
+        g.stroke();
       }
     }
-    // névoa quente rente ao chão
+    // névoa fria e doentia rente ao chão
     var gr = g.createLinearGradient(0, base - 90, 0, base);
-    gr.addColorStop(0, 'rgba(230,140,80,0)');
-    gr.addColorStop(1, 'rgba(230,140,80,0.22)');
+    gr.addColorStop(0, 'rgba(120,180,120,0)');
+    gr.addColorStop(1, 'rgba(120,180,120,0.22)');
     g.fillStyle = gr;
     g.fillRect(0, base - 90, 2400, 90);
   }
@@ -675,102 +718,105 @@ window.FG = window.FG || {};
     g.fill();
   }
 
-  // --- camada média: torres de pedra e cogumelos gigantes (só decoração) ---
+  // --- camada média: mastros de tenda listrados e postes de luz tortos
+  // (só decoração) ---
   function paintMid(g) {
     var r = makeRand(202);
     var base = LAYER_H;
-    g.fillStyle = 'rgba(49,32,62,0.9)';
+    g.fillStyle = 'rgba(30,24,34,0.9)';
     g.fillRect(0, base - 56, 2400, 56);
 
-    // torres de pedra em camadas, com fenda escura no meio
+    // mastros de tenda listrados vermelho/branco, com bandeirola no topo
     for (var s = 0; s < 4; s++) {
       var sx = 200 + s * 620 + r() * 110;
-      var sw = 90 + r() * 70, sh = 210 + r() * 150;
-      g.fillStyle = '#3c2a4c';
+      var sw = 22 + r() * 8, sh = 210 + r() * 150;
+      var top = base - sh;
+      g.fillStyle = '#2a2020';
+      g.fillRect(sx, top, sw, sh);
+      // listras
+      g.fillStyle = 'rgba(140,30,30,0.6)';
+      for (var ly = top; ly < base; ly += 26) {
+        g.fillRect(sx, ly, sw, 13);
+      }
+      g.fillStyle = 'rgba(255,255,255,0.1)';
+      g.fillRect(sx + 2, top, 3, sh);
+      // bandeirola torta
+      g.strokeStyle = 'rgba(20,8,10,0.7)';
+      g.lineWidth = 2;
       g.beginPath();
-      g.moveTo(sx, base);
-      g.lineTo(sx + 8, base - sh + 20);
-      g.quadraticCurveTo(sx + sw * 0.5, base - sh - 16, sx + sw - 8, base - sh + 24);
-      g.lineTo(sx + sw, base);
+      g.moveTo(sx + sw / 2, top);
+      g.lineTo(sx + sw / 2 + 6, top - 26);
+      g.stroke();
+      g.fillStyle = 'rgba(140,30,30,0.85)';
+      g.beginPath();
+      g.moveTo(sx + sw / 2 + 6, top - 26);
+      g.lineTo(sx + sw / 2 + 30, top - 18);
+      g.lineTo(sx + sw / 2 + 6, top - 10);
       g.closePath();
       g.fill();
-      g.strokeStyle = 'rgba(22,12,34,0.6)';
-      g.lineWidth = 3;
-      for (var ly = base - sh + 46; ly < base - 20; ly += 30 + r() * 18) {
-        g.beginPath();
-        g.moveTo(sx + 5, ly);
-        g.quadraticCurveTo(sx + sw * 0.5, ly + (r() * 2 - 1) * 8, sx + sw - 5, ly + (r() * 2 - 1) * 6);
-        g.stroke();
-      }
-      g.fillStyle = 'rgba(255,170,95,0.16)';    // aresta com o sol batendo
-      g.fillRect(sx + 6, base - sh + 22, 5, sh - 30);
-      // fenda / boca de caverna
-      g.fillStyle = 'rgba(8,3,14,0.75)';
+      // fenda escura de tenda ao pé do mastro
+      g.fillStyle = 'rgba(8,3,6,0.75)';
       g.beginPath();
       g.ellipse(sx + sw * 0.5, base - sh * 0.42, 13 + r() * 8, 26 + r() * 16, 0, 0, Math.PI * 2);
       g.fill();
     }
 
-    // cogumelos gigantes — DECORAÇÃO de fundo, nunca plataforma
+    // postes de luz tortos, lâmpada apagando/piscando — DECORAÇÃO de fundo
     for (var i = 0; i < 7; i++) {
       var mx = 120 + i * 335 + r() * 100;
-      var mh = 190 + r() * 140;
-      var capW = 110 + r() * 70, capH = 46 + r() * 26;
+      var mh = 190 + r() * 90;
       var top = base - mh;
-      g.fillStyle = '#41284e';
+      var lean = (r() * 2 - 1) * 18;
+      g.strokeStyle = '#241c22';
+      g.lineWidth = 8;
+      g.lineCap = 'round';
       g.beginPath();
-      g.moveTo(mx - 16, base);
-      g.quadraticCurveTo(mx - 10, top + capH, mx - 12, top + capH * 0.7);
-      g.lineTo(mx + 12, top + capH * 0.7);
-      g.quadraticCurveTo(mx + 10, top + capH, mx + 20, base);
-      g.closePath();
-      g.fill();
-      g.fillStyle = '#54305e';
-      g.beginPath();
-      g.ellipse(mx, top + capH, capW, capH, 0, Math.PI, Math.PI * 2);
-      g.closePath();
-      g.fill();
-      g.strokeStyle = 'rgba(255,165,90,0.35)';
-      g.lineWidth = 3;
-      g.beginPath();
-      g.ellipse(mx, top + capH, capW - 2, capH - 2, 0, Math.PI * 1.05, Math.PI * 1.6);
+      g.moveTo(mx, base);
+      g.quadraticCurveTo(mx + lean * 0.5, base - mh * 0.5, mx + lean, top);
       g.stroke();
-      g.fillStyle = 'rgba(220,190,230,0.28)';
-      for (var d = 0; d < 4; d++) {
-        g.beginPath();
-        g.arc(mx - capW * 0.6 + r() * capW * 1.2, top + capH * 0.45 - r() * capH * 0.3, 4 + r() * 6, 0, Math.PI * 2);
-        g.fill();
-      }
+      g.strokeStyle = '#241c22';
+      g.lineWidth = 6;
+      g.beginPath();
+      g.moveTo(mx + lean, top);
+      g.lineTo(mx + lean + 26, top - 14);
+      g.stroke();
+      // globo da lâmpada, quase apagado
+      g.fillStyle = 'rgba(150,190,110,0.22)';
+      g.beginPath();
+      g.arc(mx + lean + 30, top - 18, 10, 0, Math.PI * 2);
+      g.fill();
     }
-    // troncos nus entre os cogumelos
-    g.fillStyle = '#3a2348';
+    // arbustos retorcidos e ressecados entre os mastros
+    g.strokeStyle = '#1c241a';
+    g.fillStyle = '#1c241a';
     for (var t2 = 0; t2 < 4; t2++) {
       var tx = 260 + t2 * 580 + r() * 120;
       g.beginPath();
       g.moveTo(tx - 12, base);
-      g.quadraticCurveTo(tx - 4, base - 190, tx + (r() * 2 - 1) * 30 - 6, base - 300);
-      g.lineTo(tx + (r() * 2 - 1) * 30 + 8, base - 300);
-      g.quadraticCurveTo(tx + 8, base - 180, tx + 16, base);
+      g.quadraticCurveTo(tx - 4, base - 130, tx + (r() * 2 - 1) * 26 - 6, base - 190);
+      g.lineTo(tx + (r() * 2 - 1) * 26 + 8, base - 190);
+      g.quadraticCurveTo(tx + 8, base - 120, tx + 16, base);
       g.closePath();
       g.fill();
     }
   }
 
-  // --- névoa entre os níveis: duas faixas quentes que separam os patamares ---
+  // --- névoa entre os níveis: duas faixas frias e densas que separam os
+  // patamares — o mofo do parque abandonado ---
   function paintMist(g) {
     var r = makeRand(505);
     var base = LAYER_H;
     var bands = [base - 380, base - 170];
     for (var i = 0; i < bands.length; i++) {
-      var by = bands[i], bh = 90 + i * 40;
+      var by = bands[i], bh = 100 + i * 44;
       var gr = g.createLinearGradient(0, by - bh * 0.5, 0, by + bh * 0.5);
-      gr.addColorStop(0, 'rgba(226,150,110,0)');
-      gr.addColorStop(0.5, 'rgba(226,150,110,' + (0.16 + i * 0.06).toFixed(2) + ')');
-      gr.addColorStop(1, 'rgba(226,150,110,0)');
+      gr.addColorStop(0, 'rgba(120,150,110,0)');
+      gr.addColorStop(0.5, 'rgba(120,150,110,' + (0.22 + i * 0.07).toFixed(2) + ')');
+      gr.addColorStop(1, 'rgba(120,150,110,0)');
       g.fillStyle = gr;
       g.fillRect(0, by - bh * 0.5, 1600, bh);
       // bolsões mais densos, para a faixa não parecer uma régua
-      g.fillStyle = 'rgba(240,170,125,0.10)';
+      g.fillStyle = 'rgba(150,190,140,0.13)';
       for (var k = 0; k < 9; k++) {
         var px = r() * 1600, pw = 90 + r() * 190, ph = 20 + r() * 34;
         g.beginPath();
@@ -780,13 +826,13 @@ window.FG = window.FG || {};
     }
   }
 
-  // --- camada próxima: arbustos e samambaias ---
+  // --- camada próxima: arbustos secos e cercas quebradas do parque ---
   function paintNear(g) {
     var r = makeRand(303);
     var base = LAYER_H;
-    g.fillStyle = '#132917';
+    g.fillStyle = '#131c13';
     g.fillRect(0, base - 82, 2400, 82);
-    g.fillStyle = '#16301c';
+    g.fillStyle = '#182418';
     for (var i = 0; i < 16; i++) {
       var bx = i * 150 + r() * 80, by = base - 70 - r() * 30;
       for (var b = 0; b < 3; b++) {
@@ -795,22 +841,34 @@ window.FG = window.FG || {};
         g.fill();
       }
     }
-    g.strokeStyle = '#20421f';
+    // galhos secos espetados, sem folha — moitas mortas do parque
+    g.strokeStyle = '#242f20';
     g.lineCap = 'round';
     for (var f = 0; f < 14; f++) {
       var fx = 40 + f * 170 + r() * 90, fy = base - 24;
       var nfr = 4 + Math.floor(r() * 3);
       for (var k = 0; k < nfr; k++) {
         var dir = (k % 2 === 0 ? 1 : -1);
-        var len = 55 + r() * 55;
-        g.lineWidth = 3.5;
+        var len = 50 + r() * 50;
+        g.lineWidth = 3;
         g.beginPath();
         g.moveTo(fx, fy);
         g.quadraticCurveTo(fx + dir * len * 0.35, fy - len, fx + dir * len, fy - len * 0.55);
         g.stroke();
       }
     }
-    g.strokeStyle = 'rgba(70,120,60,0.8)';
+    // cerca de estacas tortas quebrando o horizonte, de vez em quando
+    g.strokeStyle = 'rgba(60,50,44,0.7)';
+    g.lineWidth = 5;
+    for (var s3 = 0; s3 < 6; s3++) {
+      var px2 = 90 + s3 * 380 + r() * 120, ph2 = 30 + r() * 18;
+      var tilt = (r() * 2 - 1) * 8;
+      g.beginPath();
+      g.moveTo(px2, base - 4);
+      g.lineTo(px2 + tilt, base - 4 - ph2);
+      g.stroke();
+    }
+    g.strokeStyle = 'rgba(70,90,60,0.55)';
     g.lineWidth = 2;
     for (var s2 = 0; s2 < 40; s2++) {
       var gx = r() * 2400, gy = base - 6;
@@ -821,11 +879,12 @@ window.FG = window.FG || {};
     }
   }
 
-  // --- primeiro plano: folhagem escura embaixo + pendentes no alto ---
+  // --- primeiro plano: silhuetas escuras embaixo + galhos retorcidos e
+  // teias de aranha penduradas no alto ---
   function paintFront(g) {
     var r = makeRand(404);
     var base = LAYER_H;
-    g.fillStyle = '#0a140c';
+    g.fillStyle = '#050a06';
     for (var i = 0; i < 22; i++) {
       var lx = i * 85 + r() * 50, lh = 70 + r() * 110;
       var lean = (r() * 2 - 1) * 40;
@@ -836,10 +895,10 @@ window.FG = window.FG || {};
       g.closePath();
       g.fill();
     }
-    g.fillStyle = '#0d1a10';
+    g.fillStyle = '#08100a';
     g.fillRect(0, base - 34, 1800, 34);
-    g.strokeStyle = '#0b150d';
-    g.fillStyle = '#0b150d';
+    g.strokeStyle = '#060c07';
+    g.fillStyle = '#060c07';
     g.lineCap = 'round';
     for (var h2 = 0; h2 < 3; h2++) {
       var hx = 220 + h2 * 620 + r() * 140;
@@ -855,9 +914,27 @@ window.FG = window.FG || {};
         g.moveTo(vx, vy);
         g.quadraticCurveTo(vx + 6, vy + 26, vx - 4, vy + 44 + r() * 22);
         g.stroke();
+      }
+      // teia de aranha entre dois pontos do galho
+      g.strokeStyle = 'rgba(210,220,210,0.28)';
+      g.lineWidth = 1.4;
+      var wcx = hx + 40, wcy = 176, wr = 34;
+      for (var sp = 0; sp < 6; sp++) {
+        var ang = (sp / 6) * Math.PI * 2;
         g.beginPath();
-        g.ellipse(vx - 4, vy + 50 + r() * 18, 6, 11, 0.4, 0, Math.PI * 2);
-        g.fill();
+        g.moveTo(wcx, wcy);
+        g.lineTo(wcx + Math.cos(ang) * wr, wcy + Math.sin(ang) * wr);
+        g.stroke();
+      }
+      for (var ring = 1; ring <= 2; ring++) {
+        g.beginPath();
+        for (var sp2 = 0; sp2 <= 6; sp2++) {
+          var ang2 = (sp2 / 6) * Math.PI * 2;
+          var rr = wr * (ring / 2.4);
+          var px3 = wcx + Math.cos(ang2) * rr, py3 = wcy + Math.sin(ang2) * rr;
+          if (sp2 === 0) g.moveTo(px3, py3); else g.lineTo(px3, py3);
+        }
+        g.stroke();
       }
     }
   }
@@ -884,7 +961,7 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // UPDATE — coleta de lumis e faíscas (a mecânica é do kit; o bosque não
+  // UPDATE — coleta de lumis e faíscas (a mecânica é do kit; o parque não
   // tem coletável próprio além das lumis)
   // ---------------------------------------------------------------
   function update(dt) {
@@ -892,7 +969,8 @@ window.FG = window.FG || {};
   }
 
   // ---------------------------------------------------------------
-  // DRAW BACK — céu, sol, camadas de parallax, névoa, raios, vagalumes
+  // DRAW BACK — céu, lua, camadas de parallax, névoa, raios, faíscas de
+  // abóbora flutuando (no lugar dos antigos vagalumes)
   // ---------------------------------------------------------------
   function drawBack(ctx, cam) {
     buildAll();
@@ -900,13 +978,13 @@ window.FG = window.FG || {};
 
     ctx.drawImage(skySpr, 0, 0);
 
-    // sol difuso, quase fixo no céu
+    // lua difusa, quase fixa no céu
     var sx = 700 - cam.x * 0.04, sy = 150 - cam.y * 0.06;
     ctx.drawImage(sunSpr, sx - 140, sy - 140);
 
     drawLayer(ctx, farL, 0.2, cam);
 
-    // raios de luz pulsando devagar
+    // feixes de luz coados pela névoa, pulsando devagar
     ctx.save();
     ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 0.6);
     drawLayer(ctx, raysL, 0.3, cam);
@@ -914,18 +992,19 @@ window.FG = window.FG || {};
 
     drawLayer(ctx, midL, 0.45, cam);
 
-    // vagalumes em senoide
+    // faíscas de abóbora flutuando (chama de vela tremeluzindo, não vaga-lume)
     ctx.save();
     for (var i = 0; i < 20; i++) {
       var fx = (((i * 397 + Math.sin(t * 0.3 + i) * 40) - cam.x * 0.55) % 1040 + 1040) % 1040 - 40;
       var fy = 90 + (i * 211) % 330 + Math.sin(t * 0.9 + i * 1.7) * 22 - cam.y * 0.5;
-      var a = 0.3 + 0.28 * Math.sin(t * 2.1 + i * 2.3);
+      var flicker = Math.sin(t * 9 + i * 3.1) * 0.5 + 0.5;
+      var a = (0.28 + 0.26 * Math.sin(t * 2.1 + i * 2.3)) * (0.6 + 0.4 * flicker);
       if (a <= 0.05) continue;
       ctx.globalAlpha = a * 0.4;
-      ctx.fillStyle = '#ffd870';
+      ctx.fillStyle = '#ff9a2e';
       ctx.beginPath(); ctx.arc(fx, fy, 5, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = a;
-      ctx.fillStyle = '#fff0b8';
+      ctx.fillStyle = '#ffe07a';
       ctx.beginPath(); ctx.arc(fx, fy, 1.8, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -995,31 +1074,31 @@ window.FG = window.FG || {};
   function drawCliff(ctx, s, d) { ctx.drawImage(d.spr, s.x + d.ox, s.y + d.oy); }
   function drawIsland(ctx, s, d) { ctx.drawImage(d.spr, s.x + d.ox, s.y + d.oy); }
 
-  // --- plataforma de terra com topo de musgo ---
+  // --- plataforma de terra com topo de musgo doentio ---
   function drawTerrain(ctx, s, d) {
-    ctx.fillStyle = '#4a2e1c';
+    ctx.fillStyle = '#2c241a';
     ctx.fillRect(s.x, s.y, s.w, s.h);
     if (s.h > 20) {
-      ctx.fillStyle = 'rgba(20,10,6,0.35)';
+      ctx.fillStyle = 'rgba(8,6,4,0.4)';
       ctx.fillRect(s.x, s.y + s.h - 10, s.w, 10);
     }
-    ctx.fillStyle = 'rgba(30,16,10,0.5)';
+    ctx.fillStyle = 'rgba(14,10,6,0.55)';
     for (var i = 0; i < d.spots.length; i++) {
       var sp = d.spots[i];
       ctx.beginPath();
       ctx.ellipse(s.x + sp.dx, s.y + sp.dy, sp.rad * 1.6, sp.rad, 0.3, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = '#3f7a2e';
+    ctx.fillStyle = '#3a4a22';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 14);
-    ctx.fillStyle = '#6fb84a';
+    ctx.fillStyle = '#5a7a2e';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 7);
-    ctx.fillStyle = 'rgba(255,220,140,0.3)';
+    ctx.fillStyle = 'rgba(200,220,180,0.28)';
     ctx.fillRect(s.x - 3, s.y - 2, s.w + 6, 2);
-    ctx.fillStyle = '#3f7a2e';
+    ctx.fillStyle = '#3a4a22';
     ctx.beginPath(); ctx.arc(s.x - 1, s.y + 15, 4, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(s.x + s.w + 1, s.y + 17, 4.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#7cc850';
+    ctx.strokeStyle = '#6a8a3a';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     for (var j = 0; j < d.tufts.length; j++) {
@@ -1032,9 +1111,9 @@ window.FG = window.FG || {};
     }
   }
 
-  // --- pedra ---
+  // --- pedra escura ---
   function drawRock(ctx, s, d) {
-    ctx.fillStyle = '#5d5348';
+    ctx.fillStyle = '#33362e';
     ctx.beginPath();
     ctx.moveTo(s.x, s.y + s.h);
     ctx.lineTo(s.x + 4, s.y + 6);
@@ -1042,9 +1121,9 @@ window.FG = window.FG || {};
     ctx.lineTo(s.x + s.w, s.y + s.h);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,220,150,0.18)';
+    ctx.fillStyle = 'rgba(160,200,130,0.14)';
     ctx.fillRect(s.x + 4, s.y + 2, s.w - 8, 4);
-    ctx.fillStyle = 'rgba(20,15,10,0.4)';
+    ctx.fillStyle = 'rgba(6,5,4,0.5)';
     for (var i = 0; i < d.spots.length; i++) {
       var sp = d.spots[i];
       ctx.beginPath();
@@ -1053,15 +1132,15 @@ window.FG = window.FG || {};
     }
   }
 
-  // --- poça venenosa com bolhas ---
+  // --- poça de lodo/óleo do parque abandonado, com bolhas ---
   function drawPool(ctx, hz, t) {
     var bot = hz.y + hz.h + 22;
-    ctx.fillStyle = '#0f3d14';
+    ctx.fillStyle = '#100e0a';
     ctx.fillRect(hz.x, hz.y, hz.w, bot - hz.y);
-    ctx.fillStyle = 'rgba(60,150,40,0.5)';
+    ctx.fillStyle = 'rgba(70,60,30,0.5)';
     ctx.fillRect(hz.x, hz.y, hz.w, 10);
     ctx.save();
-    ctx.strokeStyle = '#8fe64a';
+    ctx.strokeStyle = '#5a6e34';
     ctx.lineWidth = 3;
     ctx.beginPath();
     var step = 18;
@@ -1069,86 +1148,151 @@ window.FG = window.FG || {};
     for (var x = hz.x + step; x <= hz.x + hz.w; x += step) {
       ctx.lineTo(x, hz.y + Math.sin(t * 2 + x * 0.05) * 2.4);
     }
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = 0.7;
     ctx.stroke();
     ctx.restore();
+    // manchas de óleo iridescente boiando
     ctx.save();
-    ctx.fillStyle = '#a8f060';
+    ctx.globalAlpha = 0.22;
+    for (var o = 0; o < 3; o++) {
+      var ox = hz.x + 14 + (o * 91 + Math.sin(t * 0.6 + o) * 10) % Math.max(1, hz.w - 28);
+      var og = ctx.createRadialGradient(ox, hz.y + 5, 1, ox, hz.y + 5, 22);
+      og.addColorStop(0, 'rgba(140,110,190,0.5)');
+      og.addColorStop(0.5, 'rgba(90,150,120,0.35)');
+      og.addColorStop(1, 'rgba(90,150,120,0)');
+      ctx.fillStyle = og;
+      ctx.beginPath();
+      ctx.ellipse(ox, hz.y + 5, 22, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = '#6a7a3a';
     var nb = Math.max(2, Math.floor(hz.w / 70));
     for (var i = 0; i < nb; i++) {
       var bx = hz.x + 12 + (i * 83) % (hz.w - 24);
       var per = (t * 0.45 + i * 0.37) % 1;
       var by = bot - 4 - per * (bot - hz.y - 6);
-      ctx.globalAlpha = 0.65 * (1 - per);
+      ctx.globalAlpha = 0.6 * (1 - per);
       ctx.beginPath();
       ctx.arc(bx, by, 2 + (i % 3), 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 2.4 + hz.x);
-    ctx.fillStyle = '#5fd63a';
+    ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 2.4 + hz.x);
+    ctx.fillStyle = '#4a5a28';
     ctx.fillRect(hz.x, hz.y - 3, hz.w, 3);
     ctx.restore();
   }
 
-  // --- espinhos ---
+  // --- cerca de arame farpado (mesma hitbox/dimensão dos antigos espinhos) ---
   function drawSpikes(ctx, hz) {
-    var n = Math.max(3, Math.round(hz.w / 16));
+    var n = Math.max(3, Math.round(hz.w / 40));
     var sw = hz.w / n;
-    ctx.fillStyle = '#2a2118';
+    // dois mourões de madeira nas pontas + arames esticados
+    ctx.fillStyle = '#1c1712';
     ctx.fillRect(hz.x, hz.y + hz.h - 5, hz.w, 5);
-    for (var i = 0; i < n; i++) {
-      var bx = hz.x + i * sw;
-      ctx.fillStyle = '#cdbfae';
+    ctx.strokeStyle = '#3a3228';
+    ctx.lineWidth = 3;
+    for (var pxi = 0; pxi <= n; pxi++) {
+      var px = hz.x + pxi * sw;
       ctx.beginPath();
-      ctx.moveTo(bx, hz.y + hz.h);
-      ctx.lineTo(bx + sw / 2, hz.y);
-      ctx.lineTo(bx + sw, hz.y + hz.h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(60,45,35,0.55)';
+      ctx.moveTo(px, hz.y);
+      ctx.lineTo(px, hz.y + hz.h);
+      ctx.stroke();
+    }
+    // três arames horizontais farpados
+    ctx.strokeStyle = '#8a8a80';
+    ctx.lineWidth = 2;
+    for (var wy = 0; wy < 3; wy++) {
+      var ly = hz.y + 4 + wy * (hz.h - 8) / 2;
       ctx.beginPath();
-      ctx.moveTo(bx + sw / 2, hz.y);
-      ctx.lineTo(bx + sw, hz.y + hz.h);
-      ctx.lineTo(bx + sw / 2, hz.y + hz.h);
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(hz.x, ly + Math.sin(hz.x * 0.1 + wy) * 1.5);
+      for (var x2 = hz.x + 6; x2 <= hz.x + hz.w; x2 += 6) {
+        ctx.lineTo(x2, ly + Math.sin(x2 * 0.4 + wy) * 1.5);
+      }
+      ctx.stroke();
+      // farpas
+      ctx.strokeStyle = '#b8b8ae';
+      ctx.lineWidth = 1.4;
+      for (var fx = hz.x + 5; fx < hz.x + hz.w; fx += 13) {
+        ctx.beginPath();
+        ctx.moveTo(fx - 3, ly - 3); ctx.lineTo(fx + 3, ly + 3);
+        ctx.moveTo(fx - 3, ly + 3); ctx.lineTo(fx + 3, ly - 3);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#8a8a80';
     }
   }
 
-  // --- lanterna-checkpoint (acesa quando é o checkpoint atual) ---
+  // --- abóbora-lanterna (jack-o'-lantern) checkpoint (acesa quando é o
+  // checkpoint atual) — mesma assinatura de função que a antiga lanterna. ---
   function drawLantern(ctx, cp, lit, t) {
     var x = cp.x, y = cp.y;
-    ctx.fillStyle = '#3a2a1c';
-    ctx.fillRect(x - 3, y - 64, 6, 64);
-    ctx.fillStyle = '#2a1c12';
+    // estaca de madeira apoiando a abóbora
+    ctx.fillStyle = '#2a2018';
+    ctx.fillRect(x - 3, y - 40, 6, 40);
+    ctx.fillStyle = '#1c1610';
     ctx.fillRect(x - 8, y - 4, 16, 4);
-    ctx.fillStyle = '#2a1c12';
-    ctx.fillRect(x - 11, y - 92, 22, 30);
+    // corpo da abóbora
+    var pr = 18;
+    var pg = ctx.createRadialGradient(x - 5, y - 46, 3, x, y - 42, pr + 4);
+    if (lit) {
+      pg.addColorStop(0, '#ff9a2e');
+      pg.addColorStop(1, '#c85a10');
+    } else {
+      pg.addColorStop(0, '#5a4020');
+      pg.addColorStop(1, '#3a2a14');
+    }
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.ellipse(x, y - 42, pr, pr * 0.86, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // gomos da abóbora
+    ctx.strokeStyle = lit ? 'rgba(120,40,4,0.5)' : 'rgba(10,6,2,0.5)';
+    ctx.lineWidth = 1.6;
+    for (var gi = -1; gi <= 1; gi++) {
+      ctx.beginPath();
+      ctx.ellipse(x + gi * pr * 0.5, y - 42, pr * 0.32, pr * 0.86, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // cabinho verde torto
+    ctx.strokeStyle = '#3a4a1e';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 42 - pr * 0.86);
+    ctx.quadraticCurveTo(x + 4, y - 42 - pr * 0.86 - 8, x - 2, y - 42 - pr * 0.86 - 14);
+    ctx.stroke();
     if (lit) {
       var fl = 0.8 + 0.2 * Math.sin(t * 9 + Math.sin(t * 5.3));
       ctx.save();
-      ctx.shadowColor = '#ffb030';
+      ctx.shadowColor = '#ff9a2e';
       ctx.shadowBlur = 22 * fl;
-      ctx.fillStyle = '#ffd870';
-      ctx.fillRect(x - 8, y - 89, 16, 24);
-      ctx.restore();
-      ctx.fillStyle = '#fff2c0';
+      ctx.fillStyle = '#ffe07a';
+      // olhos e boca triangulares vazados, brilhando por dentro
       ctx.beginPath();
-      ctx.ellipse(x, y - 77, 3.4, 5.5 * fl, 0, 0, Math.PI * 2);
+      ctx.moveTo(x - 10, y - 48); ctx.lineTo(x - 4, y - 48); ctx.lineTo(x - 7, y - 41); ctx.closePath();
       ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y - 48); ctx.lineTo(x + 10, y - 48); ctx.lineTo(x + 7, y - 41); ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - 9, y - 34);
+      ctx.lineTo(x - 3, y - 38); ctx.lineTo(x, y - 34); ctx.lineTo(x + 3, y - 38);
+      ctx.lineTo(x + 9, y - 34); ctx.lineTo(x + 6, y - 30); ctx.lineTo(x - 6, y - 30);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     } else {
-      ctx.fillStyle = '#241f1a';
-      ctx.fillRect(x - 8, y - 89, 16, 24);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(x - 8, y - 89, 5, 24);
+      // rosto escuro, apagado
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y - 48); ctx.lineTo(x - 4, y - 48); ctx.lineTo(x - 7, y - 41); ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y - 48); ctx.lineTo(x + 10, y - 48); ctx.lineTo(x + 7, y - 41); ctx.closePath();
+      ctx.fill();
     }
-    ctx.fillStyle = '#1d130c';
-    ctx.beginPath();
-    ctx.moveTo(x - 14, y - 92);
-    ctx.lineTo(x, y - 102);
-    ctx.lineTo(x + 14, y - 92);
-    ctx.closePath();
-    ctx.fill();
   }
 
   // ---------------------------------------------------------------
@@ -1167,8 +1311,8 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   FG.levels = FG.levels || [];
   FG.levels.push({
-    id: 'bosque',
-    nome: 'O Bosque Crepuscular',
+    id: 'parque',
+    nome: 'Parque do Terror',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },
@@ -1177,7 +1321,7 @@ window.FG = window.FG || {};
     checkpoints: checkpoints,
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
-    bossId: 'dragao',
+    bossId: 'hugo',
     bossTriggerX: 6350,
     arena: { x: 6200, w: 1000 },
     reset: reset,

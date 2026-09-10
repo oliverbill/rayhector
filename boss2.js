@@ -1,6 +1,11 @@
 // Fagulho: Lendas do Bosque — boss2.js
-// Chefão da fase 2: O LODÃO. Sapo-lesma gigante de lodo, atolado na poça do
-// fundo da arena e virado para a esquerda (de onde o jogador chega).
+// Chefão da fase 2: SANDROLA BAFO DE SAPO. Bruxa do pântano meio-sapo,
+// atolada na poça do fundo da arena e virada para a esquerda (de onde o
+// jogador chega). Ela é o mesmo tipo de criatura que o antigo LODÃO — uma
+// cabeçorra na frente, um corpanzil/robe atrás, e uma bolsa de garganta
+// pendurada sob o queixo que é o ponto fraco — só reautorada: rosto de
+// bruxa loira com manchas de sapo, robe verde comprido no lugar do lodo
+// puro, punhos de manga azul-marinho.
 // A forma vem inteira do boss1.js — 8 de vida, 4 ataques ciclando, telegraph
 // longo em todos e uma janela de dano depois de CADA um. O que muda são os
 // ataques e o desenho: aqui não há sprite nenhum, tudo é canvas puro.
@@ -30,28 +35,30 @@ window.FG = window.FG || {};
   // é para cima. Sem sprite, sem matriz: um número aqui é o mesmo número no
   // desenho e na hitbox, e por isso caixa nenhuma escapa de debaixo do bicho.
   // ==================================================================
-  const BODY = { cx: 10, cy: -104, rx: 198, ry: 116 };   // corcova de lesma
-  const HEAD = { cx: -196, cy: -138, rx: 126, ry: 98 };  // cabeçorra de sapo
+  const BODY = { cx: 10, cy: -104, rx: 198, ry: 116 };   // robe/corpo de sapo-lesma
+  const HEAD = { cx: -196, cy: -138, rx: 126, ry: 98 };  // cabeça de bruxa-sapo
   const EYE_L = { cx: -258, cy: -226, r: 30 };           // olho da frente
   const EYE_R = { cx: -158, cy: -244, r: 32 };           // olho de trás
   const MOUTH = { x: -300, y: -74 };                     // canto da boca
 
-  // O ponto fraco: a papada sob o queixo. Na janela de dano ela incha de lodo
-  // e AFUNDA — é isso que a traz para a altura do soco. Os dois números abaixo
-  // são o coração do balanceamento e estão medidos, não chutados:
+  // O ponto fraco: a bolsa de garganta pendurada sob o queixo (o "bafo de
+  // sapo" que ela solta). Na janela de dano ela incha de veneno e AFUNDA — é
+  // isso que a traz para a altura do soco. Os dois números abaixo são o
+  // coração do balanceamento e estão medidos, não chutados — MANTIDOS iguais
+  // ao antigo LODÃO para não desbalancear a luta:
   //   centro a 100px do chão, caixa de 96 de altura  →  52..148 acima do chão.
   // O attackBox do player (34x30, no meio de um corpo de 44) cobre
   // [alturaDoPulo+7 .. alturaDoPulo+37] acima do chão, logo qualquer pulo
   // entre ~15px e ~141px acerta: o pulo simples é 118px e o pulo cortado no
   // primeiro frame é ~30px — os dois entram, que é o que o contrato exige.
   const PAPADA_X = -214;
-  const PAPADA_HIGH = 156;   // altura do centro com a papada recolhida
+  const PAPADA_HIGH = 156;   // altura do centro com a bolsa recolhida
   const PAPADA_LOW = 100;    // ... e com ela pendurada na janela de dano
   const WEAK_W = 104, WEAK_H = 96;
 
   // Massas que machucam no contato fora da janela. Repare que a caixa da
   // cabeça começa 60px acima do chão: o vão debaixo do queixo é de propósito,
-  // é onde o jogador se planta para socar a papada.
+  // é onde o jogador se planta para socar a bolsa de garganta.
   const HEAD_HULL = { x: -322, y: -246, w: 252, h: 186 };
   const BODY_HULL = { x: -170, y: -220, w: 380, h: 220 };
 
@@ -59,7 +66,7 @@ window.FG = window.FG || {};
   const TONGUE_Y = 38;
   const TONGUE_REACH = 780;  // atravessa a arena inteira até o lado do jogador
 
-  // ---------- pools do LODÃO (jorros, poças, bolhas, ondas) ----------
+  // ---------- pools da SANDROLA (jorros, poças, bolhas, ondas) ----------
   // Pré-alocadas: nada de `new` por frame, e o reset() apaga todas — senão
   // sobra jorro do pântano em cena quando a fase troca.
   const MAXSPIT = 6;
@@ -102,8 +109,8 @@ window.FG = window.FG || {};
 
   const boss = {
     // --- identidade (o engine lê o nome para a barra de vida) ---
-    id: 'lodo',
-    nome: 'O LODÃO',
+    id: 'sandrola',
+    nome: 'SANDROLA BAFO DE SAPO',
 
     // --- contrato lido pelo engine ---
     started: false,
@@ -113,23 +120,23 @@ window.FG = window.FG || {};
     maxHp: 8,
 
     // --- geometria (resolvida em runtime, no start/reset) ---
-    homeX: 0,        // o atoleiro dele, no fundo da arena
+    homeX: 0,        // o atoleiro dela, no fundo da arena
     x: 0,            // posição atual
     groundY: 0,      // chão da arena
-    bodyY: 0,        // linha do corpo = groundY - hop (sobe quando ele salta)
-    hop: 0,          // altura do salto do baque
+    bodyY: 0,        // linha do corpo = groundY - hop (sobe quando ela salta)
+    hop: 0,          // altura do salto do baque de cajado
     hopV: 0,
 
     // --- animação / telegraphs ---
-    sag: 0,          // 0..1 — papada pendurada (a janela de dano)
-    puff: 0,         // 0..1 — papada inflada (telegraph da língua)
-    charge: 0,       // 0..1 — goela acesa (telegraph da cusparada)
-    squash: 0,       // 0..1 — agachado (telegraph do baque)
+    sag: 0,          // 0..1 — bolsa de garganta pendurada (a janela de dano)
+    puff: 0,         // 0..1 — bolsa inflada (telegraph da língua)
+    charge: 0,       // 0..1 — goela acesa de veneno (telegraph do bafo)
+    squash: 0,       // 0..1 — agachada (telegraph do baque de cajado)
     glow: 0,         // brilho do ponto fraco na janela
     melt: 0,         // 0..1 — derretimento da morte
 
     // --- máquina de estados ---
-    state: 'dormant', // dormant|intro|idle|cusparada|lingua|baque|bolhas|exposto|dying
+    state: 'dormant', // dormant|intro|idle|bafo|lingua|baque|bolhas|exposto|dying
     phase: 0,
     timer: 0,
     attackIndex: 0,
@@ -144,7 +151,7 @@ window.FG = window.FG || {};
     weakBox: { x: 0, y: 0, w: 0, h: 0 },
 
     start() {
-      // Coaxo de intro + música do boss; 1.2s antes do primeiro ataque.
+      // Coaxo-cacarejo de intro + música do boss; 1.2s antes do primeiro ataque.
       if (this.started) return;
       this.started = true;
       this.resolveGeometry();
@@ -157,9 +164,9 @@ window.FG = window.FG || {};
     resolveGeometry() {
       const a = FG.level.arena;
       this.groundY = groundYAt(a.x + a.w * 0.75, 300);
-      // Atolado no fundo: o eixo dele fica a 230px da parede direita, o que
-      // deixa a papada por volta de x-214 e a metade esquerda da arena livre
-      // para o jogador desviar.
+      // Atolada no fundo: o eixo dela fica a 230px da parede direita, o que
+      // deixa a bolsa de garganta por volta de x-214 e a metade esquerda da
+      // arena livre para o jogador desviar.
       this.homeX = a.x + a.w - 230;
       this.x = this.homeX;
       this.bodyY = this.groundY;
@@ -198,8 +205,9 @@ window.FG = window.FG || {};
 
     isPhase2() { return this.hp <= 3; },
 
-    // Fim de ataque: ele arqueja, a papada incha de lodo e desce até a altura
-    // do soco. Vem depois de TODOS os ataques — é o que dá ritmo à luta.
+    // Fim de ataque: ela arqueja, a bolsa de garganta incha de veneno e desce
+    // até a altura do soco. Vem depois de TODOS os ataques — é o que dá ritmo
+    // à luta.
     expose(dur) {
       this.state = 'exposto';
       this.timer = dur;
@@ -222,7 +230,7 @@ window.FG = window.FG || {};
         this.timer = 0;
         tongue.active = false;
       } else {
-        // Recolhe a papada e volta a se acomodar no atoleiro
+        // Recolhe a bolsa de garganta e volta a se acomodar no atoleiro
         this.state = 'idle';
         this.timer = this.isPhase2() ? 1.0 : 1.4;
         this.sag = 0;
@@ -230,8 +238,8 @@ window.FG = window.FG || {};
     },
 
     // Núcleo da máquina de estados. Fica separado do `update` público porque
-    // está cheio de `return` antecipado — e os jorros e bolhas do LODÃO têm de
-    // continuar a andar mesmo nos frames em que o corpo dele não faz nada.
+    // está cheio de `return` antecipado — e os jorros e bolhas da SANDROLA têm
+    // de continuar a andar mesmo nos frames em que o corpo dela não faz nada.
     step(dt) {
       const p = FG.player;
       const ov = FG.engine.rectsOverlap;
@@ -246,7 +254,7 @@ window.FG = window.FG || {};
         this.sag = Math.min(1, this.sag + dt * 2);
         this.puff = Math.max(0, this.puff - dt);
         this.bodyY = this.groundY;
-        // lodo espirrando enquanto o bicho desmancha
+        // lodo do robe espirrando enquanto ela desmancha
         if (Math.random() < 0.6) {
           spawnParticle(this.x + rand(-260, 180), this.groundY - rand(0, 200),
             rand(-140, 140), rand(-280, -60), 0.8, 4 + Math.random() * 5, '#9fbf3a', 340);
@@ -264,7 +272,7 @@ window.FG = window.FG || {};
 
       // ---------- caixas vivas ----------
       // Calculadas antes de qualquer `return` para nunca ficarem velhas: o
-      // ponto fraco acompanha a papada, e a papada acompanha sag/salto.
+      // ponto fraco acompanha a bolsa de garganta, e ela acompanha sag/salto.
       this.bodyY = this.groundY - this.hop;
       localBox(HEAD_HULL, this.headBox);
       localBox(BODY_HULL, this.bodyBox);
@@ -277,7 +285,7 @@ window.FG = window.FG || {};
       // ---------- intro ----------
       if (this.state === 'intro') {
         this.timer -= dt;
-        this.charge = 0.5 + Math.sin(FG.engine.time * 8) * 0.2;  // coaxando
+        this.charge = 0.5 + Math.sin(FG.engine.time * 8) * 0.2;  // engasgando de veneno
         this.puff = 0.35 + Math.sin(FG.engine.time * 8) * 0.25;
         if (this.timer <= 0) {
           this.active = true;
@@ -296,7 +304,7 @@ window.FG = window.FG || {};
       this.timer -= dt;
 
       if (this.state === 'idle') {
-        // acomoda-se no atoleiro: papada recolhida, goela apagada
+        // acomoda-se no atoleiro: bolsa recolhida, goela apagada
         this.charge += (0 - this.charge) * Math.min(1, dt * 5);
         this.puff += (0 - this.puff) * Math.min(1, dt * 5);
         this.squash += (0 - this.squash) * Math.min(1, dt * 6);
@@ -304,8 +312,8 @@ window.FG = window.FG || {};
         this.x += (this.homeX - this.x) * Math.min(1, dt * 4);
         this.glow = 0;
         if (this.timer <= 0) {
-          // A cusparada abre o ciclo: é o ataque mais legível dos quatro.
-          const attacks = ['cusparada', 'lingua', 'baque', 'bolhas'];
+          // O bafo venenoso abre o ciclo: é o ataque mais legível dos quatro.
+          const attacks = ['bafo', 'lingua', 'baque', 'bolhas'];
           this.state = attacks[this.attackIndex % 4];
           this.attackIndex++;
           this.phase = 0;
@@ -313,23 +321,24 @@ window.FG = window.FG || {};
         }
 
       } else if (this.state === 'exposto') {
-        // arquejando: a papada enche de lodo, desce e acende até levar o soco
+        // arquejando: a bolsa de garganta enche de veneno, desce e acende
+        // até levar o soco
         this.sag = Math.min(1, this.sag + dt * 5);
         this.charge += (0 - this.charge) * Math.min(1, dt * 6);
         this.puff += (0 - this.puff) * Math.min(1, dt * 4);
         this.squash += (0 - this.squash) * Math.min(1, dt * 6);
         this.x += (this.homeX - this.x) * Math.min(1, dt * 3);
         this.glow = 0.6 + 0.4 * Math.sin(FG.engine.time * 12);
-        // gotas escorrendo da papada, para o alvo saltar aos olhos
+        // gotas escorrendo da bolsa, para o alvo saltar aos olhos
         if (Math.random() < 0.4) {
           spawnParticle(this.x + PAPADA_X + rand(-40, 40), this.weakBox.y + this.weakBox.h,
             rand(-20, 20), rand(20, 70), 0.5, 3.5, '#c8e86a', 500);
         }
-        // soco na papada
+        // soco na bolsa de garganta
         if (!this.stunHit && p.attackBox && p.attackBox.active && ov(p.attackBox, this.weakBox)) {
           this.takeHit();
         }
-        // pisão na papada (quica)
+        // pisão na bolsa de garganta (quica)
         else if (!this.stunHit && p.vy > 0 && ov(p, this.weakBox)) {
           p.vy = -420;
           this.takeHit();
@@ -340,11 +349,12 @@ window.FG = window.FG || {};
           this.glow = 0;
         }
 
-      } else if (this.state === 'cusparada') {
-        // ---- 1. CUSPARADA DE LODO ----
-        // Telegraph de 0.95s: recua a cabeça, a goela acende e ele engasga.
-        // Depois solta jorros em arco que deixam poça ácida onde caem — as
-        // poças ficam espaçadas de propósito, e o vão entre elas é a resposta.
+      } else if (this.state === 'bafo') {
+        // ---- 1. BAFO VENENOSO ----
+        // Telegraph de 0.95s: recua a cabeça, a goela acende e ela engasga.
+        // Depois solta jorros de bafo em arco que deixam poça ácida onde
+        // caem — as poças ficam espaçadas de propósito, e o vão entre elas
+        // é a resposta.
         if (this.phase === 0) {
           this.phase = 1;
           this.timer = 0.95;
@@ -378,9 +388,10 @@ window.FG = window.FG || {};
 
       } else if (this.state === 'lingua') {
         // ---- 2. LAMBADA DE LÍNGUA ----
-        // Telegraph de 0.95s: ele INCHA A PAPADA e treme. A língua sai reta e
-        // rasteira, e o topo dela fica a 38px do chão: qualquer pulo passa por
-        // cima, mas ficar parado no chão não passa.
+        // Telegraph de 0.95s: ela INCHA A BOLSA DE GARGANTA e treme. A
+        // língua de sapo sai reta e rasteira, e o topo dela fica a 38px do
+        // chão: qualquer pulo passa por cima, mas ficar parado no chão não
+        // passa.
         if (this.phase === 0) {
           this.phase = 1;
           this.timer = 0.95;
@@ -396,7 +407,7 @@ window.FG = window.FG || {};
             this.timer = 2.0;   // teto de segurança; quem manda é o tongue.len
           }
         } else if (this.phase === 2) {
-          // desenrola e recolhe; a papada esvazia junto com o disparo
+          // desenrola e recolhe; a bolsa de garganta esvazia junto com o disparo
           const outV = p2 ? 2500 : 2200;
           const inV = p2 ? 2200 : 2000;
           tongue.x = this.x + MOUTH.x;
@@ -426,9 +437,10 @@ window.FG = window.FG || {};
         }
 
       } else if (this.state === 'baque') {
-        // ---- 3. BAQUE ----
-        // Telegraph de 0.9s: AGACHA E TREME. Depois salta ~160px e cai; o
-        // impacto solta duas ondas rasteiras, uma para cada lado.
+        // ---- 3. BAQUE DE CAJADO ----
+        // Telegraph de 0.9s: AGACHA E TREME. Depois salta ~160px e cai
+        // batendo o corpo/cajado no chão; o impacto solta duas ondas
+        // rasteiras, uma para cada lado.
         if (this.phase === 0) {
           this.phase = 1;
           this.timer = 0.9;
@@ -454,7 +466,7 @@ window.FG = window.FG || {};
             this.hop = 0;
             this.hopV = 0;
             FG.audio.sfx('bossRoar');
-            // duas ondas, uma para cada lado, saindo de debaixo do corpanzil
+            // duas ondas, uma para cada lado, saindo de debaixo do robe
             const wv = p2 ? 340 : 300;
             for (let i = 0; i < 2; i++) {
               const w = waves[i];
@@ -501,7 +513,7 @@ window.FG = window.FG || {};
           this.phase = 1;
           this.timer = 0.9 + n * (p2 ? 0.22 : 0.30) + 0.7;
         } else if (this.phase === 1) {
-          // ele borbulha pela boca enquanto o pântano ferve
+          // ela borbulha pela boca enquanto o pântano ferve
           this.charge = 0.3 + 0.15 * Math.sin(FG.engine.time * 9);
           this.x = this.homeX + Math.sin(FG.engine.time * 12) * 2;
           if (this.timer <= 0) {
@@ -511,10 +523,10 @@ window.FG = window.FG || {};
         }
       }
 
-      // ---------- contato com o LODÃO ----------
-      // Encostar na cabeçorra ou no corpanzil machuca. Assim que a papada
-      // começa a descer (sag), tudo fica inofensivo: é justamente aí que o
-      // jogador precisa se plantar debaixo do queixo para socar.
+      // ---------- contato com a SANDROLA ----------
+      // Encostar na cabeça ou no robe/corpo machuca. Assim que a bolsa de
+      // garganta começa a descer (sag), tudo fica inofensivo: é justamente
+      // aí que o jogador precisa se plantar debaixo do queixo para socar.
       if (this.sag <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
         p.hurt(1, this.x - 100);
       }
@@ -524,7 +536,7 @@ window.FG = window.FG || {};
     update(dt) {
       this.step(dt);
       // Os perigos continuam vivos durante a morte: a bolha que já estava no
-      // ar não pode evaporar no frame em que o LODÃO desmancha.
+      // ar não pode evaporar no frame em que a SANDROLA desmancha.
       if (this.started || this.dead) updateBossStuff(dt);
     },
 
@@ -659,9 +671,10 @@ window.FG = window.FG || {};
   }
 
   // ==================================================================
-  // DESENHO — canvas puro, sem asset nenhum. O bicho é um monte de elipses
-  // de lodo: corcova de lesma atrás, cabeçorra de sapo à frente, a papada
-  // pendurada sob o queixo e dois olhos bulbosos em cima.
+  // DESENHO — canvas puro, sem asset nenhum. A bruxa é um monte de elipses:
+  // o robe verde comprido atrás (mesma silhueta do corpanzil de lesma que
+  // já era), a cabeça de pele de sapo com cabelo loiro solto à frente, a
+  // bolsa de garganta pendurada sob o queixo e dois olhos bulbosos em cima.
   // ==================================================================
   function drawBoss(ctx, cam) {
     const VIEW_W = FG.enemies.fx.VIEW_W;
@@ -691,13 +704,13 @@ window.FG = window.FG || {};
     const wide = 1 + 0.12 * boss.squash + 0.3 * melt;
 
     ctx.save();
-    // Nada do LODÃO passa da linha do lodo: ele está ATOLADO, e o que sobraria
-    // por baixo do chão fica escondido em vez de flutuar.
+    // Nada da SANDROLA passa da linha do lodo: ela está ATOLADA, e o que
+    // sobraria por baixo do chão fica escondido em vez de flutuar.
     ctx.beginPath();
     ctx.rect(-200, -1000, VIEW_W + 400, GY + 30 + 1000);
     ctx.clip();
 
-    // ---- o atoleiro: poça de lodo em que ele está enfiado ----
+    // ---- o atoleiro: poça de lodo em que ela está enfiada ----
     ctx.fillStyle = '#3b4416';
     ctx.beginPath();
     ctx.ellipse(X - 30, GY + 4, 300, 26, 0, 0, Math.PI * 2);
@@ -710,34 +723,105 @@ window.FG = window.FG || {};
     ctx.translate(X, BY);
     ctx.scale(wide, sqz);
 
-    const dark = p2 ? '#3c4c14' : '#4a5f22';
-    const mid = p2 ? '#6f8a26' : '#7d9331';
+    // robe: verde comprido fluindo pra baixo, mais escuro na fase 2
+    const robeDark = p2 ? '#294016' : '#33501e';
+    const robeMid = p2 ? '#4c7327' : '#5c8a34';
+    // pele de sapo do rosto: mais pálida e fria que o robe, para ler como pele
+    const skinDark = p2 ? '#4a6b3e' : '#587e4c';
+    const skinMid = p2 ? '#7ea468' : '#93bd7c';
     const lit = p2 ? '#a8c246' : '#9fb845';
 
-    // ---- corcova de lesma (o corpanzil atrás) ----
-    blob(ctx, BODY.cx, BODY.cy, BODY.rx, BODY.ry, dark, mid);
-    // verrugas do lombo
-    ctx.fillStyle = 'rgba(40,54,12,0.55)';
+    // ---- robe/corpo (o corpanzil atrás, virando poça de sapo-lesma embaixo) ----
+    blob(ctx, BODY.cx, BODY.cy, BODY.rx, BODY.ry, robeDark, robeMid);
+    // dobras do robe (onde antes eram verrugas do lombo)
+    ctx.strokeStyle = 'rgba(20,32,10,0.4)';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
     for (let i = 0; i < 6; i++) {
       const ang = -2.5 + i * 0.36;
+      const fx = BODY.cx + Math.cos(ang) * BODY.rx * 0.72;
+      const fy = BODY.cy + Math.sin(ang) * BODY.ry * 0.78;
       ctx.beginPath();
-      ctx.ellipse(BODY.cx + Math.cos(ang) * BODY.rx * 0.72,
-        BODY.cy + Math.sin(ang) * BODY.ry * 0.78, 13, 9, ang, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(fx, fy - 16);
+      ctx.quadraticCurveTo(fx + 4, fy, fx, fy + 16);
+      ctx.stroke();
+    }
+    // punhos de manga azul-marinho, saindo do robe como se os braços dela
+    // estivessem cruzados/apoiados no lodo — a última pincelada de bruxa
+    ctx.fillStyle = p2 ? '#131e38' : '#1b2a4a';
+    ctx.beginPath();
+    ctx.ellipse(BODY.cx - BODY.rx * 0.46, BODY.cy + BODY.ry * 0.5, 38, 22, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(BODY.cx + BODY.rx * 0.4, BODY.cy + BODY.ry * 0.62, 40, 24, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(140,164,220,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(BODY.cx - BODY.rx * 0.46 - 4, BODY.cy + BODY.ry * 0.5 - 6, 30, 8, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- cabelo loiro solto, atrás da cabeça ----
+    const hairLit = '#e8d27a', hairDark = '#b89a3e';
+    ctx.fillStyle = hairDark;
+    ctx.beginPath();
+    ctx.moveTo(HEAD.cx - HEAD.rx * 0.9, HEAD.cy - HEAD.ry * 0.3);
+    ctx.quadraticCurveTo(HEAD.cx - HEAD.rx * 1.5, HEAD.cy + HEAD.ry * 0.6,
+      HEAD.cx - HEAD.rx * 0.6, HEAD.cy + HEAD.ry * 1.7);
+    ctx.quadraticCurveTo(HEAD.cx - HEAD.rx * 0.2, HEAD.cy + HEAD.ry * 1.2,
+      HEAD.cx + HEAD.rx * 0.1, HEAD.cy + HEAD.ry * 1.5);
+    ctx.quadraticCurveTo(HEAD.cx + HEAD.rx * 0.5, HEAD.cy + HEAD.ry * 0.4,
+      HEAD.cx + HEAD.rx * 0.75, HEAD.cy - HEAD.ry * 0.5);
+    ctx.quadraticCurveTo(HEAD.cx + HEAD.rx * 0.2, HEAD.cy - HEAD.ry * 1.1,
+      HEAD.cx - HEAD.rx * 0.9, HEAD.cy - HEAD.ry * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = hairLit;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const a0 = -0.8 + i * 0.5;
+      const bx = HEAD.cx + Math.cos(a0) * HEAD.rx * 0.7;
+      const by = HEAD.cy + Math.sin(a0) * HEAD.ry * 0.9;
+      const sway = Math.sin(t * 1.4 + i) * 6;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx - 20 + sway, by + 60, bx - 10 + sway, by + 130 + i * 8);
+      ctx.stroke();
     }
 
-    // ---- cabeçorra ----
-    blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, dark, mid);
+    // ---- cabeça: base de pele de sapo (mesma silhueta da cabeçorra) ----
+    blob(ctx, HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, skinDark, skinMid);
+    // manchas/verrugas de sapo em grade, espalhadas pelo rosto
+    ctx.fillStyle = 'rgba(40,64,24,0.5)';
+    for (let gx = -2; gx <= 2; gx++) {
+      for (let gy = -1; gy <= 1; gy++) {
+        if ((gx + gy) % 2 === 0) continue;
+        const mx = HEAD.cx + gx * HEAD.rx * 0.34;
+        const my = HEAD.cy + gy * HEAD.ry * 0.4;
+        ctx.beginPath();
+        ctx.ellipse(mx, my, 11, 8, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // marca vermelha na bochecha/testa — a assinatura dela
+    ctx.fillStyle = p2 ? '#e0503a' : '#c8402c';
+    ctx.beginPath();
+    ctx.ellipse(HEAD.cx - HEAD.rx * 0.1, HEAD.cy - HEAD.ry * 0.55, 16, 22, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath();
+    ctx.ellipse(HEAD.cx - HEAD.rx * 0.1 - 4, HEAD.cy - HEAD.ry * 0.55 - 6, 6, 9, 0.15, 0, Math.PI * 2);
+    ctx.fill();
 
     // ---- boca larga, atravessando a frente da cabeça ----
-    ctx.strokeStyle = '#241a10';
+    ctx.strokeStyle = '#2a1830';
     ctx.lineWidth = 9;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(MOUTH.x, MOUTH.y);
     ctx.quadraticCurveTo(-220, MOUTH.y + 26, -110, MOUTH.y - 6);
     ctx.stroke();
-    // goela acesa: telegraph da cusparada e das bolhas
+    // goela acesa de veneno: telegraph do bafo e das bolhas
     if (boss.charge > 0.02) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -752,14 +836,14 @@ window.FG = window.FG || {};
       ctx.restore();
     }
 
-    // ---- papada: o ponto fraco ----
+    // ---- bolsa de garganta: o ponto fraco ----
     drawPapada(ctx, t, lit);
 
-    // ---- olhos bulbosos ----
+    // ---- olhos bulbosos de sapo ----
     drawEye(ctx, EYE_L, t, p2, 0);
     drawEye(ctx, EYE_R, t, p2, 1.7);
 
-    // ---- baba escorrendo do queixo e do lombo ----
+    // ---- baba/veneno escorrendo do queixo e da barra do robe ----
     ctx.fillStyle = 'rgba(200,235,120,0.4)';
     for (let i = 0; i < 5; i++) {
       const dx = -300 + i * 70;
@@ -803,8 +887,9 @@ window.FG = window.FG || {};
     ctx.fill();
   }
 
-  // A papada. Ela infla no telegraph da língua e AFUNDA na janela de dano —
-  // as duas coisas são o mesmo saco, e é isso que ensina o jogador onde bater.
+  // A bolsa de garganta. Ela infla no telegraph da língua e AFUNDA na janela
+  // de dano — as duas coisas são o mesmo saco, e é isso que ensina o jogador
+  // onde bater.
   function drawPapada(ctx, t, lit) {
     const cy = -(PAPADA_HIGH - (PAPADA_HIGH - PAPADA_LOW) * boss.sag);
     const rx = 56 + 16 * boss.puff + 10 * boss.sag;
@@ -851,7 +936,7 @@ window.FG = window.FG || {};
   }
 
   // Olho bulboso com pupila horizontal de sapo. Na fase 2 fica alaranjado —
-  // é o único aviso visual de que o bicho acelerou.
+  // é o único aviso visual de que ela acelerou.
   function drawEye(ctx, e, t, p2, off) {
     const blink = Math.sin(t * 0.8 + off) > 0.985 ? 0.15 : 1;
     ctx.fillStyle = '#5d7522';
@@ -1014,7 +1099,8 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // Única linha de load deste arquivo: entrega o LODÃO ao registro de chefões.
-  // Quem escolhe qual entra em cena é FG.enemies.reset(), pelo bossId da fase.
-  FG.enemies.registerBoss('lodo', boss);
+  // Única linha de load deste arquivo: entrega a SANDROLA ao registro de
+  // chefões. Quem escolhe qual entra em cena é FG.enemies.reset(), pelo
+  // bossId da fase.
+  FG.enemies.registerBoss('sandrola', boss);
 })();

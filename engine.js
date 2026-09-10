@@ -557,7 +557,7 @@ window.FG = window.FG || {};
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = '26px "Trebuchet MS", sans-serif';
-    ctx.fillText('bosque, pântano e vulcão — os três apagados', VIEW_W / 2, 270);
+    ctx.fillText('parque, pântano, mansão e coliseu — os quatro vencidos', VIEW_W / 2, 270);
     ctx.fillStyle = '#ffd870';
     ctx.fillText('lumis coletadas: ' + engine.lumis, VIEW_W / 2, 320);
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';

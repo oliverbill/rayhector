@@ -13,7 +13,7 @@ const DIR = path.join(__dirname, '..');
 // ainda não existem no disco são simplesmente puladas.
 const win = { FG: {} };
 const doc = { createElement: () => ({ getContext: () => ({}) }), getElementById: () => null };
-const ARQS = ['levelkit.js', 'level.js', 'level2.js', 'level3.js'];
+const ARQS = ['levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js'];
 for (const f of ARQS) {
   const p = path.join(DIR, f);
   if (!fs.existsSync(p)) continue;

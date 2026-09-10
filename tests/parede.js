@@ -50,8 +50,8 @@ global.window.FG = {};
 // parede sintética por cima da fase 0, então precisa dela publicada em
 // FG.level antes de mexer — quem publica normalmente é o engine, ao carregar
 // a fase, e aqui a partida ainda não começou.
-const CARGA = ['assets.js', 'audio.js', 'levelkit.js', 'level.js', 'level2.js', 'level3.js',
-  'obstacles.js', 'player.js', 'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'engine.js']
+const CARGA = ['assets.js', 'audio.js', 'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js',
+  'obstacles.js', 'player.js', 'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'engine.js']
   .filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of CARGA) {
   new Function('window', 'document', 'requestAnimationFrame', 'performance', 'FG', 'Image',
