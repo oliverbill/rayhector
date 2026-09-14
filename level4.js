@@ -859,6 +859,7 @@ window.FG = window.FG || {};
   FG.levels.push({
     id: 'coliseu',
     nome: 'O Coliseu',
+    musica: 'coliseu',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },

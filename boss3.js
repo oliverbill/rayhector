@@ -331,7 +331,9 @@ window.FG = window.FG || {};
       }
 
       const p2 = this.isPhase2();
-      const speedMul = p2 ? 0.85 : 1;   // fase 2: intervalos um pouco menores
+      // fase 2: intervalos bem mais curtos — era 0.85 (15%), a luta pedia um
+      // salto mais nítido no segundo tempo, ela é a última chefe do jogo
+      const speedMul = p2 ? 0.8 : 1;
       const a = FG.level.arena;
 
       this.timer -= dt;
@@ -386,9 +388,10 @@ window.FG = window.FG || {};
       // ================= 1. GIRO (rodopio de capa/morcegos) =================
       } else if (this.state === 'giro') {
         if (this.phase === 0) {
-          // telegraph: recolhe-se num rodopio e sibila
+          // telegraph: recolhe-se num rodopio e sibila — 0.9 -> 0.75, tell
+          // continua claro (o recolher em si já avisa), só menos tempo pra ler
           this.phase = 1;
-          this.timer = 0.9;
+          this.timer = 0.75;
           FG.audio.sfx('bossSpit');
         } else if (this.phase === 1) {
           this.curl = Math.min(1, this.curl + dt * 1.25);
@@ -404,19 +407,24 @@ window.FG = window.FG || {};
           if (this.timer <= 0) { this.curl = 0.7; this.phase = 2; this.timer = 0; }
         } else if (this.phase === 2) {
           // voa rasante atravessando a arena para a esquerda, garras à frente
-          this.x -= ROLL_SPEED * dt;
-          this.ballSpin -= (ROLL_SPEED / BALL_R) * dt;
+          // fase 2: ~11% mais rápida no próprio voo, não só no intervalo entre
+          // ataques — a passada em si fica mais dura de ler e de esquivar
+          const rollSpeed = p2 ? ROLL_SPEED * 1.1 : ROLL_SPEED;
+          this.x -= rollSpeed * dt;
+          this.ballSpin -= (rollSpeed / BALL_R) * dt;
           this.rollDust();
-          if (this.x <= Math.max(a.x + 80, this.homeX - ROLL_LEFT)) { this.phase = 3; this.timer = 0.22; }
+          if (this.x <= Math.max(a.x + 80, this.homeX - ROLL_LEFT)) { this.phase = 3; this.timer = 0.18; }
         } else if (this.phase === 3) {
           // bate, sibila e inverte — o intervalo é a brecha para respirar
+          // (0.22 -> 0.18: ainda dá pra reagir, só não sobra tempo de folga)
           this.rollDust();
           if (this.timer <= 0) { this.phase = 4; this.timer = 0; }
         } else if (this.phase === 4) {
-          this.x += ROLL_SPEED * dt;
-          this.ballSpin += (ROLL_SPEED / BALL_R) * dt;
+          const rollSpeed = p2 ? ROLL_SPEED * 1.1 : ROLL_SPEED;
+          this.x += rollSpeed * dt;
+          this.ballSpin += (rollSpeed / BALL_R) * dt;
           this.rollDust();
-          if (this.x >= this.homeX) { this.x = this.homeX; this.phase = 5; this.timer = 0.3; }
+          if (this.x >= this.homeX) { this.x = this.homeX; this.phase = 5; this.timer = 0.25; }
         } else if (this.phase === 5) {
           // desenrola e chega ofegante
           this.curl = Math.max(0, this.curl - dt * 3);
@@ -428,8 +436,9 @@ window.FG = window.FG || {};
       } else if (this.state === 'arremesso') {
         if (this.phase === 0) {
           // telegraph: agacha e arranca uma garra de sombra com a mão da frente
+          // (0.9 -> 0.75, mesmo corte dos outros ataques)
           this.phase = 1;
-          this.timer = 0.9;
+          this.timer = 0.75;
         } else if (this.phase === 1) {
           this.kneel = Math.min(0.35, this.kneel + dt * 1.2);   // agacha (sem expor)
           this.holdRock = Math.min(1, this.holdRock + dt * 1.6);
@@ -441,8 +450,10 @@ window.FG = window.FG || {};
               0.5, 3 + Math.random() * 3, '#3a0f18', 900);
           }
           if (this.timer <= 0) {
-            this.throwRock(p.x + p.w / 2);
-            if (p2) this.throwRock(p.x + p.w / 2 - 150);  // fase 2: duas garras
+            this.throwRock(p.x + p.w / 2, p2);
+            // fase 2: duas garras, e mais coladas uma na outra (era -150) —
+            // o vão pra passar entre as duas fica mais estreito
+            if (p2) this.throwRock(p.x + p.w / 2 - 120, p2);
             FG.audio.sfx('bossSpit');
             this.holdRock = 0;
             this.phase = 2;
@@ -458,9 +469,13 @@ window.FG = window.FG || {};
       } else if (this.state === 'fenda') {
         if (this.phase === 0) {
           // Espeta as duas garras no chão e as fendas acendem ANTES de abrir:
-          // cada jorro tem 0.9s de aviso, e elas marcham dela até o jogador.
-          const n = p2 ? 6 : 4;
-          const step = 140;
+          // cada jorro tem aviso (0.9 -> 0.75, mesmo corte dos telegraphs), e
+          // elas marcham dela até o jogador. Fase 2: mais fendas (6 -> 7) e
+          // mais coladas (step 140 -> 115) — o corredor seguro entre elas
+          // fica mais estreito, mas cada uma continua acendendo antes de abrir.
+          const n = p2 ? 7 : 4;
+          const step = p2 ? 115 : 140;
+          const warn = 0.75, gap = p2 ? 0.22 : 0.26;
           let spawned = 0;
           for (let i = 0; i < MAXFENDA && spawned < n; i++) {
             const j = fendas[i];
@@ -471,12 +486,12 @@ window.FG = window.FG || {};
             j.state = 'crack';
             j.x = jx;
             j.groundY = groundYAt(jx, 300);
-            j.timer = 0.9 + spawned * 0.26;
+            j.timer = warn + spawned * gap;
             j.h = 0;
             spawned++;
           }
           this.phase = 1;
-          this.timer = 0.9 + spawned * 0.26 + 0.45;
+          this.timer = warn + spawned * gap + 0.45;
           this.charge = 0.6;
         } else if (this.phase === 1) {
           this.kneel = Math.min(0.3, this.kneel + dt * 1.5);   // curvada, garras no chão
@@ -490,9 +505,9 @@ window.FG = window.FG || {};
       // ================= 4. GRITO (chandelier / gárgulas) =================
       } else if (this.state === 'grito') {
         if (this.phase === 0) {
-          // telegraph: ergue os dois braços por cima da cabeça
+          // telegraph: ergue os dois braços por cima da cabeça (0.85 -> 0.7)
           this.phase = 1;
-          this.timer = 0.85;
+          this.timer = 0.7;
         } else if (this.phase === 1) {
           this.armRaise = Math.min(1, this.armRaise + dt * 1.6);
           this.charge = Math.min(0.8, this.charge + dt * 1.0);
@@ -505,8 +520,11 @@ window.FG = window.FG || {};
               spawnParticle(this.x + rand(-90, 90), this.groundY, rand(-260, 260), rand(-320, -80),
                 0.6, 4 + Math.random() * 4, '#2a0f18', 900);
             }
-            // cacos: sombra no chão bem antes de cada um cair
-            const n = p2 ? 5 : 3;
+            // cacos: sombra no chão bem antes de cada um cair. Fase 2: mais
+            // cacos (5 -> 6) caindo mais colados (gap 0.2 -> 0.17) — a
+            // sombra ainda avisa cada um, só o teto fica mais cheio de vez.
+            const n = p2 ? 6 : 3;
+            const gap = p2 ? 0.17 : 0.2;
             let spawned = 0;
             for (let i = 0; i < MAXCACO && spawned < n; i++) {
               const s = cacos[i];
@@ -518,11 +536,11 @@ window.FG = window.FG || {};
               s.groundY = groundYAt(s.x + s.w / 2, 300);
               s.y = s.groundY - 520;
               s.vy = 0;
-              s.timer = 0.75 + spawned * 0.2;
+              s.timer = 0.75 + spawned * gap;
               spawned++;
             }
             this.phase = 2;
-            this.timer = 0.75 + spawned * 0.2 + 0.65;
+            this.timer = 0.75 + spawned * gap + 0.65;
           }
         } else if (this.phase === 2) {
           this.charge = Math.max(0, this.charge - dt * 0.8);
@@ -563,13 +581,15 @@ window.FG = window.FG || {};
     },
 
     // Arco alto mirado num x: sobe muito e cai quase na vertical, para o
-    // jogador ler a sombra e sair de baixo a tempo.
-    throwRock(targetX) {
+    // jogador ler a sombra e sair de baixo a tempo. `fast` (fase 2) encurta
+    // um pouco o arco — a sombra ainda avisa, só sobra menos tempo embaixo
+    // dela antes da garra chegar.
+    throwRock(targetX, fast) {
       let r = null;
       for (let i = 0; i < MAXGARRA; i++) if (!garras[i].active) { r = garras[i]; break; }
       if (!r) return;
       const g = GRAV * 0.85;
-      const vy = -720;
+      const vy = fast ? -640 : -720;
       const tFly = (-2 * vy) / g;              // tempo até voltar à altura de saída
       r.active = true;
       r.x = this.x + POSE.handFront.x;

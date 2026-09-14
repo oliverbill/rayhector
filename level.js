@@ -1644,6 +1644,7 @@ window.FG = window.FG || {};
   FG.levels.push({
     id: 'parque',
     nome: 'Parque do Terror',
+    musica: 'overworld',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },

@@ -4,7 +4,8 @@
 // Contrato (ver SPEC.md):
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
-//   FG.audio.music(name) — 'overworld' | 'boss' | null; troca com fade ~0.4s
+//   FG.audio.music(name) — 'overworld'|'boss'|'pantano'|'mansao'|'coliseu'|null;
+//                          troca com fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
 // vira no-op silencioso se o init ainda não rodou ou o contexto não roda.
@@ -348,6 +349,66 @@ window.FG = window.FG || {};
     81, 0, 0, 0, 0, 0, 0, 0,         // aterrissa no lá e respira
   ];
 
+  // ---- composição: PÂNTANO — morosa, ré menor natural, 66 BPM ----
+  // "Morosa" pedia mais que só desacelerar o metrônomo: a densidade de eventos
+  // cai junto. Onde a overworld dispara melodia+contra+baixo+bateria em toda
+  // colcheia, aqui a maior parte da grade fica em silêncio — o compasso vira
+  // espera, não impulso. Progressão i–VI–III–VII (D–Bb–F–C) repetida com um
+  // desvio pro iv (Gm) no compasso 6, típica de modo menor natural sem a
+  // sensível puxando de volta — nada aqui quer "resolver", só arrastar.
+  var PT_RAIZ = [38, 34, 41, 36, 38, 43, 36, 38]; // D2 Bb1 F2 C2 D2 G2 C2 D2, 1 por compasso
+
+  // Melodia grave e esparsa: uma frase por compasso, no máximo, com portamento
+  // pra baixo no agendador (som de nota "afundando na lama"). O resto é vazio.
+  var PT_MEL = [
+    62, 0, 0, 0, 0, 0, 0, 0,   // D4 solitária, deixa o eco morrer
+    0, 0, 0, 0, 58, 0, 0, 0,   // Bb3 no meio do compasso 2
+    0, 0, 0, 0, 0, 0, 0, 0,    // respiro total
+    60, 0, 0, 0, 0, 0, 0, 0,   // C4
+    0, 0, 0, 0, 0, 0, 0, 0,
+    55, 0, 0, 0, 0, 0, 0, 0,   // G3, raiz do Gm
+    0, 0, 0, 0, 0, 0, 0, 0,
+    50, 0, 0, 0, 53, 0, 0, 0,  // D3 . F3 — gesto de fechamento arrastado
+  ];
+
+  // ---- composição: MANSÃO — sombria, dó menor harmônico, 72 BPM ----
+  // Em vez de banda tocando junto (overworld/boss), aqui é uma linha só —
+  // sino de caixinha de música (sine com ataque lento) isolado sobre quase
+  // silêncio, mais um drone de trítono (dó/fá#) renovado a cada 2 compassos,
+  // igual à ideia do pedal de ré# do boss, mas aqui sustentado e bem mais
+  // baixo na mixagem — a dissonância fica no fundo, nunca em primeiro plano.
+  // A 2ª aumentada láb–si (característica do menor harmônico) aparece nos
+  // compassos 4-5 de propósito: é o intervalo mais "torto" da escala.
+  var MN_SINO = [
+    84, 0, 0, 0, 0, 0, 0, 0,    // C6
+    0, 0, 0, 0, 0, 0, 79, 0,    // G5, tarde no compasso 2
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 75, 0, 0, 0, 0, 0,    // Eb5
+    0, 0, 0, 0, 0, 0, 80, 0,    // Ab5 — prepara a 2ª aumentada
+    0, 0, 83, 0, 0, 0, 0, 0,    // B5 — resolve a 2ª aumentada Ab-B
+    0, 0, 0, 0, 0, 0, 0, 0,
+    72, 0, 0, 0, 77, 0, 0, 0,   // C5 . F5 — fecho, sem resolver de verdade
+  ];
+
+  // ---- composição: COLISEU — marcial e tenso, mi frígio, 132 BPM ----
+  // Frígio (2º grau abaixado, aqui fá natural sobre mi) dá o sabor "arena
+  // romana" sem copiar o lá-menor-harmônico do boss. BPM fica entre a
+  // overworld (104) e o boss (140): mais urgente que explorar, mas ainda não
+  // é a luta final — o bII (Fá maior, compasso 7) é o acorde frígio por
+  // excelência, entra só uma vez por volta como um lampejo de perigo.
+  var CL_RAIZ = [40, 38, 36, 33, 40, 38, 41, 40]; // Em D C Am Em D F Em, 1 por compasso
+
+  var CL_MEL = [
+    64, 0, 67, 64, 0, 67, 71, 0,   // Em: mi sol . mi | . sol si .
+    62, 0, 65, 62, 0, 64, 0, 0,    // D:  ré fá . ré | . mi . .
+    60, 0, 64, 60, 0, 62, 64, 0,   // C:  dó mi . dó | . ré mi .
+    57, 0, 60, 57, 0, 60, 64, 0,   // Am: lá dó . lá | . dó mi .
+    64, 0, 67, 71, 0, 67, 64, 0,   // Em: variação com o si mais cedo
+    62, 65, 0, 62, 67, 0, 65, 0,   // D:  sol grave escapando pro fá
+    65, 0, 69, 65, 0, 64, 60, 0,   // F:  fá lá . fá | . mi dó — o bII frígio
+    64, 60, 57, 55, 52, 0, 64, 0,  // Em: corrida descendente, cadência final
+  ];
+
   var SONGS = {
     overworld: {
       bpm: 104,
@@ -360,6 +421,24 @@ window.FG = window.FG || {};
       stepDur: 60 / 140 / 2, // colcheia
       steps: 64,
       agenda: agendaBoss,
+    },
+    pantano: {
+      bpm: 66,
+      stepDur: 60 / 66 / 2, // colcheia
+      steps: 64,
+      agenda: agendaPantano,
+    },
+    mansao: {
+      bpm: 72,
+      stepDur: 60 / 72 / 2, // colcheia
+      steps: 64,
+      agenda: agendaMansao,
+    },
+    coliseu: {
+      bpm: 132,
+      stepDur: 60 / 132 / 2, // colcheia
+      steps: 64,
+      agenda: agendaColiseu,
     },
   };
 
@@ -382,6 +461,20 @@ window.FG = window.FG || {};
   function bassNote(t, midi, dur, dest) {
     tone({ t: t, dur: dur, vol: 0.2, type: 'square', freq: nf(midi),
            filtro: { type: 'lowpass', f0: 320, q: 1.1 }, dest: dest });
+  }
+
+  // bumbo abafado do pântano: nada de estalo — ruído passa-baixa bem grave
+  // junto de um seno caindo devagar, o mais perto que dá de um "baque" de
+  // bota afundando em lama, sem o ataque seco do kick() de praça.
+  function bumboLama(t, dest) {
+    ruido({ t: t, dur: 0.34, vol: 0.16, ftype: 'lowpass', f0: 260, f1: 55, q: 0.9, attack: 0.02, dest: dest });
+    tone({ t: t, dur: 0.3, vol: 0.14, type: 'sine', freq: 65, freqEnd: 28, attack: 0.015, dest: dest });
+  }
+
+  // rangido esparso da mansão: sopro estreito de ruído, como madeira velha
+  // se ajeitando — nunca ritmo, só atmosfera de longe em longe.
+  function rangido(t, dest) {
+    ruido({ t: t, dur: 0.5, vol: 0.045, ftype: 'bandpass', f0: 700, f1: 420, q: 3, attack: 0.15, dest: dest });
   }
 
   // -- agendadores por música: recebem o passo global e o instante 't' --
@@ -449,6 +542,89 @@ window.FG = window.FG || {};
     if (dentro === 0 || dentro === 3 || dentro === 4) kick(t, dest);
     if (dentro === 2 || dentro === 6) snare(t, dest);
     hihat(t, (dentro % 2 === 0) ? 0.05 : 0.035, dest);
+  }
+
+  function agendaPantano(step, t, dest) {
+    var s = step % 64;
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.pantano.stepDur;
+
+    // drone de raiz sustentado o compasso inteiro — o "peso" que a overworld
+    // não tem: aqui embaixo de tudo há sempre uma nota grave morrendo devagar
+    if (dentro === 0) {
+      tone({ t: t, dur: dur * 8, vol: 0.05, type: 'sawtooth', freq: nf(PT_RAIZ[compasso]),
+             filtro: { type: 'lowpass', f0: 260 }, attack: 0.25, dest: dest });
+    }
+
+    // melodia rara, com portamento descendente de um tom — a nota "afunda"
+    // em vez de simplesmente parar, o efeito mais "morosa" que dá pra pedir
+    // de um tone() só
+    if (PT_MEL[s]) {
+      tone({ t: t, dur: dur * 7, vol: 0.13, type: 'triangle', freq: nf(PT_MEL[s]),
+             freqEnd: nf(PT_MEL[s] - 2), attack: 0.05, dest: dest });
+    }
+
+    // percussão: um baque abafado só no tempo 1 de cada compasso — sem
+    // chimbal, sem caixa. O silêncio entre os baques é a "moleza" do pântano.
+    if (dentro === 0) bumboLama(t, dest);
+  }
+
+  function agendaMansao(step, t, dest) {
+    var s = step % 64;
+    var volta = Math.floor(step / 64);
+    var dur = SONGS.mansao.stepDur;
+
+    // drone de trítono (dó/fá#), renovado a cada 2 compassos, quase inaudível
+    // — mesma ideia do pedal de ré# do boss, mas sustentado e bem mais baixo,
+    // pra incomodar sem nunca se anunciar
+    if (s % 16 === 0) {
+      var raizDrone = (s % 32 === 0) ? 36 : 42; // alterna dó2 / fá#2 a cada 2 compassos
+      tone({ t: t, dur: dur * 16, vol: 0.035, type: 'sine', freq: nf(raizDrone),
+             filtro: { type: 'lowpass', f0: 300 }, attack: 0.6, dest: dest });
+    }
+
+    // sino de caixinha de música: ataque lento, harmônico fraco por cima
+    // (mesmo truque do SFX "lumi") pra dar o timbre metálico-cristalino
+    if (MN_SINO[s]) {
+      var f = nf(MN_SINO[s]);
+      tone({ t: t, dur: dur * 6, vol: 0.1, type: 'sine', freq: f, attack: 0.05, dest: dest });
+      tone({ t: t, dur: dur * 4, vol: 0.035, type: 'sine', freq: f * 2, attack: 0.05, dest: dest });
+    }
+
+    // rangido de madeira, bem de longe em longe (uma vez a cada 2 voltas) —
+    // só pra lembrar que a casa está "viva", nunca virar ritmo
+    if (volta % 2 === 0 && s === 40) rangido(t, dest);
+  }
+
+  function agendaColiseu(step, t, dest) {
+    var s = step % 64;
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.coliseu.stepDur;
+
+    // melodia marcial: serra filtrada como um metal de fanfarra grave, não a
+    // flauta triangular da overworld nem a quadrada pontuda do boss
+    if (CL_MEL[s]) {
+      tone({ t: t, dur: dur * 1.3, vol: 0.14, type: 'sawtooth', freq: nf(CL_MEL[s]),
+             filtro: { type: 'lowpass', f0: 1800 }, attack: 0.008, dest: dest });
+    }
+
+    // baixo andando, raiz nos tempos 1/3, quinta nos 2/4 — igual esqueleto
+    // do "oom-pah" da overworld, mas mais curto e seco: aqui é marcha, não
+    // valsinha de praça
+    if (dentro % 2 === 0) {
+      var raiz = CL_RAIZ[compasso];
+      var midi = (dentro === 0 || dentro === 4) ? raiz : raiz + 7;
+      bassNote(t, midi, dur * 1.1, dest);
+    }
+
+    // bateria de tambor de guerra: bumbo em galope (1, "e" do 2, 3, "e" do 4)
+    // e caixa firme nos contratempos — mais insistente que a overworld, mas
+    // sem a síncope caótica do boss, porque a luta final ainda não começou
+    if (dentro === 0 || dentro === 3 || dentro === 4 || dentro === 7) kick(t, dest);
+    if (dentro === 2 || dentro === 6) snare(t, dest);
+    hihat(t, (dentro % 2 === 1) ? 0.045 : 0.03, dest);
   }
 
   // -- máquina do scheduler --

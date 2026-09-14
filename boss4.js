@@ -263,7 +263,8 @@ window.FG = window.FG || {};
         // materializar-se em cima do jogador seria dano que ele não podia
         // evitar. Sobe interpolado no idle, e a carência abaixo cobre o resto.
         this.state = 'idle';
-        this.timer = this.isPhase2() ? 0.7 : 0.85;
+        // fase 2: 0.6 em vez de 0.7 — menos fôlego entre golpe e próximo ataque
+        this.timer = this.isPhase2() ? 0.6 : 0.85;
         this.safe = 0.6;
       }
     },
@@ -323,7 +324,9 @@ window.FG = window.FG || {};
       }
 
       const p2 = this.isPhase2();
-      const speedMul = p2 ? 0.85 : 1;   // fase 2: intervalos um pouco menores
+      // Último chefão do jogo: fase 2 aperta mais que nos outros três (0.85
+      // lá, 0.78 aqui) — o combate final tem de doer mais no fim.
+      const speedMul = p2 ? 0.78 : 1;
       const a = FG.level.arena;
 
       this.timer -= dt;
@@ -378,9 +381,10 @@ window.FG = window.FG || {};
       // ================= 1. INVESTIDA =================
       } else if (this.state === 'investida') {
         if (this.phase === 0) {
-          // telegraph: agacha, empurra o chão com os pés, olha fundo
+          // telegraph: agacha, empurra o chão com os pés, olha fundo.
+          // Era 0.9s — encolhido para 0.72s (final boss, tell menos generoso).
           this.phase = 1;
-          this.timer = 0.9;
+          this.timer = 0.72;
           FG.audio.sfx('bossSpit');
         } else if (this.phase === 1) {
           this.lean = Math.min(1, this.lean + dt * 1.3);
@@ -392,8 +396,10 @@ window.FG = window.FG || {};
           }
           if (this.timer <= 0) { this.phase = 2; this.timer = 0; }
         } else if (this.phase === 2) {
-          // atravessa a arena para a esquerda, ombro à frente
-          this.x -= RUN_SPEED * dt;
+          // atravessa a arena para a esquerda, ombro à frente — fase 2:
+          // 15% mais rápido, já vinha telegrafado, então dá pra apertar aqui
+          const runSpd = p2 ? RUN_SPEED * 1.15 : RUN_SPEED;
+          this.x -= runSpd * dt;
           this.runDust();
           if (this.x <= Math.max(a.x + 80, this.homeX - RUN_LEFT)) { this.phase = 3; this.timer = 0.22; }
         } else if (this.phase === 3) {
@@ -401,7 +407,8 @@ window.FG = window.FG || {};
           this.runDust();
           if (this.timer <= 0) { this.phase = 4; this.timer = 0; }
         } else if (this.phase === 4) {
-          this.x += RUN_SPEED * dt;
+          const runSpd = p2 ? RUN_SPEED * 1.15 : RUN_SPEED;
+          this.x += runSpd * dt;
           this.runDust();
           if (this.x >= this.homeX) { this.x = this.homeX; this.phase = 5; this.timer = 0.3; }
         } else if (this.phase === 5) {
@@ -418,9 +425,10 @@ window.FG = window.FG || {};
       // golpe, leva o dano; o alcance é generoso mas exige estar colado.
       } else if (this.state === 'arremesso') {
         if (this.phase === 0) {
-          // telegraph: agacha e ergue o cacto acima do ombro
+          // telegraph: agacha e ergue o cacto acima do ombro.
+          // Era 0.9s — encolhido para 0.72s, mesma proporção da investida.
           this.phase = 1;
-          this.timer = 0.9;
+          this.timer = 0.72;
         } else if (this.phase === 1) {
           this.kneel = Math.min(0.35, this.kneel + dt * 1.2);   // agacha (sem expor)
           this.holdRock = Math.min(1, this.holdRock + dt * 1.6);
@@ -454,10 +462,15 @@ window.FG = window.FG || {};
       } else if (this.state === 'vazamento') {
         if (this.phase === 0) {
           // Crava os dois pés no chão e as rachaduras acendem em verde ANTES
-          // de abrir: cada jorro tem 0.9s de aviso, e eles marcham do lutador
-          // para o jogador.
-          const n = p2 ? 6 : 4;
-          const step = 138;
+          // de abrir: cada jorro tem aviso, e eles marcham do lutador para o
+          // jogador. Aviso base era 0.9s — encolhido para 0.72s. Fase 2 soma
+          // mais jorros (8 em vez de 6), mais próximos (step menor) e
+          // disparando em sequência mais apertada (stagger menor): a segunda
+          // metade da luta vira de verdade um corredor apertado de rachaduras.
+          const n = p2 ? 8 : 4;
+          const step = p2 ? 108 : 138;
+          const stagger = p2 ? 0.18 : 0.26;
+          const CRACK_T = 0.72;
           let spawned = 0;
           for (let i = 0; i < MAXJET && spawned < n; i++) {
             const j = jets[i];
@@ -468,12 +481,12 @@ window.FG = window.FG || {};
             j.state = 'crack';
             j.x = jx;
             j.groundY = groundYAt(jx, 300);
-            j.timer = 0.9 + spawned * 0.26;
+            j.timer = CRACK_T + spawned * stagger;
             j.h = 0;
             spawned++;
           }
           this.phase = 1;
-          this.timer = 0.9 + spawned * 0.26 + 0.45;
+          this.timer = CRACK_T + spawned * stagger + 0.45;
           this.charge = 0.6;
         } else if (this.phase === 1) {
           this.kneel = Math.min(0.3, this.kneel + dt * 1.5);   // curvado, punhos no chão
@@ -487,9 +500,10 @@ window.FG = window.FG || {};
       // ================= 4. SOCO DUPLO =================
       } else if (this.state === 'soco') {
         if (this.phase === 0) {
-          // telegraph: ergue os dois punhos por cima da cabeça
+          // telegraph: ergue os dois punhos por cima da cabeça.
+          // Era 0.85s — encolhido para 0.68s (~20%), mesmo critério dos outros três.
           this.phase = 1;
-          this.timer = 0.85;
+          this.timer = 0.68;
         } else if (this.phase === 1) {
           this.armRaise = Math.min(1, this.armRaise + dt * 1.6);
           this.charge = Math.min(0.8, this.charge + dt * 1.0);
@@ -503,8 +517,11 @@ window.FG = window.FG || {};
                 0.6, 4 + Math.random() * 4, '#a89060', 900);
             }
             // escombros da arquibancada/estátuas: sombra no chão bem antes de
-            // cada um cair
-            const n = p2 ? 5 : 3;
+            // cada um cair. Fase 2: mais pedaços (7 em vez de 5) caindo em
+            // sequência mais rápida (stagger menor) — mais sombras pra ler ao
+            // mesmo tempo, tempo de reação por peça mais curto.
+            const n = p2 ? 7 : 3;
+            const stagFall = p2 ? 0.14 : 0.2;
             let spawned = 0;
             for (let i = 0; i < MAXSTAL && spawned < n; i++) {
               const s = stals[i];
@@ -516,11 +533,11 @@ window.FG = window.FG || {};
               s.groundY = groundYAt(s.x + s.w / 2, 300);
               s.y = s.groundY - 520;
               s.vy = 0;
-              s.timer = 0.75 + spawned * 0.2;
+              s.timer = 0.75 + spawned * stagFall;
               spawned++;
             }
             this.phase = 2;
-            this.timer = 0.75 + spawned * 0.2 + 0.65;
+            this.timer = 0.75 + spawned * stagFall + 0.65;
           }
         } else if (this.phase === 2) {
           this.charge = Math.max(0, this.charge - dt * 0.8);
@@ -1344,7 +1361,8 @@ window.FG = window.FG || {};
       const jx = j.x - cam.x, gy = j.groundY - cam.y;
       if (j.state === 'crack') {
         // a rachadura acende em verde antes de abrir — este é o telegraph
-        const k = Math.max(0, 1 - j.timer / 0.9);
+        // (0.72 = CRACK_T em step(), mantido em sincronia com o timer real)
+        const k = Math.max(0, 1 - j.timer / 0.72);
         ctx.globalAlpha = 0.35 + 0.65 * k * (0.7 + 0.3 * Math.sin(t * 18));
         const g = ctx.createRadialGradient(jx, gy - 2, 2, jx, gy - 2, 40);
         g.addColorStop(0, 'rgba(220,255,180,0.95)');

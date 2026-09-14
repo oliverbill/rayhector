@@ -243,7 +243,7 @@ window.FG = window.FG || {};
     engine.cam.x = Math.max(0, Math.min(FG.player.x + FG.player.w / 2 - VIEW_W / 2, FG.level.W - VIEW_W));
     engine.cam.y = Math.max(0, Math.min(FG.player.y + FG.player.h / 2 - VIEW_H / 2, FG.level.H - VIEW_H));
     engine.setState('playing');
-    FG.audio.music('overworld');
+    FG.audio.music(FG.level.musica || 'overworld');
   }
 
   // Atalho de teste: abrir index.html?fase=N começa direto na fase N
@@ -323,7 +323,7 @@ window.FG = window.FG || {};
     FG.enemies.reset();
     arenaLocked = false;
     engine.setState('playing');
-    FG.audio.music('overworld');
+    FG.audio.music(FG.level.musica || 'overworld');
   }
 
   // ---------- update ----------

@@ -1559,6 +1559,7 @@ window.FG = window.FG || {};
   FG.levels.push({
     id: 'mansao',
     nome: 'A Mansão Assombrada',
+    musica: 'mansao',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },

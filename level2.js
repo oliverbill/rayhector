@@ -1820,6 +1820,7 @@ window.FG = window.FG || {};
   FG.levels.push({
     id: 'pantano',
     nome: 'O Pântano',
+    musica: 'pantano',
     W: W,
     H: H,
     playerStart: { x: 80, y: 560 },
