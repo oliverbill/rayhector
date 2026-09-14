@@ -738,6 +738,13 @@ window.FG = window.FG || {};
       for (let i = 0; i < MAXP; i++) particles[i].active = false;
     },
 
+    // Some inteiro o elenco comum no instante em que o chefão começa: a luta
+    // é só dele, sem espinhoco/voadeira/sapeca sobrando de fundo. Diferente
+    // de reset(), não mexe no boss nem nas lumis — é só esta lista.
+    clearRegulares() {
+      this.list.length = 0;
+    },
+
     update(dt) {
       // inimigos comuns (remoção in-place, sem alocar array novo)
       const list = this.list;

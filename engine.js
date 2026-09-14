@@ -227,6 +227,17 @@ window.FG = window.FG || {};
     syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
+    // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
+    // chefão, bem acima do chão, e deixa a gravidade normal do jogo assentar
+    // — sem isso testar um chefão exige atravessar a fase inteira toda vez.
+    if (chefeInicial()) {
+      FG.player.x = FG.level.bossTriggerX + 10;
+      FG.player.y = -200;
+      FG.player.vx = 0;
+      FG.player.vy = 0;
+      engine.checkpoint = { x: FG.player.x, y: FG.player.y };
+      engine.cam.x = Math.max(0, Math.min(FG.player.x + FG.player.w / 2 - VIEW_W / 2, FG.level.W - VIEW_W));
+    }
     // câmera direto no lugar: um lerp desde a fase anterior atravessaria o
     // mundo inteiro em cima do jogador
     engine.cam.x = Math.max(0, Math.min(FG.player.x + FG.player.w / 2 - VIEW_W / 2, FG.level.W - VIEW_W));
@@ -245,6 +256,15 @@ window.FG = window.FG || {};
       const n = (parseInt(q, 10) || 1) - 1;
       return Math.max(0, Math.min(FG.levels.length - 1, n));
     } catch (e) { return 0; }
+  }
+
+  // Atalho de teste: ?chefe=1 junto de ?fase=N já solta o jogador em cima do
+  // gatilho do chefão daquela fase, sem precisar atravessá-la de novo.
+  function chefeInicial() {
+    try {
+      if (typeof location === 'undefined') return false;
+      return new URLSearchParams(location.search).get('chefe') === '1';
+    } catch (e) { return false; }
   }
 
   function startGame() {
@@ -346,6 +366,7 @@ window.FG = window.FG || {};
       const boss = FG.enemies.boss;
       if (!boss.started && p.x > FG.level.bossTriggerX) {
         boss.start();
+        FG.enemies.clearRegulares(); // luta é só do chefão, sem bicho comum sobrando na arena
         p.hp = p.maxHp;
         engine.checkpoint = { x: p.x, y: p.y };
       }
@@ -875,6 +896,10 @@ window.FG = window.FG || {};
   });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
+
+  // ?chefe=1 pula até o toque no menu: começa sozinho, já em cima do gatilho
+  // do chefão (ver chefeInicial() dentro de loadLevel).
+  if (chefeInicial()) startGame();
 
   // ---------- loop ----------
   let last = performance.now();

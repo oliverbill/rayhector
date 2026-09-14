@@ -176,6 +176,7 @@ window.FG = window.FG || {};
     attackIndex: 0,
     stunHit: false,
     flash: 0,
+    safe: 0,          // carência de contato ao sair da janela (ver takeHit)
     dieTimer: 0,
     victoryFired: false,
 
@@ -219,6 +220,7 @@ window.FG = window.FG || {};
       this.attackIndex = 0;
       this.stunHit = false;
       this.flash = 0;
+      this.safe = 0;
       this.kneel = 0;
       this.sag = 0;
       this.puff = 0;
@@ -297,10 +299,15 @@ window.FG = window.FG || {};
         this.timer = 0;
         tongue.active = false;
       } else {
-        // Recolhe a bolsa de garganta e volta a se acomodar no atoleiro
+        // Recolhe a bolsa de garganta e volta a se acomodar no atoleiro. O
+        // `sag` NÃO zera de repente sem carência: quem acabou de socar está
+        // COLADO no corpo dela, e sem a carência `safe` cobrindo a subida
+        // levava dano de graça na hora em que a bolsa recolhia — era o que
+        // tornava o soco "impossível" (mesma regra do Hugo/golem/vampira).
         this.state = 'idle';
         this.timer = this.isPhase2() ? 1.0 : 1.4;
         this.sag = 0;
+        this.safe = 0.6;
       }
     },
 
@@ -311,6 +318,7 @@ window.FG = window.FG || {};
       const p = FG.player;
       const ov = FG.engine.rectsOverlap;
       if (this.flash > 0) this.flash -= dt;
+      if (this.safe > 0) this.safe -= dt;
 
       // ---------- morte cinematográfica ----------
       if (this.state === 'dying') {
@@ -593,8 +601,16 @@ window.FG = window.FG || {};
       // ---------- contato com a SANDROLA ----------
       // Encostar na cabeça ou no corpo machuca. Assim que a bolsa de garganta
       // começa a descer (sag), tudo fica inofensivo: é justamente aí que o
-      // jogador precisa se plantar debaixo do queixo para socar.
-      if (this.sag <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
+      // jogador precisa se plantar debaixo do queixo para socar. E entre um e
+      // outro há a carência `safe`, em que ela EMPURRA em vez de machucar:
+      // acertar o soco não pode custar dano só por estar onde o soco exige
+      // estar (mesma regra do Hugo/golem/vampira).
+      if (this.safe > 0) {
+        if (ov(p, this.headBox) || ov(p, this.bodyBox)) {
+          const lado = (p.x + p.w / 2) < this.x ? -1 : 1;
+          p.vx = lado * 300;
+        }
+      } else if (this.sag <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
         p.hurt(1, this.x - 100);
       }
     },
