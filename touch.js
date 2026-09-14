@@ -51,18 +51,88 @@ window.FG = window.FG || {};
 
   // Dedo -> coordenadas do canvas. O canvas é escalado por CSS (letterbox), e
   // é o rect que conta — não innerWidth/innerHeight.
-  function pick(clientX, clientY, rect) {
+  function paraCanvas(clientX, clientY, rect) {
     var sx = VIEW_W / rect.width, sy = VIEW_H / rect.height;
-    var x = (clientX - rect.left) * sx;
-    var y = (clientY - rect.top) * sy;
+    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+  }
+
+  function pick(clientX, clientY, rect) {
+    var p = paraCanvas(clientX, clientY, rect);
     var melhor = null, melhorD = Infinity;
     for (var i = 0; i < BTNS.length; i++) {
       var b = BTNS[i];
-      var dx = x - b.x, dy = y - b.y;
+      var dx = p.x - b.x, dy = p.y - b.y;
       var d = dx * dx + dy * dy;
       if (d <= b.hit * b.hit && d < melhorD) { melhor = b; melhorD = d; }
     }
     return melhor;
+  }
+
+  // Botão de pausa e os 3 itens do menu de pausa não são desenhados aqui (são
+  // HUD/overlay do engine.js) — a geometria só existe duplicada porque não há
+  // canal para os dois arquivos combinarem coordenadas em runtime. Se mexer
+  // no x/y de drawPauseButton/PAUSE_ITENS no engine.js, mexer aqui também.
+  var PAUSE_BTN = { x: 480, y: 26, hit: 30 };
+  // y = centro de cada botão, halfW/halfH = metade da caixa desenhada em
+  // engine.js (PAUSE_BTN_W=300, PAUSE_BTN_H=54) — ver PAUSE_ITENS/PAUSE_CARD
+  // lá. "Pular Fase" não pula mais direto: abre o popup de senha (pularSenha).
+  var PAUSE_ITEMS = [
+    { y: 222, halfH: 27, acao: 'resumeGame' },
+    { y: 294, halfH: 27, acao: 'requestSkipFase' },
+    { y: 366, halfH: 27, acao: 'quitToMenu' },
+  ];
+  var PAUSE_ITEM_HALF_W = 150;
+
+  // Geometria do popup de senha, espelhada de SENHA_CARD/SENHA_CONFIRM_BTN em
+  // engine.js (mesma ausência de canal em runtime dos outros PAUSE_*) —
+  // SENHA_INPUT_BOX não precisa de cópia aqui: quem cobre aquela área é o
+  // próprio <input> real, então o toque já cai nele antes de chegar a
+  // tratarPausa (ver ehPularSenhaInput).
+  var SENHA_CARD = { x: 480 - 220, y: 170, w: 440, h: 220 };
+  var SENHA_CONFIRM_BTN = { x: 480 - 110, y: 170 + 140, w: 220, h: 42 };
+
+  function dentroRetangulo(p, r) {
+    return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  }
+
+  // Toque no campo escondido da senha (#pularSenhaInput, só ativo durante
+  // 'pularSenha') precisa atravessar intacto até o iOS: preventDefault
+  // mataria o foco/teclado, e tratarPausa/comecou tratariam o toque como
+  // "cancelar" ou avanço de tela.
+  function ehPularSenhaInput(e) { return e.target && e.target.id === 'pularSenhaInput'; }
+
+  // Toque que caiu no botão de pausa (em 'playing'), num dos 3 itens do menu
+  // (em 'paused'), no botão "Confirmar" ou fora do painel (em 'pularSenha' —
+  // um toque que chegou até aqui já não foi no <input>, ver ehPularSenhaInput
+  // acima, chamado ANTES desta função pelos handlers; tocar DENTRO do painel
+  // mas fora do input/botão não faz nada, só mantém o teclado aberto). Chama
+  // direto a função exposta em FG.engine — essas ações não passam pelo funil
+  // de left/right/down/jump/attack do setAction.
+  function tratarPausa(clientX, clientY) {
+    if (!FG.engine) return false;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width) return false;
+    var p = paraCanvas(clientX, clientY, rect);
+    var acao = null;
+    if (FG.engine.state === 'playing') {
+      var dx = p.x - PAUSE_BTN.x, dy = p.y - PAUSE_BTN.y;
+      if (dx * dx + dy * dy <= PAUSE_BTN.hit * PAUSE_BTN.hit) acao = 'togglePause';
+    } else if (FG.engine.state === 'paused') {
+      for (var i = 0; i < PAUSE_ITEMS.length; i++) {
+        var it = PAUSE_ITEMS[i];
+        if (Math.abs(p.x - PAUSE_BTN.x) <= PAUSE_ITEM_HALF_W && Math.abs(p.y - it.y) <= it.halfH) {
+          acao = it.acao;
+          break;
+        }
+      }
+    } else if (FG.engine.state === 'pularSenha') {
+      if (dentroRetangulo(p, SENHA_CONFIRM_BTN)) acao = 'confirmarSenhaPular';
+      else if (!dentroRetangulo(p, SENHA_CARD)) acao = 'cancelPularSenha';
+    }
+    if (!acao) return false;
+    FG.engine.gesture();
+    FG.engine[acao]();
+    return true;
   }
 
   // Reconstrói o estado inteiro a partir dos dedos que ainda estão na tela.
@@ -105,13 +175,8 @@ window.FG = window.FG || {};
     // toque em qualquer lugar avança — é o que se espera de um jogo de celular.
     var rect = canvas.getBoundingClientRect();
     if (rect.width && FG.engine.state !== 'playing' && !pick(x, y, rect)) {
-      // Fase-select não tem botão de toque (é tela de dev): tocar em qualquer
-      // lugar volta ao menu, o mesmo que ESC faz no teclado.
-      if (FG.engine.state === 'faseselect') FG.engine.setState('menu');
-      else {
-        FG.engine.setAction('jump', true);
-        FG.engine.setAction('jump', false);
-      }
+      FG.engine.setAction('jump', true);
+      FG.engine.setAction('jump', false);
     }
   }
 
@@ -123,20 +188,16 @@ window.FG = window.FG || {};
     for (var i = 0; i < t.length; i++) out.push(t[i]);
     return out;
   }
-  // Toque no campo escondido da senha (#senhaTouch, só ativo no menu) precisa
-  // atravessar intacto até o iOS: preventDefault mataria o foco/teclado, e
-  // comecou()/sync() tratariam o toque como "avançar tela" ou botão do jogo.
-  function ehSenhaInput(e) { return e.target && e.target.id === 'senhaTouch'; }
-
   function onStart(e) {
-    if (ehSenhaInput(e)) return;
+    if (ehPularSenhaInput(e)) return;
     e.preventDefault();
     var t = e.changedTouches && e.changedTouches[0];
+    if (t && tratarPausa(t.clientX, t.clientY)) return;
     if (t) comecou(t.clientX, t.clientY);
     sync(lista(e));
   }
   function onMoveOuEnd(e) {
-    if (ehSenhaInput(e)) return;
+    if (ehPularSenhaInput(e)) return;
     e.preventDefault(); sync(lista(e));
   }
 
@@ -154,8 +215,9 @@ window.FG = window.FG || {};
   function dedo(e) { return e.pointerType !== 'mouse'; }   // mouse tem teclado junto
   function onPtrDown(e) {
     if (!dedo(e)) return;
-    if (ehSenhaInput(e)) return;
+    if (ehPularSenhaInput(e)) return;
     e.preventDefault();
+    if (tratarPausa(e.clientX, e.clientY)) return;
     ponteiros[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
     comecou(e.clientX, e.clientY);
     sync(pontos());

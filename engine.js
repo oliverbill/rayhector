@@ -25,6 +25,14 @@ window.FG = window.FG || {};
 
   const pressBuffer = { jump: false, attack: false };
 
+  // Senha do "Pular Fase" no menu de pausa: o próprio #pularSenhaInput
+  // (definido mais abaixo) é a ÚNICA fonte de verdade do que foi digitado —
+  // nada de buffer paralelo. Backspace e digitação normal já funcionam
+  // sozinhos porque é um <input> de verdade e de fato focado; confirmarSenhaPular
+  // lê senhaInput.value direto na hora do Enter/toque em "Confirmar".
+  const SENHA_PULAR = '%Baleia302%';
+  let senhaErro = false;
+
   // Um único caminho de entrada para teclado e toque: quem manda ação é sempre
   // daqui para baixo, então o touch.js não precisa saber nada de pressBuffer
   // nem das transições de estado das telas.
@@ -47,42 +55,31 @@ window.FG = window.FG || {};
   // gesto, e não só no primeiro. init() é idempotente e barato.
   function gesture() { FG.audio.init(); }
 
-  // Senha secreta do menu de seleção de fase: buffer corrediço, só letras/
-  // dígitos/%, comparado por sufixo — não precisa Enter nem digitar certinho
-  // desde o início.
-  const SENHA_FASES = '%Baleia302%';
-  let senhaBuffer = '';
-
-  // Um só caminho para abrir o menu de fases, usado tanto pelo keydown quanto
-  // pelo <input> escondido do touch (ver #senhaTouch) — a transição de estado
-  // não deve viver duas vezes.
-  function checkSenhaChar(ch) {
-    senhaBuffer = (senhaBuffer + ch).slice(-SENHA_FASES.length);
-    if (senhaBuffer === SENHA_FASES) {
-      senhaBuffer = '';
-      engine.setState('faseselect');
-      FG.audio.sfx('select');
-    }
-  }
-
   window.addEventListener('keydown', (e) => {
+    // Com o popup de senha aberto, o #pularSenhaInput está focado de verdade:
+    // nada de action key aqui pode chamar preventDefault (KeyA vira "esquerda"
+    // e bloquearia o "a" de "Baleia" chegando no campo), então a digitação
+    // normal sai deste bloco antes de tocar no funil de ações do jogo.
+    if (engine.state === 'pularSenha') {
+      if (e.code === 'Escape') { e.preventDefault(); engine.cancelPularSenha(); }
+      else if (e.code === 'Enter') { e.preventDefault(); engine.confirmarSenhaPular(); }
+      // qualquer outra tecla (letras, dígitos, %, Backspace) cai sozinha no
+      // <input> focado — é ele quem guarda o valor, não um buffer à parte
+      return;
+    }
+
     const action = keyToAction[e.code];
     if (action) e.preventDefault();
     gesture();
     if (action) setAction(action, true);
 
-    if (engine.state === 'menu' && e.key && e.key.length === 1 && /[A-Za-z0-9%]/.test(e.key)) {
-      checkSenhaChar(e.key);
-    } else if (engine.state === 'faseselect') {
-      if (e.code === 'Escape') { engine.setState('menu'); return; }
-      const m = /^Digit([1-9])$/.exec(e.code);
-      if (m) {
-        const i = parseInt(m[1], 10) - 1;
-        if (i < FG.levels.length) {
-          engine.lumis = 0;
-          loadLevel(i);
-        }
-      }
+    if (e.code === 'Escape') {
+      if (engine.state === 'playing') engine.togglePause();
+      else if (engine.state === 'paused') engine.resumeGame();
+    } else if (engine.state === 'paused') {
+      if (e.code === 'Digit1') engine.resumeGame();
+      else if (e.code === 'Digit2') engine.requestSkipFase();
+      else if (e.code === 'Digit3') engine.quitToMenu();
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -90,18 +87,29 @@ window.FG = window.FG || {};
     if (action) setAction(action, false);
   });
 
-  // Versão touch da senha: iPad não tem teclado físico, então o keydown acima
-  // nunca dispara. #senhaTouch é um <input> de verdade (só ele abre o teclado
-  // do iOS sobre um canvas) que fica invisível e sem pointer-events fora do
-  // menu — ligado/desligado em setState(), logo abaixo.
-  const senhaInput = document.getElementById('senhaTouch');
+  // Campo escondido do popup de senha: iPad não tem teclado físico, então o
+  // keydown acima nunca dispara lá — só um <input> de verdade focado por um
+  // toque genuíno abre o teclado do iOS sobre o canvas. Cobre só a caixinha
+  // de pontinhos (SENHA_INPUT_BOX), não o card inteiro — sobra espaço pro
+  // botão "Confirmar" ser de fato tocável, e não engolido pelo input.
+  const senhaInput = document.getElementById('pularSenhaInput');
   if (senhaInput) {
-    senhaInput.addEventListener('input', () => {
-      const v = senhaInput.value;
-      checkSenhaChar(v.slice(-1));
-      // Buffer do próprio campo não pode crescer para sempre num teste longo.
-      if (v.length > SENHA_FASES.length * 2) senhaInput.value = v.slice(-SENHA_FASES.length);
-    });
+    senhaInput.addEventListener('input', () => { senhaErro = false; });
+  }
+  // Alinha o campo escondido em cima da caixinha de pontinhos na tela
+  // (coordenadas de canvas -> coordenadas de página, via getBoundingClientRect,
+  // o mesmo cálculo que resize() já faz para a escala do canvas). Chamado ao
+  // entrar em 'pularSenha' e a cada resize/giro, senão desalinha do popup.
+  function posicionarSenhaInput() {
+    if (!senhaInput) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const s = rect.width / VIEW_W;
+    const c = SENHA_INPUT_BOX;
+    senhaInput.style.left = (rect.left + c.x * s) + 'px';
+    senhaInput.style.top = (rect.top + c.y * s) + 'px';
+    senhaInput.style.width = (c.w * s) + 'px';
+    senhaInput.style.height = (c.h * s) + 'px';
   }
 
   // ---------- helpers ----------
@@ -151,11 +159,19 @@ window.FG = window.FG || {};
       // que a decisão mora no setState e não em cada um deles.
       if (s === 'victory' && FG.levels && engine.levelIndex < FG.levels.length - 1) s = 'fase';
       engine.state = s;
-      // #senhaTouch só aceita toque no menu — fora dele não pode roubar
-      // nenhum gesto do jogo (ver ehSenhaInput em touch.js).
+      // #pularSenhaInput só aceita toque em 'pularSenha' — fora dali não pode
+      // roubar nenhum gesto do jogo (ver ehPularSenhaInput em touch.js).
       if (senhaInput) {
-        senhaInput.style.pointerEvents = (s === 'menu') ? 'auto' : 'none';
-        if (s !== 'menu') { senhaInput.value = ''; senhaInput.blur(); }
+        senhaInput.style.pointerEvents = (s === 'pularSenha') ? 'auto' : 'none';
+        if (s === 'pularSenha') {
+          senhaErro = false;
+          senhaInput.value = '';
+          posicionarSenhaInput();
+          senhaInput.focus();
+        } else {
+          senhaInput.value = '';
+          senhaInput.blur();
+        }
       }
       if (s === 'fase') faseTimer = 0;
       if (s === 'dead') {
@@ -244,6 +260,41 @@ window.FG = window.FG || {};
     loadLevel(i);
     FG.audio.sfx('select');
   }
+
+  // Menu de pausa: único funil de transição para as 3 ações, usado tanto
+  // pelo keydown (Escape/1/2/3) quanto pelos toques do touch.js — nenhum dos
+  // dois deve saber de setState/nextLevel por conta própria.
+  function pauseGame() {
+    // solta o que estava segurado: sem isto o Heitor continua andando/socando
+    // um frame depois de retomar, porque o dedo/tecla nunca soltou de verdade.
+    input.left = input.right = input.down = input.jump = input.attack = false;
+    engine.setState('paused');
+  }
+  function resumeGame() { engine.setState('playing'); }
+  function skipFase() { nextLevel(); }
+  function quitToMenu() { FG.audio.music(null); engine.setState('menu'); }
+  function togglePause() {
+    if (engine.state === 'playing') pauseGame();
+    else if (engine.state === 'paused') resumeGame();
+  }
+  // "Pular Fase" é a única opção do menu de pausa que pede senha (cheat de
+  // debug) — Continuar/Sair continuam instantâneos. requestSkipFase só abre
+  // o popup; confirmarSenhaPular lê o valor do #pularSenhaInput na hora do
+  // Enter/toque em "Confirmar" — só ele chama skipFase() de verdade.
+  function requestSkipFase() { engine.setState('pularSenha'); }
+  function cancelPularSenha() { engine.setState('paused'); }
+  function confirmarSenhaPular() {
+    if (!senhaInput) return;
+    if (senhaInput.value === SENHA_PULAR) { senhaInput.value = ''; skipFase(); }
+    else { senhaInput.value = ''; senhaErro = true; senhaInput.focus(); }
+  }
+  engine.togglePause = togglePause;
+  engine.resumeGame = resumeGame;
+  engine.skipFase = skipFase;
+  engine.quitToMenu = quitToMenu;
+  engine.requestSkipFase = requestSkipFase;
+  engine.cancelPularSenha = cancelPularSenha;
+  engine.confirmarSenhaPular = confirmarSenhaPular;
 
   function respawnFromCheckpoint() {
     FG.player.respawn(engine.checkpoint.x, engine.checkpoint.y);
@@ -338,7 +389,6 @@ window.FG = window.FG || {};
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
 
     if (engine.state === 'menu') { drawMenu(); drawTouch(); return; }
-    if (engine.state === 'faseselect') { drawFaseSelect(); return; }
 
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
@@ -352,6 +402,8 @@ window.FG = window.FG || {};
     if (engine.state === 'dead') drawDeadOverlay();
     if (engine.state === 'fase') drawFaseCompleta();
     if (engine.state === 'victory') drawVictory();
+    if (engine.state === 'paused') drawPausedOverlay();
+    if (engine.state === 'pularSenha') drawPularSenhaOverlay();
     drawTouch();
   }
 
@@ -405,35 +457,170 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // Menu escondido de debug: destrancado pela senha digitada em drawMenu.
-  // Bypassa startGame() de propósito, então zera lumis na hora de entrar
-  // (feito no keydown, junto do loadLevel) para não carregar contagem velha.
-  function drawFaseSelect() {
-    const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-    g.addColorStop(0, '#1a1030'); g.addColorStop(0.6, '#2e1030'); g.addColorStop(1, '#101a10');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  // Botão de pausa visível, sempre no ar durante o jogo — geometria também
+  // usada pelo touch.js para o hit-test (ver PAUSE_BTN em touch.js), já que
+  // não existe canal para os dois arquivos combinarem coordenadas em runtime.
+  function drawPauseButton() {
+    const x = VIEW_W / 2, y = 26, r = 19;
     ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffb830';
-    ctx.shadowColor = '#ff8000'; ctx.shadowBlur = 20;
-    ctx.font = 'bold 40px "Trebuchet MS", sans-serif';
-    ctx.fillText('SELECIONAR FASE', VIEW_W / 2, 140);
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(x, y - 6, 2, x, y, r);
+    g.addColorStop(0, 'rgba(60,32,80,0.7)'); g.addColorStop(1, 'rgba(24,12,36,0.6)');
+    ctx.fillStyle = g;
+    ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.font = '20px "Trebuchet MS", sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    for (let i = 0; i < FG.levels.length; i++) {
-      const y = 210 + i * 44;
-      ctx.fillStyle = '#ffd870';
-      ctx.fillText((i + 1) + '  —  ' + FG.levels[i].nome, VIEW_W / 2, y);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,190,90,0.7)';
+    ctx.stroke();
+    ctx.fillStyle = '#ffd870';
+    ctx.fillRect(x - 6, y - 8, 4, 16);
+    ctx.fillRect(x + 2, y - 8, 4, 16);
+    ctx.restore();
+  }
+
+  // Painel arredondado genérico (roundRect com fallback pra rect, igual ao
+  // TIP de drawControls) — base visual compartilhada pelos popups de pausa e
+  // de senha, pra não duplicar a mesma sequência de beginPath/fill/stroke.
+  function painel(x, y, w, h, fill, stroke) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 14);
+    else ctx.rect(x, y, w, h);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+  }
+
+  // Tela de pausa: o mundo continua desenhado por baixo (nada anima porque
+  // update() pula os estados 'paused'/'pularSenha'), com um painel central
+  // (gradiente plum + borda âmbar + filete interno, igual ao vocabulário de
+  // drawDeadOverlay/drawFaseCompleta) e as 3 opções como botões de verdade —
+  // fundo, borda e um acento colorido, não só texto flutuando. Geometria
+  // também usada pelo touch.js para o hit-test (PAUSE_ITEMS/PAUSE_BTN_*) —
+  // mexeu aqui, mexe lá.
+  const PAUSE_CARD = { x: VIEW_W / 2 - 190, y: 90, w: 380, h: 330 };
+  const PAUSE_BTN_W = 300, PAUSE_BTN_H = 54;
+  const PAUSE_ITENS = [
+    { y: 222, label: 'Continuar', tecla: '1', cor: '#8fe89a', acao: 'resumeGame' },
+    { y: 294, label: 'Pular Fase', tecla: '2', cor: '#ffd870', acao: 'requestSkipFase' },
+    { y: 366, label: 'Sair', tecla: '3', cor: '#ff8a80', acao: 'quitToMenu' },
+  ];
+  function drawPausedOverlay() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    const c = PAUSE_CARD;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 8;
+    const g = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+    g.addColorStop(0, '#2a1445'); g.addColorStop(1, '#1a1030');
+    painel(c.x, c.y, c.w, c.h, g, 'rgba(255,190,90,0.55)');
+    ctx.restore();
+    // filete interno mais fino: moldura dupla, sem depender de imagem nenhuma
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(c.x + 6, c.y + 6, c.w - 12, c.h - 12, 10);
+    else ctx.rect(c.x + 6, c.y + 6, c.w - 12, c.h - 12);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd870';
+    ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 20;
+    ctx.font = 'bold 38px "Trebuchet MS", sans-serif';
+    ctx.fillText('PAUSADO', VIEW_W / 2, c.y + 55);
+    ctx.shadowBlur = 0;
+
+    for (let i = 0; i < PAUSE_ITENS.length; i++) {
+      const it = PAUSE_ITENS[i];
+      const bx = VIEW_W / 2 - PAUSE_BTN_W / 2, by = it.y - PAUSE_BTN_H / 2;
+      painel(bx, by, PAUSE_BTN_W, PAUSE_BTN_H, 'rgba(255,255,255,0.06)', 'rgba(255,190,90,0.35)');
+      // acento colorido à esquerda: o "ícone" de cada botão, sem depender de glifo
+      ctx.fillStyle = it.cor;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx + 10, by + 10, 8, PAUSE_BTN_H - 20, 4);
+      else ctx.rect(bx + 10, by + 10, 8, PAUSE_BTN_H - 20);
+      ctx.fill();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.94)';
+      ctx.font = 'bold 24px "Trebuchet MS", sans-serif';
+      ctx.fillText(it.label, bx + 32, it.y + 8);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '18px "Trebuchet MS", sans-serif';
+      ctx.fillText(botao(it.tecla, ''), bx + PAUSE_BTN_W - 16, it.y + 6);
     }
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.textAlign = 'center';
+    ctx.restore();
+  }
+
+  // Popup pequeno de senha — só o "Pular Fase" pede, o resto do menu de
+  // pausa continua livre. Mesmo vocabulário do painel de pausa, em tamanho
+  // reduzido. Os pontinhos vêm do próprio #pularSenhaInput.value (fonte única
+  // de verdade, ver confirmarSenhaPular). Três geometrias, todas duplicadas em
+  // touch.js pro hit-test — mexeu aqui, mexe lá:
+  //   SENHA_CARD        — área do painel inteiro; toque fora dela cancela.
+  //   SENHA_INPUT_BOX    — só a caixinha de pontinhos; é onde o <input> de
+  //                        verdade fica posicionado (posicionarSenhaInput).
+  //   SENHA_CONFIRM_BTN  — botão "Confirmar"; tocar nele chama confirmarSenhaPular.
+  const SENHA_CARD = { x: VIEW_W / 2 - 220, y: 170, w: 440, h: 220 };
+  const SENHA_INPUT_BOX = { x: VIEW_W / 2 - 130, y: SENHA_CARD.y + 90, w: 260, h: 40 };
+  const SENHA_CONFIRM_BTN = { x: VIEW_W / 2 - 110, y: SENHA_CARD.y + 140, w: 220, h: 42 };
+  function drawPularSenhaOverlay() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    const c = SENHA_CARD;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 8;
+    const g = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+    g.addColorStop(0, '#2a1445'); g.addColorStop(1, '#1a1030');
+    painel(c.x, c.y, c.w, c.h, g, 'rgba(255,190,90,0.55)');
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd870';
+    ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 16;
+    ctx.font = 'bold 26px "Trebuchet MS", sans-serif';
+    ctx.fillText('PULAR FASE', VIEW_W / 2, c.y + 44);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = senhaErro ? '#ff8a80' : 'rgba(255,255,255,0.75)';
     ctx.font = '16px "Trebuchet MS", sans-serif';
-    ctx.fillText('pressione o número da fase · ESC volta ao menu', VIEW_W / 2, VIEW_H - 40);
+    ctx.fillText(senhaErro ? 'senha errada — tente de novo'
+                            : botao('digite a senha', 'toque aqui e digite a senha'),
+                 VIEW_W / 2, c.y + 74);
+
+    const b = SENHA_INPUT_BOX;
+    const dots = senhaInput ? Math.min(senhaInput.value.length, SENHA_PULAR.length) : 0;
+    painel(b.x, b.y, b.w, b.h, 'rgba(0,0,0,0.3)', 'rgba(255,190,90,0.4)');
+    ctx.fillStyle = '#ffe8b0';
+    ctx.font = 'bold 22px "Trebuchet MS", sans-serif';
+    let pontos = '';
+    for (let i = 0; i < dots; i++) pontos += '•';
+    ctx.fillText(pontos || ' ', VIEW_W / 2, b.y + b.h / 2 + 7);
+
+    const cb = SENHA_CONFIRM_BTN;
+    painel(cb.x, cb.y, cb.w, cb.h, 'rgba(143,232,154,0.16)', 'rgba(143,232,154,0.6)');
+    ctx.fillStyle = '#c8f7c5';
+    ctx.font = 'bold 18px "Trebuchet MS", sans-serif';
+    ctx.fillText(botao('Confirmar (Enter)', 'Confirmar'), VIEW_W / 2, cb.y + cb.h / 2 + 7);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '14px "Trebuchet MS", sans-serif';
+    ctx.fillText(botao('ESC cancela', 'toque fora do painel cancela'), VIEW_W / 2, c.y + c.h - 16);
     ctx.restore();
   }
 
   function drawHUD() {
+    if (engine.state === 'playing') drawPauseButton();
     ctx.save();
     // corações (hp em metades)
     const hp = FG.player.hp, max = FG.player.maxHp;
@@ -677,6 +864,9 @@ window.FG = window.FG || {};
     const scale = Math.min(w / VIEW_W, h / VIEW_H);
     canvas.style.width = Math.floor(VIEW_W * scale) + 'px';
     canvas.style.height = Math.floor(VIEW_H * scale) + 'px';
+    // giro/redimensionamento com o popup de senha aberto não pode desalinhar
+    // o <input> escondido do painel visível por baixo dele
+    if (engine.state === 'pularSenha') posicionarSenhaInput();
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => {
