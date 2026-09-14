@@ -349,45 +349,48 @@ window.FG = window.FG || {};
     81, 0, 0, 0, 0, 0, 0, 0,         // aterrissa no lá e respira
   ];
 
-  // ---- composição: PÂNTANO — morosa, ré menor natural, 66 BPM ----
-  // "Morosa" pedia mais que só desacelerar o metrônomo: a densidade de eventos
-  // cai junto. Onde a overworld dispara melodia+contra+baixo+bateria em toda
-  // colcheia, aqui a maior parte da grade fica em silêncio — o compasso vira
-  // espera, não impulso. Progressão i–VI–III–VII (D–Bb–F–C) repetida com um
-  // desvio pro iv (Gm) no compasso 6, típica de modo menor natural sem a
-  // sensível puxando de volta — nada aqui quer "resolver", só arrastar.
+  // ---- composição: PÂNTANO — morosa, ré menor natural, 68 BPM ----
+  // "Morosa" é o tempo lento e o portamento afundando, não a grade vazia — a
+  // 1ª versão espaçava as notas de menos em menos e soava como se faltasse
+  // alguma coisa. Aqui a melodia cobre metade da grade (nota sim, nota não,
+  // em colcheias), sempre dentro do arpejo do acorde do compasso, e o drone
+  // ganha a 3ª e a 5ª por cima da fundamental — vira pad, não só baixo.
+  // Progressão i–VI–III–VII (D–Bb–F–C) repetida com desvio pro iv (Gm) no
+  // compasso 6, típica de modo menor natural sem sensível puxando de volta.
   var PT_RAIZ = [38, 34, 41, 36, 38, 43, 36, 38]; // D2 Bb1 F2 C2 D2 G2 C2 D2, 1 por compasso
 
-  // Melodia grave e esparsa: uma frase por compasso, no máximo, com portamento
-  // pra baixo no agendador (som de nota "afundando na lama"). O resto é vazio.
+  // Arpejo do acorde de cada compasso, sempre em colcheias pares — com
+  // portamento descendente no agendador (nota "afunda" em vez de só parar).
   var PT_MEL = [
-    62, 0, 0, 0, 0, 0, 0, 0,   // D4 solitária, deixa o eco morrer
-    0, 0, 0, 0, 58, 0, 0, 0,   // Bb3 no meio do compasso 2
-    0, 0, 0, 0, 0, 0, 0, 0,    // respiro total
-    60, 0, 0, 0, 0, 0, 0, 0,   // C4
-    0, 0, 0, 0, 0, 0, 0, 0,
-    55, 0, 0, 0, 0, 0, 0, 0,   // G3, raiz do Gm
-    0, 0, 0, 0, 0, 0, 0, 0,
-    50, 0, 0, 0, 53, 0, 0, 0,  // D3 . F3 — gesto de fechamento arrastado
+    62, 0, 65, 0, 69, 0, 65, 0,   // Dm:  ré fá lá fá
+    58, 0, 62, 0, 65, 0, 62, 0,   // Bb:  sib ré fá ré
+    65, 0, 69, 0, 72, 0, 69, 0,   // F:   fá lá dó' lá
+    60, 0, 64, 0, 67, 0, 64, 0,   // C:   dó mi sol mi
+    69, 0, 65, 0, 62, 0, 65, 0,   // Dm:  variação descendo
+    55, 0, 58, 0, 62, 0, 58, 0,   // Gm:  sol sib ré sib
+    67, 0, 64, 0, 60, 0, 64, 0,   // C:   descendo de volta
+    62, 0, 58, 0, 55, 0, 50, 0,   // Dm:  afunda até o ré grave — fecho
   ];
 
   // ---- composição: MANSÃO — sombria, dó menor harmônico, 72 BPM ----
-  // Em vez de banda tocando junto (overworld/boss), aqui é uma linha só —
-  // sino de caixinha de música (sine com ataque lento) isolado sobre quase
-  // silêncio, mais um drone de trítono (dó/fá#) renovado a cada 2 compassos,
-  // igual à ideia do pedal de ré# do boss, mas aqui sustentado e bem mais
-  // baixo na mixagem — a dissonância fica no fundo, nunca em primeiro plano.
+  // Em vez de banda tocando junto (overworld/boss), aqui é o sino de caixinha
+  // de música (sine com ataque lento) tocando um arpejo constante — a 1ª
+  // versão isolava só 1-2 sinos por compasso e soava com buracos demais.
+  // Agora é arpejo em colcheias pares o loop inteiro, mais um pad de tríade
+  // sustentada por baixo (renovado a cada 4 compassos) e o drone de trítono
+  // (dó/fá#, ideia do pedal de ré# do boss) preenchendo o fundo — a
+  // dissonância e a atmosfera continuam no fundo, só que agora sem silêncio.
   // A 2ª aumentada láb–si (característica do menor harmônico) aparece nos
   // compassos 4-5 de propósito: é o intervalo mais "torto" da escala.
   var MN_SINO = [
-    84, 0, 0, 0, 0, 0, 0, 0,    // C6
-    0, 0, 0, 0, 0, 0, 79, 0,    // G5, tarde no compasso 2
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 75, 0, 0, 0, 0, 0,    // Eb5
-    0, 0, 0, 0, 0, 0, 80, 0,    // Ab5 — prepara a 2ª aumentada
-    0, 0, 83, 0, 0, 0, 0, 0,    // B5 — resolve a 2ª aumentada Ab-B
-    0, 0, 0, 0, 0, 0, 0, 0,
-    72, 0, 0, 0, 77, 0, 0, 0,   // C5 . F5 — fecho, sem resolver de verdade
+    84, 0, 79, 0, 75, 0, 72, 0,   // C6 sol5 mib5 dó5 — desce
+    75, 0, 79, 0, 84, 0, 79, 0,   // sobe de volta
+    72, 0, 75, 0, 79, 0, 84, 0,   // sobe de novo, mais alto
+    79, 0, 84, 0, 87, 0, 84, 0,   // sol5 dó6 mib6 dó6 — pico
+    84, 0, 80, 0, 84, 0, 80, 0,   // dó6/láb5 — prepara a 2ª aumentada
+    83, 0, 79, 0, 83, 0, 79, 0,   // si5/sol5 — resolve a 2ª aumentada Ab-B
+    75, 0, 72, 0, 75, 0, 72, 0,   // desce de volta
+    72, 0, 77, 0, 72, 0, 68, 0,   // dó5 fá5 dó5 láb4 — fecho, sem resolver de verdade
   ];
 
   // ---- composição: COLISEU — marcial e tenso, mi frígio, 132 BPM ----
@@ -423,8 +426,8 @@ window.FG = window.FG || {};
       agenda: agendaBoss,
     },
     pantano: {
-      bpm: 66,
-      stepDur: 60 / 66 / 2, // colcheia
+      bpm: 68,
+      stepDur: 60 / 68 / 2, // colcheia
       steps: 64,
       agenda: agendaPantano,
     },
@@ -550,24 +553,29 @@ window.FG = window.FG || {};
     var dentro = s % 8;
     var dur = SONGS.pantano.stepDur;
 
-    // drone de raiz sustentado o compasso inteiro — o "peso" que a overworld
-    // não tem: aqui embaixo de tudo há sempre uma nota grave morrendo devagar
+    // pad sustentado o compasso inteiro: fundamental + 3ª + 5ª (uma oitava
+    // acima, mais fracas) — vira cama harmônica, não só um baixo solitário
     if (dentro === 0) {
-      tone({ t: t, dur: dur * 8, vol: 0.05, type: 'sawtooth', freq: nf(PT_RAIZ[compasso]),
+      var raiz = PT_RAIZ[compasso];
+      tone({ t: t, dur: dur * 8, vol: 0.05, type: 'sawtooth', freq: nf(raiz),
              filtro: { type: 'lowpass', f0: 260 }, attack: 0.25, dest: dest });
+      tone({ t: t, dur: dur * 8, vol: 0.03, type: 'sine', freq: nf(raiz + 3 + 12),
+             attack: 0.3, dest: dest });
+      tone({ t: t, dur: dur * 8, vol: 0.03, type: 'sine', freq: nf(raiz + 7 + 12),
+             attack: 0.3, dest: dest });
     }
 
-    // melodia rara, com portamento descendente de um tom — a nota "afunda"
-    // em vez de simplesmente parar, o efeito mais "morosa" que dá pra pedir
-    // de um tone() só
+    // arpejo do acorde em colcheias pares, com portamento descendente de um
+    // tom — cada nota "afunda" em vez de só parar, o que dá o ar "morosa"
+    // mesmo com a grade metade preenchida (achado bom, não fica vazia)
     if (PT_MEL[s]) {
-      tone({ t: t, dur: dur * 7, vol: 0.13, type: 'triangle', freq: nf(PT_MEL[s]),
+      tone({ t: t, dur: dur * 3, vol: 0.13, type: 'triangle', freq: nf(PT_MEL[s]),
              freqEnd: nf(PT_MEL[s] - 2), attack: 0.05, dest: dest });
     }
 
-    // percussão: um baque abafado só no tempo 1 de cada compasso — sem
-    // chimbal, sem caixa. O silêncio entre os baques é a "moleza" do pântano.
-    if (dentro === 0) bumboLama(t, dest);
+    // percussão: baque abafado nos tempos 1 e 3 — passo lento de duas patas
+    // na lama, não um só baque solitário por compasso
+    if (dentro === 0 || dentro === 4) bumboLama(t, dest);
   }
 
   function agendaMansao(step, t, dest) {
@@ -584,8 +592,18 @@ window.FG = window.FG || {};
              filtro: { type: 'lowpass', f0: 300 }, attack: 0.6, dest: dest });
     }
 
+    // pad de tríade sustentada (dó menor), renovado a cada 4 compassos e bem
+    // baixo na mixagem — preenche o fundo pra não sobrar silêncio entre um
+    // sino e outro, sem competir com o drone de trítono nem com o sino
+    if (s % 32 === 0) {
+      tone({ t: t, dur: dur * 32, vol: 0.025, type: 'sine', freq: nf(48), attack: 1.2, dest: dest });
+      tone({ t: t, dur: dur * 32, vol: 0.02, type: 'sine', freq: nf(51), attack: 1.2, dest: dest });
+      tone({ t: t, dur: dur * 32, vol: 0.02, type: 'sine', freq: nf(55), attack: 1.2, dest: dest });
+    }
+
     // sino de caixinha de música: ataque lento, harmônico fraco por cima
-    // (mesmo truque do SFX "lumi") pra dar o timbre metálico-cristalino
+    // (mesmo truque do SFX "lumi") — agora em arpejo constante (colcheias
+    // pares), não mais isolado a 1-2 toques soltos por compasso
     if (MN_SINO[s]) {
       var f = nf(MN_SINO[s]);
       tone({ t: t, dur: dur * 6, vol: 0.1, type: 'sine', freq: f, attack: 0.05, dest: dest });
