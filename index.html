@@ -32,10 +32,23 @@
     image-rendering: auto;
     touch-action: none;
   }
+  /* Campo escondido da senha de fases no touch (ver engine.js/touch.js): um
+     canvas não pega foco do teclado do iOS sozinho, só um <input> de verdade
+     abre o teclado do sistema. pointer-events fica 'none' o tempo todo, exceto
+     no menu (ligado pelo engine.setState) — fora do menu não deve roubar
+     nenhum toque do jogo. */
+  #senhaTouch {
+    position: absolute; right: 0; bottom: 0; width: 48px; height: 48px;
+    margin: 0; padding: 0; border: none; background: transparent; opacity: 0;
+    pointer-events: none; z-index: 5;
+  }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="game" width="960" height="540"></canvas></div>
+<div id="wrap">
+  <canvas id="game" width="960" height="540"></canvas>
+  <input id="senhaTouch" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="-1">
+</div>
 <script src="assets.js"></script>
 <script src="audio.js"></script>
 <!-- levelkit antes das fases (elas o usam para construir a geometria no load);

@@ -105,8 +105,13 @@ window.FG = window.FG || {};
     // toque em qualquer lugar avança — é o que se espera de um jogo de celular.
     var rect = canvas.getBoundingClientRect();
     if (rect.width && FG.engine.state !== 'playing' && !pick(x, y, rect)) {
-      FG.engine.setAction('jump', true);
-      FG.engine.setAction('jump', false);
+      // Fase-select não tem botão de toque (é tela de dev): tocar em qualquer
+      // lugar volta ao menu, o mesmo que ESC faz no teclado.
+      if (FG.engine.state === 'faseselect') FG.engine.setState('menu');
+      else {
+        FG.engine.setAction('jump', true);
+        FG.engine.setAction('jump', false);
+      }
     }
   }
 
@@ -118,13 +123,22 @@ window.FG = window.FG || {};
     for (var i = 0; i < t.length; i++) out.push(t[i]);
     return out;
   }
+  // Toque no campo escondido da senha (#senhaTouch, só ativo no menu) precisa
+  // atravessar intacto até o iOS: preventDefault mataria o foco/teclado, e
+  // comecou()/sync() tratariam o toque como "avançar tela" ou botão do jogo.
+  function ehSenhaInput(e) { return e.target && e.target.id === 'senhaTouch'; }
+
   function onStart(e) {
+    if (ehSenhaInput(e)) return;
     e.preventDefault();
     var t = e.changedTouches && e.changedTouches[0];
     if (t) comecou(t.clientX, t.clientY);
     sync(lista(e));
   }
-  function onMoveOuEnd(e) { e.preventDefault(); sync(lista(e)); }
+  function onMoveOuEnd(e) {
+    if (ehSenhaInput(e)) return;
+    e.preventDefault(); sync(lista(e));
+  }
 
   // ----------------------------------------------------- Pointer Events -----
   // Rede de segurança para aparelho que tem tela sensível mas NÃO emite touch
@@ -140,6 +154,7 @@ window.FG = window.FG || {};
   function dedo(e) { return e.pointerType !== 'mouse'; }   // mouse tem teclado junto
   function onPtrDown(e) {
     if (!dedo(e)) return;
+    if (ehSenhaInput(e)) return;
     e.preventDefault();
     ponteiros[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
     comecou(e.clientX, e.clientY);

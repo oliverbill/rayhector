@@ -53,6 +53,18 @@ window.FG = window.FG || {};
   const SENHA_FASES = '%Baleia302%';
   let senhaBuffer = '';
 
+  // Um só caminho para abrir o menu de fases, usado tanto pelo keydown quanto
+  // pelo <input> escondido do touch (ver #senhaTouch) — a transição de estado
+  // não deve viver duas vezes.
+  function checkSenhaChar(ch) {
+    senhaBuffer = (senhaBuffer + ch).slice(-SENHA_FASES.length);
+    if (senhaBuffer === SENHA_FASES) {
+      senhaBuffer = '';
+      engine.setState('faseselect');
+      FG.audio.sfx('select');
+    }
+  }
+
   window.addEventListener('keydown', (e) => {
     const action = keyToAction[e.code];
     if (action) e.preventDefault();
@@ -60,12 +72,7 @@ window.FG = window.FG || {};
     if (action) setAction(action, true);
 
     if (engine.state === 'menu' && e.key && e.key.length === 1 && /[A-Za-z0-9%]/.test(e.key)) {
-      senhaBuffer = (senhaBuffer + e.key).slice(-SENHA_FASES.length);
-      if (senhaBuffer === SENHA_FASES) {
-        senhaBuffer = '';
-        engine.setState('faseselect');
-        FG.audio.sfx('select');
-      }
+      checkSenhaChar(e.key);
     } else if (engine.state === 'faseselect') {
       if (e.code === 'Escape') { engine.setState('menu'); return; }
       const m = /^Digit([1-9])$/.exec(e.code);
@@ -82,6 +89,20 @@ window.FG = window.FG || {};
     const action = keyToAction[e.code];
     if (action) setAction(action, false);
   });
+
+  // Versão touch da senha: iPad não tem teclado físico, então o keydown acima
+  // nunca dispara. #senhaTouch é um <input> de verdade (só ele abre o teclado
+  // do iOS sobre um canvas) que fica invisível e sem pointer-events fora do
+  // menu — ligado/desligado em setState(), logo abaixo.
+  const senhaInput = document.getElementById('senhaTouch');
+  if (senhaInput) {
+    senhaInput.addEventListener('input', () => {
+      const v = senhaInput.value;
+      checkSenhaChar(v.slice(-1));
+      // Buffer do próprio campo não pode crescer para sempre num teste longo.
+      if (v.length > SENHA_FASES.length * 2) senhaInput.value = v.slice(-SENHA_FASES.length);
+    });
+  }
 
   // ---------- helpers ----------
   function rectsOverlap(a, b) {
@@ -130,6 +151,12 @@ window.FG = window.FG || {};
       // que a decisão mora no setState e não em cada um deles.
       if (s === 'victory' && FG.levels && engine.levelIndex < FG.levels.length - 1) s = 'fase';
       engine.state = s;
+      // #senhaTouch só aceita toque no menu — fora dele não pode roubar
+      // nenhum gesto do jogo (ver ehSenhaInput em touch.js).
+      if (senhaInput) {
+        senhaInput.style.pointerEvents = (s === 'menu') ? 'auto' : 'none';
+        if (s !== 'menu') { senhaInput.value = ''; senhaInput.blur(); }
+      }
       if (s === 'fase') faseTimer = 0;
       if (s === 'dead') {
         deadTimer = 0;
