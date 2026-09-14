@@ -47,11 +47,36 @@ window.FG = window.FG || {};
   // gesto, e não só no primeiro. init() é idempotente e barato.
   function gesture() { FG.audio.init(); }
 
+  // Senha secreta do menu de seleção de fase: buffer corrediço, só letras/
+  // dígitos/%, comparado por sufixo — não precisa Enter nem digitar certinho
+  // desde o início.
+  const SENHA_FASES = '%Baleia302%';
+  let senhaBuffer = '';
+
   window.addEventListener('keydown', (e) => {
     const action = keyToAction[e.code];
     if (action) e.preventDefault();
     gesture();
     if (action) setAction(action, true);
+
+    if (engine.state === 'menu' && e.key && e.key.length === 1 && /[A-Za-z0-9%]/.test(e.key)) {
+      senhaBuffer = (senhaBuffer + e.key).slice(-SENHA_FASES.length);
+      if (senhaBuffer === SENHA_FASES) {
+        senhaBuffer = '';
+        engine.setState('faseselect');
+        FG.audio.sfx('select');
+      }
+    } else if (engine.state === 'faseselect') {
+      if (e.code === 'Escape') { engine.setState('menu'); return; }
+      const m = /^Digit([1-9])$/.exec(e.code);
+      if (m) {
+        const i = parseInt(m[1], 10) - 1;
+        if (i < FG.levels.length) {
+          engine.lumis = 0;
+          loadLevel(i);
+        }
+      }
+    }
   });
   window.addEventListener('keyup', (e) => {
     const action = keyToAction[e.code];
@@ -237,9 +262,15 @@ window.FG = window.FG || {};
           }
         }
       }
-      // gatilho e tranca da arena do boss
+      // gatilho e tranca da arena do boss: sempre entra com os 6 corações
+      // cheios, e o checkpoint vira este ponto — morrer no chefão reinicia
+      // direto nele, sem voltar nada da fase.
       const boss = FG.enemies.boss;
-      if (!boss.started && p.x > FG.level.bossTriggerX) boss.start();
+      if (!boss.started && p.x > FG.level.bossTriggerX) {
+        boss.start();
+        p.hp = p.maxHp;
+        engine.checkpoint = { x: p.x, y: p.y };
+      }
       if (boss.started && !boss.dead) {
         arenaLocked = true;
         const a = FG.level.arena;
@@ -280,6 +311,7 @@ window.FG = window.FG || {};
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
 
     if (engine.state === 'menu') { drawMenu(); drawTouch(); return; }
+    if (engine.state === 'faseselect') { drawFaseSelect(); return; }
 
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
@@ -343,6 +375,34 @@ window.FG = window.FG || {};
     ctx.fillText(botao('setas / WASD para mover · ESPAÇO pula (2x; segure para planar) · X soca',
                        '◀ ▶ para mover · PULO pula (2x; segure para planar) · SOCO soca'),
                  VIEW_W / 2, 400);
+    ctx.restore();
+  }
+
+  // Menu escondido de debug: destrancado pela senha digitada em drawMenu.
+  // Bypassa startGame() de propósito, então zera lumis na hora de entrar
+  // (feito no keydown, junto do loadLevel) para não carregar contagem velha.
+  function drawFaseSelect() {
+    const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+    g.addColorStop(0, '#1a1030'); g.addColorStop(0.6, '#2e1030'); g.addColorStop(1, '#101a10');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffb830';
+    ctx.shadowColor = '#ff8000'; ctx.shadowBlur = 20;
+    ctx.font = 'bold 40px "Trebuchet MS", sans-serif';
+    ctx.fillText('SELECIONAR FASE', VIEW_W / 2, 140);
+    ctx.shadowBlur = 0;
+    ctx.font = '20px "Trebuchet MS", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < FG.levels.length; i++) {
+      const y = 210 + i * 44;
+      ctx.fillStyle = '#ffd870';
+      ctx.fillText((i + 1) + '  —  ' + FG.levels[i].nome, VIEW_W / 2, y);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '16px "Trebuchet MS", sans-serif';
+    ctx.fillText('pressione o número da fase · ESC volta ao menu', VIEW_W / 2, VIEW_H - 40);
     ctx.restore();
   }
 
