@@ -29,11 +29,19 @@ window.FG = window.FG || {};
   // RITMO EM 6 TRECHOS — cada um ensina uma coisa antes de cobrá-la
   //  (1) x 0..880     MARGEM SECA. Chão firme, raízes em degrau, nenhum perigo.
 //  (2+3) x 880..4480 O LAGO SUBMERSO — METADE DA FASE debaixo d'água. Água
-//                   limpa (sem veneno): mergulhar é a rota principal, com
-//                   trilhas de lumis, um ninho no fundo, pilares de pedra,
-//                   piranhas e carangos. Na superfície, troncos-boia e três
-//                   ILHAS de lodo (com nado por baixo delas) dão a rota seca
-//                   e os respiros; o checkpoint do meio fica na ILHA B.
+//                   limpa (sem veneno): mergulhar é OBRIGATÓRIO em dois
+//                   pontos do traçado (o resto é respiro), com trilhas de
+//                   lumis, um ninho no fundo, pilares de pedra, piranhas,
+//                   carangos, e agora o jacaré (mordida forte, patrulha
+//                   lenta) e o candiru (minúsculo, só ativo com o jogador
+//                   molhado). Na superfície, troncos-boia e três ILHAS de
+//                   lodo (com nado por baixo delas) dão respiro entre os dois
+//                   mergulhos forçados — não mais uma rota seca ponta a
+//                   ponta: os troncos que fechavam ILHA A→B e B→C foram
+//                   removidos de propósito, então quem tenta ir só por cima
+//                   cai no vão e molha de qualquer jeito. O checkpoint do
+//                   meio fica na ILHA B, alcançável nadando e escalando a
+//                   face dela (toda face vertical contínua é escalável).
 //  (4) x 4480..5150 MARGEM LESTE. Sai da água, lodo raso, rumo à fenda.
 //  (5) x 5150..5560 A FENDA DAS RAÍZES. Duas paredes frente a frente: descida
 //                   controlada agarrando, e a saída de quem caiu no lamaçal.
@@ -110,21 +118,34 @@ window.FG = window.FG || {};
   // chão firme do bambuzal (x=2700), onde dá para ler o disparo sem estar
   // pendurado em nada, e só depois cruza os cipós.
   // Nenhum inimigo antes de x=1000: o trecho 1 é margem limpa.
+  //
+  // O jacaré patrulha bem os dois vãos onde os troncos-boia foram removidos
+  // (1990..2650 e 2910..3550): é ele quem cobra o pedágio de quem tenta
+  // atravessar por cima. O candiru fica espalhado pelo lago inteiro, mas só
+  // acorda (e só machuca) com o jogador dentro d'água — fora d'água é
+  // decoração inofensiva.
   // ---------------------------------------------------------------
   var enemyDefs = [
     { type: 'voadeira',  x: 1030, y: 520, range: 110 },  // (1) fim da margem
 
     // (2+3) O LAGO — piranhas patrulhando o volume, carangos no leito e nos
-    // pilares, e os peixes voadores rasantes por cima da superfície
+    // pilares, os peixes voadores rasantes por cima da superfície, e agora
+    // jacarés e candirus nos dois vãos obrigatórios
     { type: 'piranha',   x: 930,  y: 770, range: 110 },
     { type: 'piranha',   x: 1060, y: 890, range: 100 },
     { type: 'carango',   x: 970,  y: 968, range: 90 },
+    { type: 'candiru',   x: 1180, y: 840, range: 0 },
     { type: 'piranha',   x: 1550, y: 810, range: 120 },
     { type: 'carango',   x: 1900, y: 968, range: 90 },
+    { type: 'jacare',    x: 2300, y: 900, range: 260 },  // vão obrigatório ILHA A→B
     { type: 'piranha',   x: 2150, y: 760, range: 130 },
+    { type: 'candiru',   x: 2080, y: 900, range: 0 },
     { type: 'piranha',   x: 2450, y: 900, range: 110 },
+    { type: 'candiru',   x: 2560, y: 950, range: 0 },
     { type: 'carango',   x: 3110, y: 734, range: 38 },   // em cima do pilar 2!
+    { type: 'jacare',    x: 3140, y: 900, range: 240 },  // vão obrigatório ILHA B→C
     { type: 'piranha',   x: 2950, y: 880, range: 120 },
+    { type: 'candiru',   x: 3260, y: 860, range: 0 },
     { type: 'carango',   x: 3300, y: 968, range: 100 },
     { type: 'piranha',   x: 3450, y: 790, range: 110 },
     { type: 'piranha',   x: 4100, y: 900, range: 120 },
@@ -164,13 +185,15 @@ window.FG = window.FG || {};
   // Todo cipó reserva sag+13+60px livres abaixo da reta dos pinos.
   // ---------------------------------------------------------------
   var obstacleDefs = [
-    // troncos-boia na superfície do lago: a rota seca de quem ainda não quer
-    // mergulhar. Afundam com o peso (556+70+22 = 648 < 664, nunca somem).
+    // troncos-boia na superfície do lago: dão respiro entre os mergulhos,
+    // mas NÃO fecham o lago ponta a ponta — de propósito faltam os troncos
+    // entre ILHA A e ILHA B e entre ILHA B e ILHA C (vãos de 640-660px, bem
+    // além do que pulo duplo + planagem cobrem), então esses dois trechos só
+    // se atravessam nadando, cara a cara com o jacaré. Afundam com o peso
+    // (556+70+22 = 648 < 664, nunca somem).
     { type: 'tronco', x: 960,  y: 556, w: 130 },
     { type: 'tronco', x: 1440, y: 568, w: 110 },
     { type: 'tronco', x: 1640, y: 568, w: 110 },
-    { type: 'tronco', x: 2280, y: 560, w: 110 },
-    { type: 'tronco', x: 3180, y: 560, w: 110 },
     { type: 'tronco', x: 4180, y: 560, w: 110 },
 
     // (6) lamaçal final: um tronco sobre a poça pré-clareira, como despedida.
