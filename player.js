@@ -28,11 +28,16 @@ window.FG = window.FG || {};
   // aperto de PULO (mash) dá o impulso normal de pulo (reaproveitado, ver
   // jumpsUsed resetado a cada frame lá embaixo), mas ele morre rápido se não
   // vier outro aperto logo atrás.
-  const QUICKSAND_PULL = 2600;  // "gravidade" da areia (px/s²), mais forte que a normal
+  const QUICKSAND_PULL = 3400;  // "gravidade" da areia (px/s²) — bem mais forte que a
+                                 // normal, e mais forte que antes: puxa de volta rápido
+                                 // demais pro mash sozinho vencer, precisa ser insistente
   const QUICKSAND_SINK = 150;   // velocidade terminal de afundamento sem apertar nada (px/s) —
                                  // rápido o bastante pra cobrar mash de verdade: sem apertar
                                  // nada, afunda até a falha bem antes de atravessar o poço
                                  // andando (ver simulação em level4.js/tests, poço de 540px)
+  const QUICKSAND_JUMP_SCALE = 0.68; // cada aperto de pulo dentro da areia sobe menos que
+                                      // um pulo normal — a areia PRENDE: escapar custa mais
+                                      // apertos, não é só repetir o pulo de sempre mais rápido
   const QUICKSAND_FAIL_DEPTH = 130; // px afundados desde a entrada = falha (engine.js aplica dano/respawn)
 
   // ---------- pool de faíscas (sem alocação por frame) ----------
@@ -204,18 +209,25 @@ window.FG = window.FG || {};
       // corrida: aceleração com input, atrito sem.
       // Durante o wallLock, o input de volta para a parede é ignorado — senão
       // o salto de parede morre colado nela e não se sobe penhasco nenhum.
+      // Dentro da areia movediça (flag do frame anterior — a detecção em si
+      // roda mais abaixo, mas um frame de atraso não muda nada em regime
+      // permanente) a areia agarra o corpo inteiro, não só a queda: menos
+      // aceleração, atrito bem mais forte e um teto de velocidade baixo —
+      // reforça a sensação de estar PRESO, não só afundando.
+      const naAreia = this.inQuicksand;
       let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       if (wallLock > 0 && dir === lastWallDir) dir = 0;
       if (dir !== 0) {
-        this.vx += dir * ACCEL * dt;
+        this.vx += dir * (naAreia ? ACCEL * 0.35 : ACCEL) * dt;
         this.facing = dir;
       } else if (this.vx !== 0) {
-        const drop = FRICTION * dt;
+        const drop = (naAreia ? FRICTION * 2.4 : FRICTION) * dt;
         if (Math.abs(this.vx) <= drop) this.vx = 0;
         else this.vx -= Math.sign(this.vx) * drop;
       }
-      if (this.vx > MAX_VX) this.vx = MAX_VX;
-      if (this.vx < -MAX_VX) this.vx = -MAX_VX;
+      const vxCap = naAreia ? MAX_VX * 0.45 : MAX_VX;
+      if (this.vx > vxCap) this.vx = vxCap;
+      if (this.vx < -vxCap) this.vx = -vxCap;
 
       // agarrar: no ar, caindo, com parede do lado e empurrando contra ela
       const pushingWall = lastWallDir !== 0 && wallCoyote > 0 &&
@@ -327,7 +339,10 @@ window.FG = window.FG || {};
           FG.audio.sfx('walljump');
           this.spawnBurst(7);
         } else if (jumpsUsed === 0 && (this.onGround || coyoteTimer <= COYOTE)) {
-          this.vy = JUMP_VY;
+          // dentro da areia, cada aperto sobe menos que um pulo normal — é
+          // isso que faz a areia PRENDER: precisa de mash de verdade, não só
+          // repetir o pulo comum
+          this.vy = inQuicksand ? JUMP_VY * QUICKSAND_JUMP_SCALE : JUMP_VY;
           jumpsUsed = 1; jumpBuffer = 0; jumpCut = false;
           FG.audio.sfx('jump');
           this.spawnBurst(4);
