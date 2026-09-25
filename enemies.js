@@ -1,6 +1,7 @@
 // Fagulho: Lendas do Bosque — enemies.js
-// FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe), as pools
-// de partícula e o registro de chefões. Cada chefão mora no seu arquivo
+// FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe, e os da
+// gruta submersa do pântano: piranha, carango, jacaré, candiru), as pools de
+// partícula e o registro de chefões. Cada chefão mora no seu arquivo
 // (boss1.js, boss2.js, boss3.js) e regista-se aqui no load; enemies.js só
 // escolhe qual deles entra em cena, pelo bossId da fase. Nenhuma referência a
 // outros módulos no load — só dentro de funções chamadas em runtime.
@@ -110,6 +111,9 @@ window.FG = window.FG || {};
       phase: Math.random() * Math.PI * 2, // dessincroniza animações
       st: 'parado',    // sub-estado (peixe: parado|disparo|sumido)
       speed: def.speed || 560, // velocidade do disparo do peixe
+      hp: 1,           // vida em golpes (soco ou pisão); a maioria morre no 1º
+      dmg: 1,          // dano de contato (fora do pisão) causado ao player
+      hitCd: 0,        // janela pós-acerto sem contar de novo o mesmo soco
       dead: false,
     };
     if (e.type === 'espinhoco') { e.w = 48; e.h = 26; }
@@ -117,9 +121,11 @@ window.FG = window.FG || {};
     else if (e.type === 'peixe') { e.w = 46; e.h = 24; } // achatado: é um torpedo
     else if (e.type === 'piranha') { e.w = 36; e.h = 22; } // gruta submersa
     else if (e.type === 'carango') { e.w = 44; e.h = 26; } // leito da gruta
+    else if (e.type === 'jacare') { e.w = 78; e.h = 30; e.hp = 3; e.dmg = 2; } // o predador-título do lago
+    else if (e.type === 'candiru') { e.w = 14; e.h = 9; e.dmg = 1; } // minúsculo, só ativo na água
     else { e.w = 38; e.h = 32; } // sapeca
-    // baseY: linha da patrulha da piranha — desliza de volta ao spawnY depois
-    // de um bote, para não teleportar na vertical ao retomar a ondulação.
+    // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
+    // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
     e.baseY = def.y;
     if (e.type === 'carango') e.timer = rand(1.2, 2.2); // primeira pinçada dessincronizada
     return e;
@@ -322,23 +328,109 @@ window.FG = window.FG || {};
           e.timer = rand(1.8, 2.6);   // ~2.2s até a próxima pinçada
         }
       }
+    } else if (e.type === 'jacare') {
+      // Jacaré: o predador do lago. Patrulha quase parado, boiando rente ao
+      // leito com só as costas e os olhos de fora, e dá uma dentada de longo
+      // alcance — bem maior que a da piranha — quando o jogador entra na água
+      // perto dele ou pisa na beirada. Mais lento para atacar (telegraph
+      // maior), mas a mordida dói o dobro e ele aguenta 3 golpes.
+      const t = FG.engine.time + e.phase;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dy = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 26;
+        e.x += e.dir * SPD * dt;
+        if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+        if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 2);
+        e.y = e.baseY + Math.sin(t * 1.1) * 4;   // quase parado boiando
+        if (Math.random() < 0.015) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.9 : 0.1), e.y + e.h * 0.2,
+            rand(-6, 6), -24, 0.9, 2.5, 'rgba(200,245,250,0.7)', -30);
+        }
+        // alcance de detecção bem maior que o da piranha
+        if (dx * dx + dy * dy < 230 * 230 && Math.abs(dy) < 130) {
+          e.dir = dx >= 0 ? 1 : -1;
+          e.st = 'erica';
+          e.timer = 0.32;      // telegraph mais longo: dá tempo de reagir
+        }
+      } else if (e.st === 'erica') {
+        e.timer -= dt;
+        e.y = e.baseY + Math.sin(t * 26) * 2;
+        if (e.timer <= 0) {
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const BOTE = 260;
+          e.dir = dx >= 0 ? 1 : -1;
+          e.vx = (dx / d) * BOTE;
+          e.vy = (dy / d) * BOTE;
+          e.st = 'bote';
+          e.timer = 0.55;
+        }
+      } else { // bote
+        e.timer -= dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (Math.random() < 0.4) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.1 : 0.9), e.y + e.h * 0.5,
+            rand(-24, 24), rand(-45, -10), 0.4, 2.5 + Math.random() * 2, 'rgba(200,245,250,0.75)', -50);
+        }
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.baseY = e.y;
+          e.vx = 0; e.vy = 0;
+        }
+      }
+    } else if (e.type === 'candiru') {
+      // Candiru: some enquanto o jogador está seco (não ameaça de fora
+      // d'água) e vira uma flecha minúscula e insistente assim que ele
+      // mergulha — mordida fraca, mas persiste enquanto o jogador continuar
+      // molhado por perto.
+      if (!p.inWater) {
+        e.st = 'dormente';
+        e.x = e.spawnX + Math.sin((FG.engine.time + e.phase) * 1.4) * 5;
+        e.y = e.spawnY + Math.sin((FG.engine.time + e.phase) * 1.9) * 4;
+        e.vx = 0; e.vy = 0;
+      } else {
+        e.st = 'ativo';
+        const dx2 = (p.x + p.w / 2) - (e.x + e.w / 2);
+        const dy2 = (p.y + p.h / 2) - (e.y + e.h / 2);
+        const d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+        const SPD = 220;
+        e.dir = dx2 >= 0 ? 1 : -1;
+        e.x += (dx2 / d2) * SPD * dt;
+        e.y += (dy2 / d2) * SPD * dt;
+        if (Math.random() < 0.3) {
+          spawnParticle(e.x + e.w * 0.5, e.y + e.h * 0.5, rand(-10, 10), rand(-20, -4),
+            0.3, 1.5, 'rgba(200,245,250,0.8)', -30);
+        }
+      }
     }
 
     // ---------- combate ----------
-    // 1) Soco: se a hitbox do golpe sobrepõe, morre (qualquer tipo).
-    if (p.attackBox && p.attackBox.active && ov(p.attackBox, e)) {
-      killEnemy(e);
+    if (e.hitCd > 0) e.hitCd -= dt;
+
+    // 1) Soco: se a hitbox do golpe sobrepõe e não está na janela de
+    // cooldown do acerto, desconta 1 de vida. A maioria morre no 1º golpe;
+    // o jacaré aguenta 3.
+    if (p.attackBox && p.attackBox.active && e.hitCd <= 0 && ov(p.attackBox, e)) {
+      e.hp -= 1;
+      e.hitCd = 0.3;
+      if (e.hp <= 0) { killEnemy(e); return; }
+      FG.audio.sfx('hitEnemy');
       return;
     }
     // 2) Contato com o player
     if (ov(p, e)) {
       if (e.type !== 'espinhoco' && isStomp(p, e)) {
-        // Pisão: inimigo morre e o player quica.
-        killEnemy(e);
+        // Pisão: desconta vida (a maioria já zera) e o player quica.
+        if (e.hitCd <= 0) { e.hp -= 1; e.hitCd = 0.3; }
         p.vy = -420;
+        if (e.hp <= 0) { killEnemy(e); return; }
+      } else if (e.type === 'candiru' && !p.inWater) {
+        // dormente fora d'água: contato não machuca
       } else {
         // Espinhoco espeta até quem pisa; os outros machucam de lado.
-        p.hurt(1, e.x + e.w / 2);
+        p.hurt(e.dmg || 1, e.x + e.w / 2);
       }
     }
   }
@@ -691,6 +783,127 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  function drawJacare(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const ericada = e.st === 'erica';
+    const dando = e.st === 'bote';
+    const wob = Math.sin(t * (ericada || dando ? 20 : 5) + e.phase) * (dando ? 6 : 3);
+    ctx.save();
+    ctx.translate(cx + (ericada ? Math.sin(t * 46) * 1.2 : 0), cy);
+    ctx.scale(e.dir, 1);
+    if (dando) ctx.scale(1.12, 0.9);
+
+    // cauda comprida, ondulando
+    ctx.fillStyle = '#3c4a22';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.32, 0);
+    ctx.lineTo(-e.w * 0.7, -9 + wob);
+    ctx.lineTo(-e.w * 0.58, 0);
+    ctx.lineTo(-e.w * 0.7, 9 + wob);
+    ctx.closePath();
+    ctx.fill();
+    // cristas dorsais, três triângulos ao longo do dorso
+    ctx.fillStyle = '#2c3a18';
+    for (let i = 0; i < 3; i++) {
+      const bx = -e.w * 0.18 + i * e.w * 0.16;
+      ctx.beginPath();
+      ctx.moveTo(bx - 5, -e.h * 0.4);
+      ctx.lineTo(bx, -e.h * 0.7 - wob * 0.2);
+      ctx.lineTo(bx + 5, -e.h * 0.4);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // corpo grosso, couraça verde-oliva
+    const g = ctx.createRadialGradient(-4, -e.h * 0.1, 2, 0, 0, e.w * 0.5);
+    g.addColorStop(0, '#6a7a3c');
+    g.addColorStop(0.55, '#4a5a26');
+    g.addColorStop(1, '#2c3814');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, e.w * 0.46, e.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // barriga clara, só a fatia de baixo
+    ctx.fillStyle = 'rgba(214,208,164,0.65)';
+    ctx.beginPath();
+    ctx.ellipse(0, e.h * 0.28, e.w * 0.36, e.h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // placas do couro
+    ctx.fillStyle = 'rgba(28,36,14,0.35)';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.ellipse(-e.w * 0.2 + i * e.w * 0.14, -e.h * 0.06, 4, 2.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // focinho longo, achatado, na frente
+    ctx.fillStyle = '#3c4a20';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.3, -e.h * 0.22);
+    ctx.lineTo(e.w * 0.62, -e.h * 0.1);
+    ctx.lineTo(e.w * 0.62, e.h * 0.1);
+    ctx.lineTo(e.w * 0.3, e.h * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    // mordida: dentinhos brancos só aparecem eriçado/atacando
+    if (ericada || dando) {
+      ctx.fillStyle = '#f2ead0';
+      const nD = 4;
+      for (let i = 0; i < nD; i++) {
+        const tx = e.w * (0.34 + i * 0.07);
+        ctx.beginPath();
+        ctx.moveTo(tx, -e.h * 0.14); ctx.lineTo(tx + 2.4, -e.h * 0.14); ctx.lineTo(tx + 1.2, -e.h * 0.06);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(tx, e.h * 0.14); ctx.lineTo(tx + 2.4, e.h * 0.14); ctx.lineTo(tx + 1.2, e.h * 0.06);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // olhos em bossa no alto da cabeça — o que se vê de fora quando ele
+    // finge só boiar
+    for (let s = -1; s <= 1; s += 2) {
+      const ex = e.w * 0.14, ey = s * e.h * 0.3 - e.h * 0.02;
+      ctx.fillStyle = '#3c4a20';
+      ctx.beginPath(); ctx.arc(ex, ey, 4.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd23a';
+      ctx.beginPath(); ctx.arc(ex + 1, ey, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a0d08';
+      ctx.beginPath(); ctx.arc(ex + 1.8, ey, 1.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawCandiru(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const ativo = e.st === 'ativo';
+    const wob = Math.sin(t * (ativo ? 24 : 6) + e.phase) * (ativo ? 3 : 1.4);
+    ctx.save();
+    ctx.globalAlpha = ativo ? 0.95 : 0.35; // dormente: quase invisível, escondido no lodo
+    ctx.translate(cx, cy);
+    ctx.scale(e.dir, 1);
+    // corpo filiforme, um traço fino com cauda
+    ctx.strokeStyle = '#d8c8a8';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.5, wob * 0.5);
+    ctx.quadraticCurveTo(0, -wob, e.w * 0.5, 0);
+    ctx.stroke();
+    // cabecinha com boquinha
+    ctx.fillStyle = '#c8b898';
+    ctx.beginPath();
+    ctx.arc(e.w * 0.46, 0, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    if (ativo) {
+      ctx.fillStyle = '#5a1616';
+      ctx.beginPath();
+      ctx.arc(e.w * 0.52, 0, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // Registro de chefões
   // Cada boss vive no seu arquivo (boss1.js, boss2.js, boss3.js) e regista-se
@@ -776,6 +989,8 @@ window.FG = window.FG || {};
         else if (e.type === 'peixe') drawPeixe(ctx, e, t);
         else if (e.type === 'piranha') drawPiranha(ctx, e, t);
         else if (e.type === 'carango') drawCarango(ctx, e, t);
+        else if (e.type === 'jacare') drawJacare(ctx, e, t);
+        else if (e.type === 'candiru') drawCandiru(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();
