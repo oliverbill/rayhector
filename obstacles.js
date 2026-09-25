@@ -81,9 +81,13 @@ window.FG = window.FG || {};
   var HOTDOG_COOLDOWN = 0.5;  // carência depois de comer, antes de reabrir o prompt
 
   var COASTER_RANGE = 36;     // alcance horizontal de interação
-  var COASTER_RIDE_TIME = 10; // segundos do passeio (pedido)
-  var COASTER_AMP = 78;       // amplitude vertical da ondulação do trilho
-  var COASTER_LOOPS = 3;      // quantos sobe-e-desce em 10s
+  // Passeio ida-e-volta bem maior que o original: subida (lift hill), um
+  // cruzeiro longo pelo céu, um loop-de-loop de verdade (360°) no meio do
+  // cruzeiro e volta pelo MESMO trilho até a estação. Percurso de ida tem
+  // ~3600px (a volta é o dobro) — 17s dá pra acompanhar a subida, o
+  // cruzeiro, o loop e a volta sem parecer nem arrastado nem borrado
+  // (~423px/s de velocidade média; ficou entre os 12-20s pedidos).
+  var COASTER_RIDE_TIME = 17; // segundos do passeio (ida+volta)
   var COASTER_COOLDOWN = 0.8; // carência ao desembarcar antes de poder reembarcar
 
   var FERRIS_ZOOM_LEVEL = 0.24; // câmera nesta escala no topo (menor = mais afastada)
@@ -536,18 +540,49 @@ window.FG = window.FG || {};
     };
   }
 
-  // 11) montanharussa {x, y, w, h, railW} — (x,y) = ponto de embarque, no
-  // chão. Ao interagir, vira p.ride por COASTER_RIDE_TIME segundos, seguindo
-  // uma trajetória ondulada (sub-loops) e devolvendo o jogador um pouco à
-  // frente do embarque, num ponto seguro.
+  // 11) montanharussa {x, y, w, h, liftDx, cruiseY, loopDx, loopR, farDx} —
+  // (x,y) = ponto de embarque, no chão. Ao interagir, vira p.ride por
+  // COASTER_RIDE_TIME segundos, percorrendo uma trajetória grande pelo céu
+  // da fase (subida → cruzeiro → loop-de-loop → cruzeiro → ponto mais
+  // distante) e VOLTANDO pelo mesmo trilho até a estação — é sempre uma
+  // volta fechada: por maior que seja o passeio visualmente, o jogador
+  // desembarca de volta perto de onde embarcou (não é atalho de progressão).
+  //   liftDx  — avanço horizontal da subida (estação → altura de cruzeiro)
+  //   cruiseY — altura ABSOLUTA (mundo) do cruzeiro, no céu da fase
+  //   loopDx  — distância da estação até o centro do loop
+  //   loopR   — raio do loop-de-loop
+  //   farDx   — distância da estação até o ponto mais distante do passeio
   function makeMontanhaRussa(d) {
     var w = d.w || 64, h = d.h || 46;
-    var railW = d.railW != null ? d.railW : 180;
+    var liftDx = d.liftDx != null ? d.liftDx : 120;
+    var cruiseY = d.cruiseY != null ? d.cruiseY : 180;
+    var loopDx = d.loopDx != null ? d.loopDx : 900;
+    var loopR = d.loopR != null ? d.loopR : 80;
+    var farDx = d.farDx != null ? d.farDx : 2800;
+
+    var stationY = d.y - 46;
+    var liftLen = Math.hypot(liftDx, stationY - cruiseY);
+    var cruiseALen = Math.max(0, loopDx - liftDx);
+    var loopLen = TAU * loopR;
+    var cruiseBLen = Math.max(0, farDx - loopDx);
+    var outboundLen = liftLen + cruiseALen + loopLen + cruiseBLen;
+
     return {
       type: 'montanharussa',
       x: d.x, y: d.y, w: w, h: h,
-      railW: railW,
-      exitX: d.exitX != null ? d.exitX : d.x + railW,
+      liftDx: liftDx, cruiseY: cruiseY, loopDx: loopDx, loopR: loopR, farDx: farDx,
+      // limites (em fração s da IDA, 0..1) de cada trecho do caminho —
+      // proporcionais ao comprimento de cada trecho, pra manter o carrinho
+      // andando a uma velocidade visual mais ou menos constante
+      sClimbEnd: outboundLen ? liftLen / outboundLen : 0,
+      sCruiseAEnd: outboundLen ? (liftLen + cruiseALen) / outboundLen : 0,
+      sLoopEnd: outboundLen ? (liftLen + cruiseALen + loopLen) / outboundLen : 0,
+      outboundLen: outboundLen,
+      // bbox do trilho inteiro (usado só pra decidir se vale a pena desenhar)
+      pathX0: d.x, pathX1: d.x + farDx,
+      pathY0: cruiseY - 2 * loopR, pathY1: stationY,
+      // ida-e-volta: desembarca sempre na própria estação
+      exitX: d.exitX != null ? d.exitX : d.x,
       exitY: d.exitY != null ? d.exitY : d.y,
       cool: 0, t: 0,
     };
@@ -1034,13 +1069,52 @@ window.FG = window.FG || {};
   }
 
   // --- montanha-russa ----------------------------------------------------
-  // Trajetória ondulada em coordenadas absolutas, u em 0..1. Começa e termina
-  // na mesma altura (o embarque/desembarque não pode nascer dentro do chão).
+  // Trajetória em coordenadas absolutas, u em 0..1 (fração do TEMPO do
+  // passeio inteiro). u=0 e u=1 são sempre a estação: u 0..0.5 é a IDA
+  // (fração de caminho s = u*2), u 0.5..1 é a VOLTA pelo MESMO trilho físico
+  // espelhada no tempo (s = (1-u)*2) — garante que o passeio é sempre uma
+  // volta fechada, nunca um atalho de progressão.
+  // Dentro da ida, s percorre 4 trechos em sequência (ver sClimbEnd/
+  // sCruiseAEnd/sLoopEnd calculados em makeMontanhaRussa):
+  //   1) subida (lift hill) da estação até a altura de cruzeiro
+  //   2) cruzeiro reto até o centro do loop
+  //   3) loop-de-loop (360° completo)
+  //   4) cruzeiro reto até o ponto mais distante do passeio
   var _coasterPt = { x: 0, y: 0 }; // reuso: só existe UM passeio ativo por vez
   function coasterPoint(o, u) {
-    var x = o.x + o.railW * u;
-    var wave = 0.5 - 0.5 * Math.cos(u * Math.PI * 2 * COASTER_LOOPS);
-    var y = o.y - 46 - COASTER_AMP * wave;
+    var s = u <= 0.5 ? u * 2 : (1 - u) * 2;
+    var stationX = o.x, stationY = o.y - 46;
+    var liftEndX = stationX + o.liftDx;
+    var loopX = stationX + o.loopDx;
+    var farX = stationX + o.farDx;
+    var cy = o.cruiseY, R = o.loopR;
+    var x, y;
+    if (s < o.sClimbEnd) {
+      // 1) subida: ease in-out até a altura de cruzeiro
+      var us1 = o.sClimbEnd > 0 ? s / o.sClimbEnd : 1;
+      var e = 0.5 - 0.5 * Math.cos(us1 * Math.PI);
+      x = stationX + (liftEndX - stationX) * e;
+      y = stationY + (cy - stationY) * e;
+    } else if (s < o.sCruiseAEnd) {
+      // 2) cruzeiro reto até o centro do loop
+      var span2 = o.sCruiseAEnd - o.sClimbEnd;
+      var us2 = span2 > 0 ? (s - o.sClimbEnd) / span2 : 1;
+      x = liftEndX + (loopX - liftEndX) * us2;
+      y = cy;
+    } else if (s < o.sLoopEnd) {
+      // 3) loop-de-loop: círculo fechado, começa e acaba embaixo (em cy)
+      var span3 = o.sLoopEnd - o.sCruiseAEnd;
+      var us3 = span3 > 0 ? (s - o.sCruiseAEnd) / span3 : 1;
+      var ang = us3 * TAU;
+      x = loopX + R * Math.sin(ang);
+      y = (cy - R) + R * Math.cos(ang);
+    } else {
+      // 4) cruzeiro reto até o ponto mais distante
+      var span4 = 1 - o.sLoopEnd;
+      var us4 = span4 > 0 ? (s - o.sLoopEnd) / span4 : 1;
+      x = loopX + (farX - loopX) * us4;
+      y = cy;
+    }
     _coasterPt.x = x; _coasterPt.y = y;
     return _coasterPt;
   }
@@ -2034,17 +2108,22 @@ window.FG = window.FG || {};
 
   // --- montanha-russa: trilho ondulado (decorativo) + carrinho -----------
   function drawMontanhaRussaFundo(ctx, o, cam, t, p) {
-    if (!visible(cam, o.x - 20, o.y - COASTER_AMP - 80, o.railW + 40, COASTER_AMP + 100)) return;
+    // bbox do trilho INTEIRO (a ida cobre todo o caminho físico; a volta
+    // reusa o mesmo trilho) — só pula o desenho se a câmera está longe de
+    // toda a extensão do passeio, não só perto da estação.
+    if (!visible(cam, o.pathX0 - 20, o.pathY0 - 20,
+        (o.pathX1 - o.pathX0) + 40, (o.pathY1 - o.pathY0) + 40)) return;
     ctx.save();
     ctx.translate(-cam.x, -cam.y);
 
-    // trilho: amostra a mesma curva do passeio, desenhada como referência
+    // trilho: amostra a curva de IDA inteira (u 0..0.5 cobre s 0..1) — a
+    // volta é o mesmo trilho físico, não precisa desenhar de novo
     ctx.strokeStyle = grad.trilho || '#33373e';
     ctx.lineWidth = 6;
     ctx.beginPath();
-    var N = 40;
+    var N = 160; // caminho bem mais longo que antes; amostragem generosa
     for (var i = 0; i <= N; i++) {
-      var u = i / N;
+      var u = (i / N) * 0.5;
       var pt = coasterPoint(o, u);
       if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
     }
@@ -2053,14 +2132,21 @@ window.FG = window.FG || {};
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // pilares de sustentação a cada ~90px
+    // pilares de sustentação a cada ~90px de trilho, pulando o trecho do
+    // loop (não tem apoio embaixo — fica fechado no ar). Pilares CURTOS
+    // (não tentam alcançar o chão real da fase, que varia demais de altura
+    // ao longo do cruzeiro — abismos, gorges, mesas): só sugerem sustentação.
     ctx.strokeStyle = '#22232a';
     ctx.lineWidth = 5;
-    for (var u2 = 0; u2 <= 1.001; u2 += 90 / o.railW) {
-      var pp = coasterPoint(o, Math.min(1, u2));
+    var pillarStepU = o.outboundLen > 0 ? (90 / o.outboundLen) * 0.5 : 0.5;
+    for (var u2 = 0; u2 <= 0.5 + 1e-6; u2 += pillarStepU) {
+      var uu = Math.min(0.5, u2);
+      var sFrac = uu * 2;
+      if (sFrac > o.sCruiseAEnd && sFrac < o.sLoopEnd) continue; // dentro do loop
+      var pp = coasterPoint(o, uu);
       ctx.beginPath();
       ctx.moveTo(pp.x, pp.y + 6);
-      ctx.lineTo(pp.x, o.y + 20);
+      ctx.lineTo(pp.x, pp.y + 200);
       ctx.stroke();
     }
 

@@ -228,9 +228,16 @@ window.FG = window.FG || {};
     { type: 'sopro',       x: 3234, y: 392, w: 52, h: 130 },
     { type: 'pendulo',     x: 3530, y: 290, len: 175, arc: 0.9, period: 2.6 },
 
-    // (2) mesa base B (meio do trecho 2 dobrado): montanha-russa — embarca,
-    // passeio ondulado sobre a própria mesa e desce um pouco à frente.
-    { type: 'montanharussa', x: 3850, y: 620, railW: 70 },
+    // (2) mesa base B (meio do trecho 2 dobrado): montanha-russa — embarca
+    // e sobe até o céu da fase (y~180, acima de tudo no trecho 2/3: bônus
+    // altos ficam em y=300-396, mesas altas em y=496, pilares/penhascos do
+    // gorge em y=220-250), dá um cruzeiro longo, um loop-de-loop de verdade
+    // por volta de x=4750 (ainda dentro do trecho 2, antes do gorge) e segue
+    // cruzeiro até x~6650 (sobrevoando os dois gorges do trecho 3, sempre
+    // livre por cima dos pilares/penhascos) — e VOLTA pelo mesmo trilho até
+    // esta mesma estação. Posição de embarque mantida (mesmo lugar de
+    // sempre): o passeio é só cosmético, não avança o jogador pela fase.
+    { type: 'montanharussa', x: 3850, y: 620 },
 
     // (2) mesas B: repetição um pouco mais rápida do mesmo conjunto
     { type: 'espinhorolo', x: 4120, y: 512, w: 44, range: 99, speed: 126 },
