@@ -630,7 +630,7 @@ window.FG = window.FG || {};
       hubX: hubX, hubY: hubY,
       wheelR: wheelR,
       rotSpeed: d.rotSpeed != null ? d.rotSpeed : 0.4,     // giro do aro/gôndolas decorativos
-      cabRotSpeed: d.cabRotSpeed != null ? d.cabRotSpeed : 0.12, // giro da ESCADA — bem mais lento, senão não dá pra escalar
+      cabRotSpeed: d.cabRotSpeed != null ? d.cabRotSpeed : 0.24, // giro da ESCADA (2x mais rápido que o original 0.12)
       nSat: d.nSat || 9,                                 // gôndolas decorativas no aro
     };
   }
