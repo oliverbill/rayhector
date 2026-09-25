@@ -11,6 +11,8 @@
 //   disco       — disco de âmbar que sobe e desce de leve; sólido e carrega
 //   tronco      — tronco que AFUNDA com o peso do player e volta a subir
 //   brasa       — zona de chuva de brasa em rajadas telegrafadas (não sólida)
+//   trovao      — raio periódico numa faixa: clarão no céu, raio caindo,
+//                 dano se cair perto do player e screen shake (não sólida)
 //
 // A colisão sai de graça: as peças sólidas vivas entram em `movers` e o engine
 // injeta esse array em FG.level.solids a cada frame. Aqui só se move a peça e
@@ -86,6 +88,19 @@ window.FG = window.FG || {};
 
   var FERRIS_ZOOM_LEVEL = 0.24; // câmera nesta escala no topo (menor = mais afastada)
   var FERRIS_ZOOM_HOLD = 3.6;   // segundos que o zoom-out fica ligado
+
+  // --- trovão (mansão) -----------------------------------------------
+  // Clarão no céu (TROVAO_FLASH) → raio descendo até o chão (TROVAO_RAIO) →
+  // impacto: dano se o jogador estiver perto do ponto de queda, tremor de
+  // câmera sempre (genérico, via engine.shakeCamera). Dano real e não só
+  // cosmético: um hazard silencioso que nunca ameaça ninguém não ensina nada
+  // — e o clarão de aviso (mesma lógica de telegraph da brasa) já dá tempo de
+  // sair da coluna antes do estouro.
+  var TROVAO_FLASH = 0.16;      // clarão no céu, antes do raio aparecer
+  var TROVAO_RAIO = 0.16;       // o raio descendo até o impacto
+  var TROVAO_DANO_R = 64;       // raio horizontal de dano no impacto
+  var TROVAO_SHAKE_MAG = 13;    // intensidade do tremor de câmera
+  var TROVAO_SHAKE_DUR = 0.5;   // duração do tremor
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
@@ -565,6 +580,29 @@ window.FG = window.FG || {};
       hubX: d.x + (offsets[offsets.length - 1].dx) * 0.5,
       hubY: d.y + (offsets[offsets.length - 1].dy) * 0.5,
     };
+  }
+
+  // 13) trovão {x, w, groundY, interval, jitter}
+  // Não é sólido e não tem `rect`: nunca entra em `movers`. `x`/`w` marcam a
+  // FAIXA onde o raio pode cair (o ponto exato é sorteado a cada disparo);
+  // `groundY` é onde ele estoura (tem de coincidir com piso real, mesma regra
+  // da brasa). `interval`/`jitter` dão o período médio entre trovões e a
+  // dessincronia que evita virar metrônomo.
+  function makeTrovao(d) {
+    var w = d.w || 400;
+    var interval = d.interval || 6;
+    var o = {
+      type: 'trovao',
+      x: d.x, w: w,
+      groundY: d.groundY != null ? d.groundY : 620,
+      interval: interval,
+      jitter: d.jitter != null ? d.jitter : 2,
+      state: 'espera',       // espera → flash → raio → (impacto) → espera
+      timer: rand(1, interval), // primeiro trovão dessincronizado por zona
+      flashT: 0, raioT: 0,
+      strikeX: d.x,
+    };
+    return o;
   }
 
   // ==================================================================
@@ -1049,6 +1087,37 @@ window.FG = window.FG || {};
       if (o.zoomTimer <= 0) {
         o.zoomTimer = 0;
         if (FG.engine) FG.engine.camZoomTarget = 1;
+      }
+    }
+  }
+
+  // --- trovão ----------------------------------------------------------
+  function updateTrovao(o, dt, p, t) {
+    if (o.state === 'espera') {
+      o.timer -= dt;
+      if (o.timer <= 0) {
+        o.state = 'flash';
+        o.flashT = TROVAO_FLASH;
+        o.strikeX = o.x + rand(-o.w / 2, o.w / 2);
+      }
+    } else if (o.state === 'flash') {
+      o.flashT -= dt;
+      if (o.flashT <= 0) { o.state = 'raio'; o.raioT = TROVAO_RAIO; }
+    } else if (o.state === 'raio') {
+      o.raioT -= dt;
+      if (o.raioT <= 0) {
+        // impacto: dano real se o jogador estiver perto do ponto de queda
+        if (p && Math.abs((p.x + p.w / 2) - o.strikeX) < TROVAO_DANO_R) {
+          p.hurt(1, o.strikeX);
+        }
+        if (FG.engine && FG.engine.shakeCamera) FG.engine.shakeCamera(TROVAO_SHAKE_MAG, TROVAO_SHAKE_DUR);
+        if (FG.audio) FG.audio.sfx('bossRoar'); // estrondo grave — reaproveitado, sem sfx próprio
+        for (var k = 0; k < 10; k++) {
+          spawnParticle(o.strikeX, o.groundY, rand(-150, 150), rand(-260, -60),
+            rand(0.3, 0.6), rand(2, 4.2), 'rgba(220,225,255,0.9)', 500);
+        }
+        o.state = 'espera';
+        o.timer = Math.max(1.5, o.interval + rand(-o.jitter, o.jitter));
       }
     }
   }
@@ -2018,6 +2087,77 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- trovão ----------------------------------------------------------
+  // Clarão: cobre a TELA INTEIRA em coordenadas de tela (não de mundo), então
+  // não usa `visible()` nem desconta a câmera — é o céu inteiro que acende,
+  // não um retângulo do cenário. drawBehind (aqui) é onde ele mora: precisa
+  // ficar atrás do jogador e dos inimigos, senão o clarão os apaga.
+  function drawTrovaoFundo(ctx, o, cam, t) {
+    var alpha = 0;
+    if (o.state === 'flash') alpha = 0.8 * (o.flashT / TROVAO_FLASH);
+    else if (o.state === 'raio') alpha = 0.22 * (o.raioT / TROVAO_RAIO); // resíduo do clarão
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#eef2ff';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.restore();
+  }
+
+  // O raio: um zigue-zague do topo do céu até o groundY, crescendo ao longo
+  // de TROVAO_RAIO (a ponta desce, não aparece inteiro de uma vez). Fica na
+  // camada da FRENTE — o raio risca por cima de tudo, é luz, não cenário.
+  function drawTrovaoFrente(ctx, o, cam, t) {
+    if (o.state !== 'raio') return;
+    if (!visible(cam, o.strikeX - 40, 0, 80, o.groundY)) return;
+    var sx = o.strikeX - cam.x;
+    var topY = -cam.y;
+    var botY = o.groundY - cam.y;
+    var k = 1 - o.raioT / TROVAO_RAIO;          // 0..1: quanto do raio já desceu
+    var curY = topY + (botY - topY) * k;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    var segs = 6;
+    var pts = [{ x: sx, y: topY }];
+    for (var i = 1; i <= segs; i++) {
+      var f = i / segs;
+      var y = topY + (curY - topY) * f;
+      var jag = (i === segs) ? 0 : ((i % 2 === 0) ? 1 : -1) * (7 + (i * 13) % 12);
+      pts.push({ x: sx + jag, y: y });
+    }
+
+    ctx.shadowColor = '#c8d8ff';
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = 'rgba(200,215,255,0.55)';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var p1 = 1; p1 < pts.length; p1++) ctx.lineTo(pts[p1].x, pts[p1].y);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#fdfeff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var p2 = 1; p2 < pts.length; p2++) ctx.lineTo(pts[p2].x, pts[p2].y);
+    ctx.stroke();
+
+    // clarão no ponto de impacto quando o raio já chegou perto do chão
+    if (k > 0.7) {
+      ctx.globalAlpha = (k - 0.7) / 0.3;
+      var g = ctx.createRadialGradient(sx, botY, 0, sx, botY, 60);
+      g.addColorStop(0, 'rgba(230,238,255,0.9)');
+      g.addColorStop(1, 'rgba(230,238,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx, botY, 60, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // API pública — FG.obstacles
   // ==================================================================
@@ -2066,6 +2206,7 @@ window.FG = window.FG || {};
         else if (d.type === 'cachorroquente') list.push(makeCachorroquente(d));
         else if (d.type === 'montanharussa') list.push(makeMontanhaRussa(d));
         else if (d.type === 'rodagigante') list.push(makeRodagigante(d));
+        else if (d.type === 'trovao') list.push(makeTrovao(d));
       }
     },
 
@@ -2114,6 +2255,8 @@ window.FG = window.FG || {};
         } else if (o.type === 'rodagigante') {
           updateRodagigante(o, dt, p);
           for (var c = 0; c < o.cabins.length; c++) movers.push(o.cabins[c]);
+        } else if (o.type === 'trovao') {
+          updateTrovao(o, dt, p, t);   // não é sólido: nada em movers
         }
       }
 
@@ -2139,6 +2282,7 @@ window.FG = window.FG || {};
         else if (o.type === 'cachorroquente') drawCachorroquente(ctx, o, cam, t);
         else if (o.type === 'montanharussa') drawMontanhaRussaFundo(ctx, o, cam, t);
         else if (o.type === 'rodagigante') drawRodagigante(ctx, o, cam, t);
+        else if (o.type === 'trovao') drawTrovaoFundo(ctx, o, cam, t);
       }
     },
 
@@ -2155,6 +2299,7 @@ window.FG = window.FG || {};
         else if (o.type === 'espinhorolo') drawEspinhorolo(ctx, o, cam, t);
         else if (o.type === 'brasa') drawBrasaFrente(ctx, o, cam, t);
         else if (o.type === 'montanharussa') drawMontanhaRussaFrente(ctx, o, cam, p);
+        else if (o.type === 'trovao') drawTrovaoFrente(ctx, o, cam, t);
       }
       drawParticles(ctx, cam);
     },

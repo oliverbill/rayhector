@@ -1,7 +1,8 @@
 // Fagulho: Lendas do Bosque — enemies.js
 // FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe, e os da
-// gruta submersa do pântano: piranha, carango, jacaré, candiru), as pools de
-// partícula e o registro de chefões. Cada chefão mora no seu arquivo
+// gruta submersa do pântano: piranha, carango, jacaré, candiru; e os da
+// mansão: lobo, fantasma, ratazana), as pools de partícula e o registro de
+// chefões. Cada chefão mora no seu arquivo
 // (boss1.js, boss2.js, boss3.js) e regista-se aqui no load; enemies.js só
 // escolhe qual deles entra em cena, pelo bossId da fase. Nenhuma referência a
 // outros módulos no load — só dentro de funções chamadas em runtime.
@@ -123,6 +124,9 @@ window.FG = window.FG || {};
     else if (e.type === 'carango') { e.w = 44; e.h = 26; } // leito da gruta
     else if (e.type === 'jacare') { e.w = 78; e.h = 30; e.hp = 3; e.dmg = 2; } // o predador-título do lago
     else if (e.type === 'candiru') { e.w = 14; e.h = 9; e.dmg = 1; } // minúsculo, só ativo na água
+    else if (e.type === 'lobo') { e.w = 52; e.h = 30; }     // mansão: rasteiro, rápido
+    else if (e.type === 'fantasma') { e.w = 34; e.h = 40; } // mansão: aéreo, etéreo
+    else if (e.type === 'ratazana') { e.w = 58; e.h = 32; } // mansão: rasteiro, robusto
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
@@ -403,6 +407,75 @@ window.FG = window.FG || {};
           spawnParticle(e.x + e.w * 0.5, e.y + e.h * 0.5, rand(-10, 10), rand(-20, -4),
             0.3, 1.5, 'rgba(200,245,250,0.8)', -30);
         }
+      }
+    } else if (e.type === 'lobo') {
+      // Lobo da mansão: rasteja como o espinhoco (mesma gravidade e colisão),
+      // mas dentro do range dele vira caçada — dispara na direção do player
+      // bem mais rápido que a patrulha. Fora do range e fora da faixa
+      // vertical (não desce escada nenhuma atrás de quem está dois andares
+      // acima), volta ao vaivém normal e vira nas bordas do range/parede.
+      const SPD_PATROL = 60, SPD_CACA = 235;
+      e.vy += GRAV * dt;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const perseguindo = Math.abs(dx) < e.range && Math.abs((p.y + p.h / 2) - (e.y + e.h / 2)) < 140;
+      if (perseguindo) e.dir = dx >= 0 ? 1 : -1;
+      e.vx = e.dir * (perseguindo ? SPD_CACA : SPD_PATROL);
+      const wantVx = e.vx;
+      FG.engine.moveAndCollide(e, dt);
+      if ((wantVx !== 0 && e.vx === 0) ||
+          (e.dir > 0 && e.x > e.spawnX + e.range) ||
+          (e.dir < 0 && e.x < e.spawnX - e.range)) {
+        e.dir = -e.dir;
+      }
+    } else if (e.type === 'fantasma') {
+      // Fantasma: sem gravidade nenhuma (flutua de verdade), pairando num
+      // senoide vertical em torno de e.baseY. Longe do player, deriva devagar
+      // de volta ao spawn; perto (dentro do range), avança mole na direção
+      // dele — mais devagar que qualquer bicho no chão, porque a ameaça dele
+      // é não poder ser ignorado, não a velocidade.
+      const t = FG.engine.time + e.phase;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dy = (p.y + p.h / 2) - (e.y + e.h / 2);
+      const perto = Math.abs(dx) < e.range && Math.abs(dy) < 220;
+      if (perto) {
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const SPD = 44;
+        e.x += (dx / d) * SPD * dt;
+        e.baseY += (dy / d) * SPD * dt;
+        e.dir = dx >= 0 ? 1 : -1;
+      } else {
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 0.6);
+        e.x += (e.spawnX - e.x) * Math.min(1, dt * 0.4);
+      }
+      e.y = e.baseY + Math.sin(t * 1.6) * 16;
+    } else if (e.type === 'ratazana') {
+      // Ratazana gigante: rasteja devagar como o espinhoco, mas quando o
+      // player entra perto no chão ela dispara uma carreira curta na direção
+      // dele (mais rápida que o passo normal) antes de voltar ao ritmo — o
+      // "sapeca" do chão, só que correndo em vez de pulando.
+      e.vy += GRAV * dt;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      if (e.st === 'parado') {
+        const SPD = 48;
+        e.vx = e.dir * SPD;
+        e.timer -= dt;
+        if (e.timer <= 0 && Math.abs(dx) < 260 && Math.abs((p.y + p.h) - (e.y + e.h)) < 60) {
+          e.dir = dx >= 0 ? 1 : -1;
+          e.vx = e.dir * 250;
+          e.st = 'carga';
+          e.timer = 0.8;
+        }
+      } else { // carga
+        e.vx = e.dir * 250;
+        e.timer -= dt;
+        if (e.timer <= 0) { e.st = 'parado'; e.timer = rand(1.2, 2.0); }
+      }
+      const wantVx = e.vx;
+      FG.engine.moveAndCollide(e, dt);
+      if ((wantVx !== 0 && e.vx === 0) ||
+          (e.dir > 0 && e.x > e.spawnX + e.range) ||
+          (e.dir < 0 && e.x < e.spawnX - e.range)) {
+        e.dir = -e.dir;
       }
     }
 
@@ -904,6 +977,203 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- lobo: silhueta cinza-arroxeada rasteira, pernas em tesoura e olhos
+  // vermelhos acesos — a assinatura dos bichos de perseguição da mansão ---
+  function drawLobo(ctx, e, t) {
+    const cx = e.x + e.w / 2, gy = e.y + e.h;
+    const correndo = Math.abs(e.vx) > 90;
+    const passo = Math.sin(t * (correndo ? 16 : 8) + e.phase);
+    ctx.save();
+    ctx.translate(cx, gy);
+    ctx.scale(e.dir, 1);
+
+    // pernas em tesoura (duas de cada lado, defasadas)
+    ctx.strokeStyle = '#241a2c'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      const swing = passo * (correndo ? 10 : 4) * s;
+      ctx.beginPath();
+      ctx.moveTo(s * e.w * 0.26, -e.h * 0.55);
+      ctx.lineTo(s * e.w * 0.26 + swing, -2);
+      ctx.stroke();
+    }
+
+    // corpo: cunha baixa e comprida, dorso arqueado
+    const g = ctx.createLinearGradient(-e.w * 0.5, -e.h, e.w * 0.5, -e.h * 0.2);
+    g.addColorStop(0, '#4a3a5c');
+    g.addColorStop(0.55, '#2e2440');
+    g.addColorStop(1, '#160f22');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.5, -e.h * 0.35);
+    ctx.quadraticCurveTo(-e.w * 0.3, -e.h * 1.02, e.w * 0.12, -e.h * 0.92);
+    ctx.quadraticCurveTo(e.w * 0.42, -e.h * 0.85, e.w * 0.56, -e.h * 0.5);
+    ctx.quadraticCurveTo(e.w * 0.48, -e.h * 0.18, e.w * 0.3, -e.h * 0.12);
+    ctx.lineTo(-e.w * 0.4, -e.h * 0.16);
+    ctx.closePath();
+    ctx.fill();
+
+    // pelagem eriçada no dorso
+    ctx.fillStyle = '#1a1224';
+    for (let i = -2; i <= 2; i++) {
+      const bx = i * e.w * 0.11;
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, -e.h * 0.9);
+      ctx.lineTo(bx, -e.h * 1.12 - Math.abs(i) * 2);
+      ctx.lineTo(bx + 4, -e.h * 0.9);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // cauda baixa balançando
+    ctx.strokeStyle = '#241a2c'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.48, -e.h * 0.3);
+    ctx.quadraticCurveTo(-e.w * 0.72, -e.h * 0.4 + Math.sin(t * 5) * 4, -e.w * 0.86, -e.h * 0.18);
+    ctx.stroke();
+
+    // focinho e olho vermelho brilhante
+    ctx.fillStyle = '#160f22';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.5, -e.h * 0.5);
+    ctx.lineTo(e.w * 0.7, -e.h * 0.44);
+    ctx.lineTo(e.w * 0.48, -e.h * 0.32);
+    ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.shadowColor = '#ff3050'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff5060';
+    ctx.beginPath(); ctx.arc(e.w * 0.44, -e.h * 0.62, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // --- fantasma: lençol etéreo translúcido, base ondulando, olhos ocos
+  // brilhando de azul-esverdeado — flutua sem nunca tocar o chão ---
+  function drawFantasma(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const flick = 0.62 + 0.14 * Math.sin(t * 2.4 + e.phase); // pulsa entre visível e quase some
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = flick;
+
+    // halo frio pairando
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, e.w * 1.6);
+    halo.addColorStop(0, 'rgba(150,230,220,0.30)');
+    halo.addColorStop(1, 'rgba(150,230,220,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, e.w * 1.6, 0, Math.PI * 2); ctx.fill();
+
+    // corpo: lençol com base ondulada (a "cauda" do fantasma)
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, 'rgba(235,245,255,0.9)');
+    g.addColorStop(0.6, 'rgba(190,225,235,0.55)');
+    g.addColorStop(1, 'rgba(170,215,225,0.15)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.46, -e.h * 0.1);
+    ctx.quadraticCurveTo(-e.w * 0.5, -e.h * 0.55, 0, -e.h * 0.58);
+    ctx.quadraticCurveTo(e.w * 0.5, -e.h * 0.55, e.w * 0.46, -e.h * 0.1);
+    const n = 4;
+    for (let i = 0; i <= n; i++) {
+      const fx = e.w * 0.46 - i * (e.w * 0.92 / n);
+      const wob = Math.sin(t * 3 + i * 1.4 + e.phase) * 5;
+      ctx.lineTo(fx, e.h * 0.42 + wob + ((i % 2) ? 8 : 0));
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // olhos ocos, vazios, com um brilho ciano frio dentro
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.fillStyle = 'rgba(20,20,30,0.75)';
+      ctx.beginPath();
+      ctx.ellipse(s * e.w * 0.18, -e.h * 0.14, 4.4, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#8ff0e0';
+      ctx.beginPath();
+      ctx.arc(s * e.w * 0.18, -e.h * 0.12, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // boca em "ó" assombrada
+    ctx.fillStyle = 'rgba(20,20,30,0.6)';
+    ctx.beginPath();
+    ctx.ellipse(0, e.h * 0.06, 3.6, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // --- ratazana gigante: corpo robusto marrom-acinzentado, cauda comprida
+  // arrastando e dentes à mostra — a versão grande dos bichos de chão ---
+  function drawRatazana(ctx, e, t) {
+    const cx = e.x + e.w / 2, gy = e.y + e.h;
+    const correndo = e.st === 'carga';
+    const passo = Math.sin(t * (correndo ? 18 : 9) + e.phase);
+    ctx.save();
+    ctx.translate(cx, gy);
+    ctx.scale(e.dir, 1);
+
+    // cauda comprida arrastando atrás
+    ctx.strokeStyle = '#5c4a3a'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.42, -e.h * 0.28);
+    ctx.quadraticCurveTo(-e.w * 0.78, -e.h * 0.1 + Math.sin(t * 6 + e.phase) * 5,
+      -e.w * 1.02, -e.h * 0.3 + Math.sin(t * 6 + e.phase + 1) * 6);
+    ctx.stroke();
+
+    // perninhas curtas e grossas
+    ctx.strokeStyle = '#3a2c20'; ctx.lineWidth = 4.4; ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      const swing = passo * (correndo ? 6 : 3) * s;
+      ctx.beginPath();
+      ctx.moveTo(s * e.w * 0.22, -e.h * 0.3);
+      ctx.lineTo(s * e.w * 0.22 + swing, -1);
+      ctx.stroke();
+    }
+
+    // corpo oval robusto
+    const g = ctx.createRadialGradient(-4, -e.h * 0.62, 3, 0, -e.h * 0.5, e.w * 0.6);
+    g.addColorStop(0, '#8a7460');
+    g.addColorStop(0.55, '#5c4a3a');
+    g.addColorStop(1, '#332720');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, -e.h * 0.48, e.w * 0.52, e.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // barriga clara
+    ctx.fillStyle = 'rgba(200,184,160,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(0, -e.h * 0.16, e.w * 0.36, e.h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // orelhas arredondadas
+    ctx.fillStyle = '#3a2c20';
+    ctx.beginPath();
+    ctx.ellipse(e.w * 0.22, -e.h * 0.92, 6, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(e.w * 0.42, -e.h * 0.84, 5.4, 6.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // focinho pontudo com bigodes e dentinhos
+    ctx.fillStyle = '#5c4a3a';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.46, -e.h * 0.5);
+    ctx.lineTo(e.w * 0.74, -e.h * 0.42);
+    ctx.lineTo(e.w * 0.44, -e.h * 0.32);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.6, -e.h * 0.4); ctx.lineTo(e.w * 0.66, -e.h * 0.36); ctx.lineTo(e.w * 0.58, -e.h * 0.34);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.64, -e.h * 0.44); ctx.lineTo(e.w * 0.9, -e.h * 0.5);
+    ctx.moveTo(e.w * 0.64, -e.h * 0.4); ctx.lineTo(e.w * 0.9, -e.h * 0.4);
+    ctx.stroke();
+
+    // olho pequeno e raivoso
+    ctx.fillStyle = '#ffd23a';
+    ctx.beginPath(); ctx.arc(e.w * 0.3, -e.h * 0.64, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a0d08';
+    ctx.beginPath(); ctx.arc(e.w * 0.32, -e.h * 0.63, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   // ==================================================================
   // Registro de chefões
   // Cada boss vive no seu arquivo (boss1.js, boss2.js, boss3.js) e regista-se
@@ -991,6 +1261,9 @@ window.FG = window.FG || {};
         else if (e.type === 'carango') drawCarango(ctx, e, t);
         else if (e.type === 'jacare') drawJacare(ctx, e, t);
         else if (e.type === 'candiru') drawCandiru(ctx, e, t);
+        else if (e.type === 'lobo') drawLobo(ctx, e, t);
+        else if (e.type === 'fantasma') drawFantasma(ctx, e, t);
+        else if (e.type === 'ratazana') drawRatazana(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();

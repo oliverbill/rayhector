@@ -160,6 +160,18 @@ window.FG = window.FG || {};
     rectsOverlap, moveAndCollide,
     setAction, gesture,
     addLumi(n) { engine.lumis += (n || 1); },
+    // ---------- tremor de câmera (screen shake) ----------
+    // Genérico: qualquer obstáculo (hoje só o trovão da mansão) pode chamar
+    // isto para sacudir a tela. `shake.time` decai linearmente até 0; a
+    // intensidade do offset aplicado no draw() cai junto (ver computeShake
+    // logo abaixo). Chamadas empilham por MAX, não por soma: um segundo
+    // tremor mais fraco durante um mais forte não interrompe o mais forte.
+    shake: { time: 0, duration: 0, mag: 0 },
+    shakeCamera(intensity, duration) {
+      const s = engine.shake;
+      const i = intensity || 8, d = duration || 0.4;
+      if (i >= s.mag || s.time <= 0) { s.mag = i; s.duration = d; s.time = d; }
+    },
     setState(s) {
       // Chefão derrotado com fase na fila não é vitória do JOGO, é fim de fase.
       // Os chefões não sabem em que fase vivem — quem sabe é aqui, e é por isso
@@ -342,6 +354,8 @@ window.FG = window.FG || {};
     input.attackPressed = pressBuffer.attack; pressBuffer.attack = false;
     input.interactPressed = pressBuffer.interact; pressBuffer.interact = false;
 
+    if (engine.shake.time > 0) engine.shake.time = Math.max(0, engine.shake.time - dt);
+
     if (engine.state === 'playing') {
       const p = FG.player;
       FG.level.update(dt);
@@ -419,12 +433,31 @@ window.FG = window.FG || {};
     engine.camZoom += (engine.camZoomTarget - engine.camZoom) * zk;
   }
 
+  // Offset de tremor aplicado só no DESENHO: mexe em cam.x/cam.y por um
+  // instante e devolve antes do HUD, para o cálculo da câmera-alvo em
+  // updateCamera() nunca ver a posição sacudida (senão o tremor vazaria para
+  // a suavização do frame seguinte e o "erro" nunca se corrigiria de vez).
+  function computeShake() {
+    const s = engine.shake;
+    if (s.time <= 0 || s.duration <= 0) return 0;
+    return s.mag * (s.time / s.duration);
+  }
+
   // ---------- draw ----------
   function draw() {
     const cam = engine.cam;
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
 
     if (engine.state === 'menu') { drawMenu(); drawTouch(); return; }
+
+    // screen shake (trovão): desloca a câmera real por um instante antes de
+    // desenhar — tudo (mundo e parallax) sente o tremor.
+    const amt = computeShake();
+    const realX = cam.x, realY = cam.y;
+    if (amt > 0) {
+      cam.x += (Math.random() * 2 - 1) * amt;
+      cam.y += (Math.random() * 2 - 1) * amt * 0.6; // menos vertical: o chão não some
+    }
 
     // zoom-out (roda-gigante): escala tudo em torno do centro da tela, com a
     // câmera ainda mandando na posição — é só uma lente, o mundo continua no
@@ -437,6 +470,7 @@ window.FG = window.FG || {};
       ctx.scale(zoom, zoom);
       ctx.translate(-VIEW_W / 2, -VIEW_H / 2);
     }
+
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
     if (FG.obstacles) FG.obstacles.drawBehind(ctx, cam);
@@ -445,6 +479,8 @@ window.FG = window.FG || {};
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
+
+    cam.x = realX; cam.y = realY;
 
     drawHUD();
     if (engine.state === 'playing' && FG.obstacles && FG.obstacles.activePrompt) {
