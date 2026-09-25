@@ -15,6 +15,16 @@ window.FG = window.FG || {};
   const VIEW_W = 960;        // canvas interno (para culling)
   const CULL = 140;          // margem de culling em px
 
+  // Candiru: no lago tem muita unidade espalhada, mas só UM pode estar
+  // mordendo por vez, e um novo só entra em ação 5s depois do anterior —
+  // sem isso, todo candiru do mapa inteiro acordava junto assim que o
+  // jogador molhava o pé, virando um enxame. `candiruAtivo` é a instância
+  // com a vez; `candiruLiberaEm` é o instante (FG.engine.time) a partir do
+  // qual outro pode assumir. Ambos zerados em reset() a cada troca de fase.
+  const CANDIRU_RANGE = 260;
+  let candiruAtivo = null;
+  let candiruLiberaEm = 0;
+
   // ------------------------------------------------------------------
   // Pool de partículas (pufe de fumaça, brasas, ouro da morte do boss).
   // Reuso total: nada de alocar objeto por frame.
@@ -385,27 +395,42 @@ window.FG = window.FG || {};
         }
       }
     } else if (e.type === 'candiru') {
-      // Candiru: some enquanto o jogador está seco (não ameaça de fora
-      // d'água) e vira uma flecha minúscula e insistente assim que ele
-      // mergulha — mordida fraca, mas persiste enquanto o jogador continuar
-      // molhado por perto.
-      if (!p.inWater) {
+      // Candiru: some enquanto o jogador está seco, e só UM de cada vez pode
+      // acordar e virar a flecha insistente atrás dele — os outros ficam
+      // dormentes mesmo perto, esperando a vez (ver CANDIRU_RANGE/
+      // candiruAtivo/candiruLiberaEm no topo do arquivo). Isso troca "enxame
+      // constante" por "uma mordida a cada ~5s", que é bem mais justo.
+      const dormir = () => {
         e.st = 'dormente';
         e.x = e.spawnX + Math.sin((FG.engine.time + e.phase) * 1.4) * 5;
         e.y = e.spawnY + Math.sin((FG.engine.time + e.phase) * 1.9) * 4;
         e.vx = 0; e.vy = 0;
+        if (candiruAtivo === e) candiruAtivo = null;
+      };
+      if (!p.inWater) {
+        dormir();
       } else {
-        e.st = 'ativo';
         const dx2 = (p.x + p.w / 2) - (e.x + e.w / 2);
         const dy2 = (p.y + p.h / 2) - (e.y + e.h / 2);
         const d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
-        const SPD = 220;
-        e.dir = dx2 >= 0 ? 1 : -1;
-        e.x += (dx2 / d2) * SPD * dt;
-        e.y += (dy2 / d2) * SPD * dt;
-        if (Math.random() < 0.3) {
-          spawnParticle(e.x + e.w * 0.5, e.y + e.h * 0.5, rand(-10, 10), rand(-20, -4),
-            0.3, 1.5, 'rgba(200,245,250,0.8)', -30);
+        const noAlcance = d2 < CANDIRU_RANGE;
+        const souEu = candiruAtivo === e;
+        const possoAssumir = !candiruAtivo && noAlcance && FG.engine.time >= candiruLiberaEm;
+        if (souEu && !noAlcance) {
+          dormir();
+        } else if (souEu || possoAssumir) {
+          if (possoAssumir) { candiruAtivo = e; candiruLiberaEm = FG.engine.time + 5; }
+          e.st = 'ativo';
+          const SPD = 220;
+          e.dir = dx2 >= 0 ? 1 : -1;
+          e.x += (dx2 / d2) * SPD * dt;
+          e.y += (dy2 / d2) * SPD * dt;
+          if (Math.random() < 0.3) {
+            spawnParticle(e.x + e.w * 0.5, e.y + e.h * 0.5, rand(-10, 10), rand(-20, -4),
+              0.3, 1.5, 'rgba(200,245,250,0.8)', -30);
+          }
+        } else {
+          dormir();
         }
       }
     } else if (e.type === 'lobo') {
@@ -861,6 +886,10 @@ window.FG = window.FG || {};
     const ericada = e.st === 'erica';
     const dando = e.st === 'bote';
     const wob = Math.sin(t * (ericada || dando ? 20 : 5) + e.phase) * (dando ? 6 : 3);
+    // mandíbula: fechada em repouso, escancara ao eriçar e fica batendo
+    // (chomp) durante o bote — é a "tentativa de morder" ficar visível
+    const jawTarget = dando ? 0.62 + Math.sin(t * 24 + e.phase) * 0.14 : (ericada ? 0.5 : 0);
+    const jaw = Math.max(0, jawTarget);
     ctx.save();
     ctx.translate(cx + (ericada ? Math.sin(t * 46) * 1.2 : 0), cy);
     ctx.scale(e.dir, 1);
@@ -887,6 +916,37 @@ window.FG = window.FG || {};
       ctx.fill();
     }
 
+    // patas curtas e grossas, uma dianteira e uma traseira de cada lado,
+    // remando devagar quando parado e recolhidas (achatadas contra o corpo,
+    // como nadadeira) durante o bote — a velocidade vem do rabo, não delas
+    const legKick = dando ? 0 : Math.sin(t * 3.2 + e.phase) * 6;
+    ctx.strokeStyle = '#2c3814';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    const legPairs = [
+      { bx: -e.w * 0.24, by: e.h * 0.36, len: e.w * 0.16, sw: 1 },   // traseira
+      { bx: e.w * 0.02, by: e.h * 0.34, len: e.w * 0.14, sw: -1 },   // dianteira
+    ];
+    for (let li = 0; li < legPairs.length; li++) {
+      const leg = legPairs[li];
+      const kick = legKick * leg.sw * (dando ? 0.3 : 1);
+      const flat = dando ? 0.4 : 1; // achata contra o corpo no bote
+      ctx.beginPath();
+      ctx.moveTo(leg.bx, leg.by * 0.6);
+      ctx.lineTo(leg.bx + leg.len * 0.4, (leg.by + 6 + kick) * flat);
+      ctx.stroke();
+      // pé em leque, 3 dedos curtos
+      ctx.save();
+      ctx.translate(leg.bx + leg.len * 0.4, (leg.by + 6 + kick) * flat);
+      ctx.fillStyle = '#2c3814';
+      for (let d = -1; d <= 1; d++) {
+        ctx.beginPath();
+        ctx.ellipse(d * 3.2, 3, 2.4, 4, d * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     // corpo grosso, couraça verde-oliva
     const g = ctx.createRadialGradient(-4, -e.h * 0.1, 2, 0, 0, e.w * 0.5);
     g.addColorStop(0, '#6a7a3c');
@@ -909,29 +969,57 @@ window.FG = window.FG || {};
       ctx.fill();
     }
 
-    // focinho longo, achatado, na frente
+    // focinho: mandíbula de cima (fixa na cabeça) e de baixo (gira num
+    // dobradiça na base do focinho) — jaw=0 fecham juntas, jaw>0 escancara
+    const hingeX = e.w * 0.3;
+    ctx.save();
+    ctx.translate(hingeX, 0);
+    ctx.rotate(-jaw * 0.55);
     ctx.fillStyle = '#3c4a20';
     ctx.beginPath();
-    ctx.moveTo(e.w * 0.3, -e.h * 0.22);
-    ctx.lineTo(e.w * 0.62, -e.h * 0.1);
-    ctx.lineTo(e.w * 0.62, e.h * 0.1);
-    ctx.lineTo(e.w * 0.3, e.h * 0.22);
+    ctx.moveTo(0, -e.h * 0.22);
+    ctx.lineTo(e.w * 0.32, -e.h * 0.08);
+    ctx.lineTo(e.w * 0.32, 0);
+    ctx.lineTo(0, 0);
     ctx.closePath();
     ctx.fill();
-    // mordida: dentinhos brancos só aparecem eriçado/atacando
-    if (ericada || dando) {
+    if (jaw > 0.05) {
       ctx.fillStyle = '#f2ead0';
-      const nD = 4;
-      for (let i = 0; i < nD; i++) {
-        const tx = e.w * (0.34 + i * 0.07);
+      for (let i = 0; i < 4; i++) {
+        const tx = e.w * (0.06 + i * 0.07);
         ctx.beginPath();
-        ctx.moveTo(tx, -e.h * 0.14); ctx.lineTo(tx + 2.4, -e.h * 0.14); ctx.lineTo(tx + 1.2, -e.h * 0.06);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(tx, e.h * 0.14); ctx.lineTo(tx + 2.4, e.h * 0.14); ctx.lineTo(tx + 1.2, e.h * 0.06);
+        ctx.moveTo(tx, -e.h * 0.02); ctx.lineTo(tx + 2.2, -e.h * 0.02); ctx.lineTo(tx + 1.1, e.h * 0.04);
         ctx.closePath(); ctx.fill();
       }
     }
+    ctx.restore();
+    ctx.save();
+    ctx.translate(hingeX, 0);
+    ctx.rotate(jaw * 0.55);
+    ctx.fillStyle = '#354419';
+    ctx.beginPath();
+    ctx.moveTo(0, e.h * 0.22);
+    ctx.lineTo(e.w * 0.32, e.h * 0.08);
+    ctx.lineTo(e.w * 0.32, 0);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+    if (jaw > 0.05) {
+      ctx.fillStyle = '#f2ead0';
+      for (let i = 0; i < 4; i++) {
+        const tx = e.w * (0.06 + i * 0.07);
+        ctx.beginPath();
+        ctx.moveTo(tx, e.h * 0.02); ctx.lineTo(tx + 2.2, e.h * 0.02); ctx.lineTo(tx + 1.1, -e.h * 0.04);
+        ctx.closePath(); ctx.fill();
+      }
+      // gengiva vermelha visível dentro da boca aberta
+      ctx.fillStyle = 'rgba(140,30,30,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(2, -e.h * 0.02); ctx.lineTo(e.w * 0.3, -e.h * 0.06);
+      ctx.lineTo(e.w * 0.3, e.h * 0.06); ctx.lineTo(2, e.h * 0.02);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
 
     // olhos em bossa no alto da cabeça — o que se vê de fora quando ele
     // finge só boiar
@@ -1208,6 +1296,7 @@ window.FG = window.FG || {};
     reset() {
       // Repovoa os inimigos comuns a partir do level e re-arma o boss.
       this.list.length = 0;
+      candiruAtivo = null; candiruLiberaEm = 0; // referência da fase anterior não serve mais
       const defs = FG.level.enemyDefs;
       for (let i = 0; i < defs.length; i++) this.list.push(makeEnemy(defs[i]));
       // Reseta TODOS os registrados, não só o da fase que entra: o chefão da
