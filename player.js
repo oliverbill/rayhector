@@ -479,6 +479,10 @@ window.FG = window.FG || {};
     },
 
     hurt(dmg, fromX) {
+      // passageiro de uma atração (ex. montanha-russa): imune por enquanto
+      // durar o passeio — não faz sentido levar dano de espinho/trovão numa
+      // cutscene onde o jogador não tem controle nenhum sobre a posição.
+      if (this.ride) return;
       if (this.invuln > 0) return;
       this.hp -= dmg;
       this.invuln = 1.2;

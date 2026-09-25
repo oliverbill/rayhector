@@ -588,11 +588,13 @@ window.FG = window.FG || {};
     };
   }
 
-  // 12) rodagigante {x, y, cabins?} — (x,y) = cabine da base. Cabines fixas
-  // dispostas em espiral ascendente (degraus, não giram — mais fácil e mais
-  // justo de escalar). A última é o "topo": pisar nela dispara o zoom-out.
-  // A ESTRUTURA em si (aro + gôndolas decorativas) gira sem parar em torno
-  // do eixo — é só visual, orbita por fora da escada e nunca toca nela.
+  // 12) rodagigante {x, y, cabins?} — (x,y) = cabine da base. As cabines-
+  // degrau GIRAM DE VERDADE junto com a roda (rígido, em torno do eixo): cada
+  // uma guarda seu (raio, ângulo inicial) relativo ao hub e o update recalcula
+  // a posição a cada frame conforme o aro gira — carregando o jogador junto
+  // se ele estiver em pé nela, no mesmo esquema de arrasto das plataformas.
+  // "Topo" não é mais um índice fixo: é sempre a cabine com o Y mais alto
+  // (mais negativo) no instante — como a roda gira, quem está lá em cima muda.
   function makeRodagigante(d) {
     var cabW = d.cabW || 62, cabH = d.cabH || 18;
     // deslocamentos relativos padrão: zigue-zague subindo (ver comentário no
@@ -604,29 +606,31 @@ window.FG = window.FG || {};
       { dx: -80, dy: -225 },
       { dx: 80, dy: -300 },
     ];
-    var cabins = [];
-    for (var i = 0; i < offsets.length; i++) {
-      var off = offsets[i];
-      cabins.push({ x: d.x + off.dx, y: d.y + off.dy, w: cabW, h: cabH });
-    }
     var hubX = d.x + (offsets[offsets.length - 1].dx) * 0.5;
     var hubY = d.y + (offsets[offsets.length - 1].dy) * 0.5;
-    // raio do aro giratório: precisa envolver a cabine mais distante do eixo,
-    // com uma folga, senão a escada visualmente "vaza" para fora da roda
+    var cabins = [], cabR = [], cabAng = [];
     var wheelR = 60;
-    for (var j = 0; j < cabins.length; j++) {
-      var cc = cabins[j];
-      var dx0 = (cc.x + cc.w / 2) - hubX, dy0 = (cc.y + cc.h / 2) - hubY;
-      wheelR = Math.max(wheelR, Math.hypot(dx0, dy0) + 55);
+    for (var i = 0; i < offsets.length; i++) {
+      var off = offsets[i];
+      var cx = d.x + off.dx, cy = d.y + off.dy; // centro da cabine, posição inicial
+      var dx0 = cx - hubX, dy0 = cy - hubY;
+      var r = Math.hypot(dx0, dy0);
+      cabR.push(r);
+      cabAng.push(Math.atan2(dy0, dx0));
+      cabins.push({ x: cx - cabW / 2, y: cy - cabH / 2, w: cabW, h: cabH });
+      // raio do aro decorativo: precisa envolver a cabine mais distante do
+      // eixo, com folga, senão a escada visualmente "vaza" para fora da roda
+      wheelR = Math.max(wheelR, r + 55);
     }
     return {
       type: 'rodagigante',
       x: d.x, y: d.y, cabins: cabins,
+      cabR: cabR, cabAng: cabAng,       // geometria rígida de cada cabine-degrau
       zooming: false, zoomTimer: 0,
-      // eixo/roda decorativa: centro aproximado do círculo que os degraus sugerem
       hubX: hubX, hubY: hubY,
       wheelR: wheelR,
-      rotSpeed: d.rotSpeed != null ? d.rotSpeed : 0.4,  // rad/s — giro lento e constante
+      rotSpeed: d.rotSpeed != null ? d.rotSpeed : 0.4,     // giro do aro/gôndolas decorativos
+      cabRotSpeed: d.cabRotSpeed != null ? d.cabRotSpeed : 0.12, // giro da ESCADA — bem mais lento, senão não dá pra escalar
       nSat: d.nSat || 9,                                 // gôndolas decorativas no aro
     };
   }
@@ -1160,9 +1164,31 @@ window.FG = window.FG || {};
   // As cabines são degraus sólidos empilhados em espiral (entram em movers,
   // como uma plataforma parada). Pisar na última — o "topo" — dá um zoom-out
   // real na câmera por alguns segundos; depois volta sozinho ao normal.
-  function updateRodagigante(o, dt, p) {
-    var topo = o.cabins[o.cabins.length - 1];
-    var atTopo = !!(p && playerOnTop(topo, p));
+  function updateRodagigante(o, dt, p, t) {
+    var rot = t * o.cabRotSpeed;
+    // quem estava em pé em QUAL cabine, antes de girar — carrega junto,
+    // igual à plataforma: mede o "em cima" com a posição antiga, aplica o
+    // delta depois de mover.
+    var ridingIdx = -1;
+    if (p && p.onGround) {
+      for (var ci = 0; ci < o.cabins.length; ci++) {
+        if (playerOnTop(o.cabins[ci], p)) { ridingIdx = ci; break; }
+      }
+    }
+    var topoY = Infinity, topoIdx = 0;
+    for (var i = 0; i < o.cabins.length; i++) {
+      var cab = o.cabins[i];
+      var ang = o.cabAng[i] + rot;
+      var nx = o.hubX + Math.cos(ang) * o.cabR[i] - cab.w / 2;
+      var ny = o.hubY + Math.sin(ang) * o.cabR[i] - cab.h / 2;
+      if (i === ridingIdx) { p.x += nx - cab.x; p.y += ny - cab.y; }
+      cab.x = nx; cab.y = ny;
+      if (cab.y < topoY) { topoY = cab.y; topoIdx = i; }
+    }
+
+    // "topo" é sempre a cabine mais alta NO INSTANTE — como a roda gira,
+    // pisar em qualquer uma delas pode virar o topo mais cedo ou mais tarde.
+    var atTopo = ridingIdx === topoIdx;
     if (atTopo && !o.zooming) {
       o.zooming = true;
       o.zoomTimer = FERRIS_ZOOM_HOLD;
@@ -2220,22 +2246,25 @@ window.FG = window.FG || {};
     ctx.arc(o.hubX, o.hubY, 16, 0, TAU);
     ctx.stroke();
 
-    // aros ligando o eixo à ESCADA de cabines (essa não gira — é o que se
-    // escala; um tom mais frio/metálico para diferenciar do aro que gira)
+    // aros ligando o eixo à ESCADA de cabines — gira junto com o jogador em
+    // cima (bem mais devagar que o aro decorativo), num tom mais frio/
+    // metálico pra diferenciar visualmente do aro que só gira por fora
     ctx.strokeStyle = 'rgba(140,140,160,0.4)';
     ctx.lineWidth = 3;
     ctx.beginPath();
+    var topoIdx = 0, topoY = Infinity;
     for (var i = 0; i < o.cabins.length; i++) {
       var c = o.cabins[i];
       ctx.moveTo(o.hubX, o.hubY);
       ctx.lineTo(c.x + c.w / 2, c.y + c.h / 2);
+      if (c.y < topoY) { topoY = c.y; topoIdx = i; }
     }
     ctx.stroke();
 
     for (var k = 0; k < o.cabins.length; k++) {
       var cab = o.cabins[k];
       if (!visible(cam, cab.x, cab.y - 20, cab.w, cab.h + 30)) continue;
-      var topo = k === o.cabins.length - 1;
+      var topo = k === topoIdx; // a cabine mais alta NO INSTANTE — muda conforme a roda gira
       ctx.save();
       ctx.translate(cab.x, cab.y);
       // gôndola: corpo arredondado + friso
@@ -2430,7 +2459,7 @@ window.FG = window.FG || {};
         } else if (o.type === 'montanharussa') {
           updateMontanhaRussa(o, dt, p);    // ponto de embarque não é sólido
         } else if (o.type === 'rodagigante') {
-          updateRodagigante(o, dt, p);
+          updateRodagigante(o, dt, p, t);
           for (var c = 0; c < o.cabins.length; c++) movers.push(o.cabins[c]);
         } else if (o.type === 'trovao') {
           updateTrovao(o, dt, p, t);   // não é sólido: nada em movers
