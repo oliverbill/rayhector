@@ -18,7 +18,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 6800, H = 720;
+  var W = 6950, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -43,10 +43,20 @@ window.FG = window.FG || {};
   //                     com uma plataforma-elevador ajudando o trecho mais
   //                     largo. Piso oculto no fundo: quem cai anda tomando
   //                     dano e sobe de volta pela margem.
-  //  (5) x 4400..5500   AS RUÍNAS DE ESTÁTUAS: escombros que desmoronam sob
+  //  (5) x 4400..5650   AS RUÍNAS DE ESTÁTUAS: escombros que desmoronam sob
   //                     o peso, coluna de ar quente da fornalha por baixo da
   //                     arena, e o rolo de lâminas final antes da clareira.
-  //  (6) x 5500..6800   A ARENA DO CHEFÃO: clareira plana de areia batida,
+  //                     Em 5110..5650 o piso vira um poço de areia movediça —
+  //                     travessia obrigatória: NENHUM sólido cruza o vão
+  //                     (qualquer parede ali viraria escada, o motor deixa
+  //                     agarrar e subir qualquer face vertical), e o vão de
+  //                     540px é largo demais para pulo duplo + planagem
+  //                     cruzarem sem tocar a areia (ver tests/reach.js — só
+  //                     fica alcançável no modo "perito", nunca no "casual").
+  //                     Só se atravessa afundando e apertando pulo rápido
+  //                     para não afundar demais (ver FG.level.quicksand e o
+  //                     tratamento em player.js/engine.js).
+  //  (6) x 5650..6950   A ARENA DO CHEFÃO: clareira plana de areia batida,
   //                     com as últimas lâminas antes do combate contra
   //                     Sergiola Mutante.
   //
@@ -101,12 +111,19 @@ window.FG = window.FG || {};
     // ---- (5) as ruínas de estátuas ----
     S(4600, 620, 300, 100, 'g'),      // [22] piso 4600..4900 (checkpoint 3)
     S(4980, 560, 130, 26, 'r'),       // [23] base de estátua caída (+60)
-    S(5180, 620, 320, 100, 'g'),      // [24] piso 5180..5500
+    // SEM piso nem teto em 5110..5650: é o poço de areia movediça (ver
+    // FG.level.quicksand), mesma superfície y=560 da estátua — entrada sem
+    // degrau. NENHUM sólido cruza o vão de propósito: qualquer parede ali
+    // vira escada (o motor deixa agarrar e subir QUALQUER face vertical), e
+    // um teto que cobrisse o poço inteiro só criaria um desvio por cima dele
+    // andando. O vão de 540px é largo demais para pulo duplo + planagem
+    // cruzarem sem tocar a areia (ver tests/reach.js — só alcançável no modo
+    // "perito", nunca no "casual") — a travessia real é afundar na areia.
 
     // ---- (6) a arena do chefão ----
-    S(5500, 620, 1300, 100, 'g'),     // [25] clareira de areia batida
-    S(5620, 540, 120, 24, 'r'),       // [26] (+80)
-    S(5780, 496, 110, 22, 'r'),       // [27] (+44 do anterior)
+    S(5650, 620, 1300, 100, 'g'),     // [25] clareira de areia batida
+    S(5770, 540, 120, 24, 'r'),       // [26] (+80)
+    S(5930, 496, 110, 22, 'r'),       // [27] (+44 do anterior)
   ];
 
   // ---------------------------------------------------------------
@@ -119,8 +136,26 @@ window.FG = window.FG || {};
     Hz(2280, 596, 90, 24, 's'),    // base da muralha, antes de subir
     Hz(3000, 674, 1400, 26, 's'),  // fossa de destroços do trecho 4
     Hz(4650, 596, 100, 24, 's'),   // ruínas, antes da estátua caída
-    Hz(5210, 596, 90, 24, 's'),    // entrando na clareira
-    Hz(5850, 596, 90, 24, 's'),    // arena do chefão
+    // (o antigo hazard aqui saiu: 5110..5650 virou o poço de areia
+    // movediça — a própria areia já é o perigo, sem lâmina por cima)
+    Hz(6000, 596, 90, 24, 's'),    // arena do chefão
+  ];
+
+  // ---------------------------------------------------------------
+  // AREIA MOVEDIÇA — o player.js lê FG.level.quicksand: dentro destes
+  // retângulos a gravidade normal fica suspensa e vira afundamento contínuo
+  // (ver constantes QUICKSAND_* em player.js), e cada aperto de PULO dá um
+  // contra-impulso — segurar não ajuda, precisa apertar de novo rápido
+  // ("mash"). Afundar mais que QUICKSAND_FAIL_DEPTH desde a entrada é falha
+  // (engine.js aplica dano + respawn no checkpoint mais próximo, igual à
+  // queda no vazio).
+  // O poço de 5110..5650 (trecho 5) é o único da fase: não há sólido nenhum
+  // cruzando o vão (nem piso nem teto — ver o comentário em solids, logo
+  // antes da estátua caída), e o vão de 540px é largo demais para pulo
+  // duplo + planagem cruzarem — travessia obrigatória.
+  // ---------------------------------------------------------------
+  var quicksand = [
+    { x: 5110, y: 560, w: 540, h: 340 },
   ];
 
   // 3 tochas-checkpoint (acendem quando ativadas)
@@ -147,8 +182,8 @@ window.FG = window.FG || {};
     { type: 'espinhoco', x: 4460, y: 594, range: 80 },
     { type: 'sapeca',    x: 4720, y: 588, range: 90 },
     { type: 'voadeira',  x: 5030, y: 420, range: 130 },
-    { type: 'espinhoco', x: 5560, y: 594, range: 90 },
-    { type: 'sapeca',    x: 5900, y: 588, range: 70 },
+    { type: 'espinhoco', x: 5710, y: 594, range: 90 },
+    { type: 'sapeca',    x: 6050, y: 588, range: 70 },
   ];
 
   // ---------------------------------------------------------------
@@ -174,14 +209,14 @@ window.FG = window.FG || {};
     { type: 'plataforma', x: 3860, y: 440, w: 110, dx: 140, dy: -40, period: 4.4, phase: 0 },
     { type: 'sopro',      x: 4150, y: 300, w: 90, h: 240 },
 
-    // (5) ruínas: a estátua caída é instável, e o rolo de lâminas final
-    // cobra a travessia antes da arena.
+    // (5) ruínas: a estátua caída é instável. (o antigo rolo de lâminas em
+    // 5220 saiu: aquele piso virou o poço de areia movediça — ver
+    // FG.level.quicksand logo abaixo do array de hazards.)
     { type: 'desmorona',   x: 5000, y: 512, w: 90 },
-    { type: 'espinhorolo', x: 5220, y: 576, w: 44, range: 140, speed: 140 },
 
     // (6) arena do chefão: última roda de lâminas antes do combate — nada
     // dentro da própria arena, a luta é do chefão.
-    { type: 'espinhorolo', x: 5680, y: 576, w: 44, range: 120, speed: 145 },
+    { type: 'espinhorolo', x: 5830, y: 576, w: 44, range: 120, speed: 145 },
   ];
 
   // ---------------------------------------------------------------
@@ -219,10 +254,10 @@ window.FG = window.FG || {};
   lumiArc(5040, 460, 4, 160, 40);
   lumiLine(5240, 578, 3, 50);
   // (6) arena do chefão
-  lumiLine(5660, 500, 3, 44);
-  lumiLine(5820, 456, 3, 44);
-  lumiArc(6100, 546, 4, 170, 42);
-  lumiLine(6280, 570, 2, 60);
+  lumiLine(5810, 500, 3, 44);
+  lumiLine(5970, 456, 3, 44);
+  lumiArc(6250, 546, 4, 170, 42);
+  lumiLine(6430, 570, 2, 60);
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC).
   var sparks = kit.makeSparks(64);
@@ -724,6 +759,13 @@ window.FG = window.FG || {};
       else drawPedra(ctx, s, d, t);
     }
 
+    // poço(s) de areia movediça
+    for (var q = 0; q < quicksand.length; q++) {
+      var qz = quicksand[q];
+      if (qz.x > x1 || qz.x + qz.w < x0) continue;
+      drawAreiaMovedica(ctx, qz, t);
+    }
+
     // lâminas por cima do terreno
     for (var h2 = 0; h2 < hazards.length; h2++) {
       var hz2 = hazards[h2];
@@ -774,6 +816,68 @@ window.FG = window.FG || {};
     ctx.fillRect(s.x - 2, s.y - 2, s.w + 4, 4);
     ctx.fillStyle = 'rgba(255,200,140,0.3)';
     ctx.fillRect(s.x - 2, s.y - 2, s.w + 4, 1.4);
+  }
+
+  // --- areia movediça: superfície ondulando + bolhas de quem se debate ---
+  function drawAreiaMovedica(ctx, qz, t) {
+    var x = qz.x, y = qz.y, w = qz.w, h = qz.h;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+
+    // corpo: areia escura e densa, mais funda vira breu (some no fundo do poço)
+    var gr = ctx.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, '#8a6a3a');
+    gr.addColorStop(0.18, '#6e5330');
+    gr.addColorStop(0.55, '#4a3a24');
+    gr.addColorStop(1, '#1c150c');
+    ctx.fillStyle = gr;
+    ctx.fillRect(x, y, w, h);
+
+    // ondulação da superfície: várias faixas senoidais defasadas, escurecendo
+    // com a profundidade — vende o "líquido espesso"
+    var nBands = 6;
+    for (var b = 0; b < nBands; b++) {
+      var by = y + 4 + b * 13;
+      ctx.strokeStyle = 'rgba(20,14,8,' + (0.18 + b * 0.03).toFixed(2) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (var px = 0; px <= w; px += 10) {
+        var wy = by + Math.sin(t * 1.6 + px * 0.045 + b * 1.1) * (3.2 - b * 0.2);
+        if (px === 0) ctx.moveTo(x + px, wy); else ctx.lineTo(x + px, wy);
+      }
+      ctx.stroke();
+    }
+
+    // brilho quente na crosta (pega a luz do poente, como o resto da arena)
+    ctx.fillStyle = 'rgba(255,190,120,0.16)';
+    ctx.fillRect(x, y, w, 6);
+
+    // bolhas subindo devagar — mais numerosas e agitadas quando o jogador
+    // está se debatendo ali dentro (lido de FG.player, opcional/defensivo)
+    var p = FG.player;
+    var struggling = !!(p && p.inQuicksand && p.x + p.w / 2 >= x && p.x + p.w / 2 <= x + w);
+    var nBub = struggling ? 14 : 6;
+    ctx.fillStyle = 'rgba(230,200,150,0.55)';
+    for (var i = 0; i < nBub; i++) {
+      var seed = i * 71.3;
+      var cyc = (t * (struggling ? 0.9 : 0.35) + seed * 0.13) % 1;
+      var bx = x + ((Math.sin(seed) * 0.5 + 0.5) * w);
+      var byy = y + h - cyc * h * 0.6;
+      var r = 1.2 + (i % 3) * 0.7;
+      ctx.globalAlpha = (1 - cyc) * 0.7;
+      ctx.beginPath();
+      ctx.arc(bx, byy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // moldura da borda: aresta mais clara marcando onde a areia começa
+    ctx.fillStyle = 'rgba(255,200,140,0.35)';
+    ctx.fillRect(x - 2, y - 2, w + 4, 3);
   }
 
   // --- lâminas de gladiador cravadas na areia ---
@@ -865,12 +969,13 @@ window.FG = window.FG || {};
     playerStart: { x: 80, y: 560 },
     solids: solids,
     hazards: hazards,
+    quicksand: quicksand,
     checkpoints: checkpoints,
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'sergiola',
-    bossTriggerX: 5760,
-    arena: { x: 5700, w: 1100 },
+    bossTriggerX: 5910,
+    arena: { x: 5850, w: 1100 },
     reset: reset,
     update: update,
     drawBack: drawBack,

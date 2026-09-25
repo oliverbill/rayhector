@@ -23,6 +23,18 @@ window.FG = window.FG || {};
   const WALL_LOCK = 0.12;    // tempo sem poder voltar a colar na parede
   const WALL_COYOTE = 0.1;   // tolerância após desencostar
 
+  // areia movediça: gravidade normal fica suspensa e vira uma "gravidade"
+  // densa que puxa qualquer impulso de volta para o afundamento — cada
+  // aperto de PULO (mash) dá o impulso normal de pulo (reaproveitado, ver
+  // jumpsUsed resetado a cada frame lá embaixo), mas ele morre rápido se não
+  // vier outro aperto logo atrás.
+  const QUICKSAND_PULL = 2600;  // "gravidade" da areia (px/s²), mais forte que a normal
+  const QUICKSAND_SINK = 150;   // velocidade terminal de afundamento sem apertar nada (px/s) —
+                                 // rápido o bastante pra cobrar mash de verdade: sem apertar
+                                 // nada, afunda até a falha bem antes de atravessar o poço
+                                 // andando (ver simulação em level4.js/tests, poço de 540px)
+  const QUICKSAND_FAIL_DEPTH = 130; // px afundados desde a entrada = falha (engine.js aplica dano/respawn)
+
   // ---------- pool de faíscas (sem alocação por frame) ----------
   const SPARKS = 28;
   const sparks = [];
@@ -132,6 +144,11 @@ window.FG = window.FG || {};
     // corrida, pulo, gravidade e colisão. O soco continua valendo, porque
     // dependurado ainda dá para socar quem vem.
     hang: null,
+    // Areia movediça: null quando fora. Enquanto dentro (ver FG.level.quicksand),
+    // o afundamento é controlado por este mesmo update (ver update()) — quem
+    // decide a falha (afundou demais) é o engine, olhando inQuicksand/qsEntryY.
+    inQuicksand: false,
+    qsEntryY: 0,
 
     // ---------- lógica ----------
     update(dt) {
@@ -221,6 +238,25 @@ window.FG = window.FG || {};
         coyoteTimer = 0;   // emergir conta como "chão fresco": o pulo sai na hora
       }
       this.inWater = inWater;
+
+      // ---------- areia movediça (FG.level.quicksand, opcional por fase) ----------
+      // Mesmo ponto testado da água (meio do peito): pés na beirada não contam
+      // como ter entrado. jumpsUsed resetado a cada frame aqui dentro é o que
+      // permite reaproveitar o pulo normal (mais abaixo) como o "mash" de
+      // escapar — cada aperto dá o mesmo impulso de sempre, e a gravidade da
+      // areia (ver bloco de física mais abaixo) puxa de volta rápido.
+      let inQuicksand = false;
+      const _qs = FG.level.quicksand;
+      if (_qs) {
+        const scx = this.x + this.w / 2, scy = this.y + this.h * 0.55;
+        for (let i = 0; i < _qs.length; i++) {
+          const qz = _qs[i];
+          if (scx >= qz.x && scx <= qz.x + qz.w && scy >= qz.y && scy <= qz.y + qz.h) { inQuicksand = true; break; }
+        }
+      }
+      if (inQuicksand && !this.inQuicksand) { this.qsEntryY = this.y; FG.audio.sfx('sinking'); }
+      this.inQuicksand = inQuicksand;
+      if (inQuicksand) { jumpsUsed = 0; glideLeft = GLIDE_TIME; coyoteTimer = 0; }
 
       // pose de nado: o blend persegue inWater (deita/levanta sem pular de pose)
       swimBlend += ((inWater ? 1 : 0) - swimBlend) * Math.min(1, dt * 9);
@@ -317,6 +353,14 @@ window.FG = window.FG || {};
         if (this.vx < -240) this.vx = -240;
         gliding = false;
         jumpCut = true;   // nado não é pulo: nada de corte de altura ao soltar
+      } else if (inQuicksand) {
+        // gravidade normal suspensa: o impulso do pulo (aplicado acima, igual
+        // ao pulo em terra firme) já deu a subida deste frame — aqui só cabe
+        // puxar de volta rápido para o afundamento, até bater no teto de
+        // velocidade terminal quando não há impulso nenhum brigando contra.
+        this.vy += QUICKSAND_PULL * dt;
+        if (this.vy > QUICKSAND_SINK) this.vy = QUICKSAND_SINK;
+        gliding = false;
       } else {
         this.vy += GRAVITY * dt;
         const cap = clinging ? WALL_SLIDE : (gliding ? GLIDE_FALL : MAX_FALL);
@@ -438,6 +482,7 @@ window.FG = window.FG || {};
       gliding = false; glideLeft = GLIDE_TIME; attackTimer = 0; attackCooldown = 0;
       wallLock = 0; wallCoyote = 0; lastWallDir = 0; clinging = false; scrapeAccum = 0;
       swimBlend = 0; swimPhase = 0; bubbleAccum = 0; this.inWater = false;
+      this.inQuicksand = false; this.qsEntryY = 0;
       this.wallDir = 0;
       for (let i = 0; i < SPARKS; i++) sparks[i].life = 0;
     },
@@ -674,6 +719,10 @@ window.FG = window.FG || {};
       ctx.restore();
     },
   };
+
+  // exposto para o engine, que decide a falha (afundou demais) fora daqui —
+  // mesmo padrão da queda no vazio, olhando um campo do player.
+  player.QUICKSAND_FAIL_DEPTH = QUICKSAND_FAIL_DEPTH;
 
   FG.player = player;
 })();

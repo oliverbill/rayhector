@@ -351,6 +351,13 @@ window.FG = window.FG || {};
         p.hurt(2, p.x);
         if (p.hp > 0) p.respawn(engine.checkpoint.x, engine.checkpoint.y);
       }
+      // areia movediça: afundou demais desde que entrou (não apertou o pulo
+      // rápido o bastante) — falha igual à queda no vazio, dano e volta pro
+      // checkpoint mais próximo.
+      if (p.inQuicksand && p.y - p.qsEntryY > p.QUICKSAND_FAIL_DEPTH) {
+        p.hurt(2, p.x);
+        if (p.hp > 0) p.respawn(engine.checkpoint.x, engine.checkpoint.y);
+      }
       // checkpoints
       for (const c of FG.level.checkpoints) {
         if (Math.abs(p.x + p.w / 2 - c.x) < 40 && Math.abs(p.y + p.h - c.y) < 80) {

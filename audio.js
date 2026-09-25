@@ -255,6 +255,11 @@ window.FG = window.FG || {};
         tone({ t: t + 1.0, dur: 1.0, vol: 0.06, type: 'triangle', freq: nf(acorde[j]), attack: 0.04 });
       }
     },
+    // sucção grave e pastosa — entrou na areia movediça
+    sinking: function (t) {
+      ruido({ t: t, dur: 0.5, vol: 0.14, ftype: 'lowpass', f0: 700, f1: 160, q: 1.0, attack: 0.03 });
+      tone({ t: t, dur: 0.4, vol: 0.12, type: 'sine', freq: 140, freqEnd: 60, attack: 0.02 });
+    },
     // blip de menu
     select: function (t) {
       tone({ t: t, dur: 0.09, vol: 0.16, type: 'square', freq: 660, freqEnd: 880,
