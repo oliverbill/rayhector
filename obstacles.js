@@ -556,6 +556,8 @@ window.FG = window.FG || {};
   // 12) rodagigante {x, y, cabins?} — (x,y) = cabine da base. Cabines fixas
   // dispostas em espiral ascendente (degraus, não giram — mais fácil e mais
   // justo de escalar). A última é o "topo": pisar nela dispara o zoom-out.
+  // A ESTRUTURA em si (aro + gôndolas decorativas) gira sem parar em torno
+  // do eixo — é só visual, orbita por fora da escada e nunca toca nela.
   function makeRodagigante(d) {
     var cabW = d.cabW || 62, cabH = d.cabH || 18;
     // deslocamentos relativos padrão: zigue-zague subindo (ver comentário no
@@ -572,13 +574,25 @@ window.FG = window.FG || {};
       var off = offsets[i];
       cabins.push({ x: d.x + off.dx, y: d.y + off.dy, w: cabW, h: cabH });
     }
+    var hubX = d.x + (offsets[offsets.length - 1].dx) * 0.5;
+    var hubY = d.y + (offsets[offsets.length - 1].dy) * 0.5;
+    // raio do aro giratório: precisa envolver a cabine mais distante do eixo,
+    // com uma folga, senão a escada visualmente "vaza" para fora da roda
+    var wheelR = 60;
+    for (var j = 0; j < cabins.length; j++) {
+      var cc = cabins[j];
+      var dx0 = (cc.x + cc.w / 2) - hubX, dy0 = (cc.y + cc.h / 2) - hubY;
+      wheelR = Math.max(wheelR, Math.hypot(dx0, dy0) + 55);
+    }
     return {
       type: 'rodagigante',
       x: d.x, y: d.y, cabins: cabins,
       zooming: false, zoomTimer: 0,
       // eixo/roda decorativa: centro aproximado do círculo que os degraus sugerem
-      hubX: d.x + (offsets[offsets.length - 1].dx) * 0.5,
-      hubY: d.y + (offsets[offsets.length - 1].dy) * 0.5,
+      hubX: hubX, hubY: hubY,
+      wheelR: wheelR,
+      rotSpeed: d.rotSpeed != null ? d.rotSpeed : 0.4,  // rad/s — giro lento e constante
+      nSat: d.nSat || 9,                                 // gôndolas decorativas no aro
     };
   }
 
@@ -1900,7 +1914,8 @@ window.FG = window.FG || {};
     ctx.save();
     ctx.translate(sx, sy);
 
-    // carrinho: caixa roxa sombria com friso verde-doentio
+    // carrinho: caixa roxa sombria com friso verde-doentio, aresta clara no
+    // topo pra ler como metal contra o fundo escuro do parque
     ctx.fillStyle = '#3a2050';
     ctx.fillRect(0, -o.h * 0.55, o.w, o.h * 0.55);
     ctx.fillStyle = '#241436';
@@ -1908,10 +1923,38 @@ window.FG = window.FG || {};
     ctx.strokeStyle = '#7fd94a';
     ctx.lineWidth = 2;
     ctx.strokeRect(2, -o.h * 0.55 + 2, o.w - 4, o.h * 0.55 - 4);
+    ctx.strokeStyle = 'rgba(230,220,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(2, -o.h * 0.55 + 2); ctx.lineTo(o.w - 2, -o.h * 0.55 + 2); ctx.stroke();
     // rodinhas
     ctx.fillStyle = '#161018';
     ctx.beginPath(); ctx.arc(o.w * 0.18, 4, 7, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(o.w * 0.82, 4, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(200,190,220,0.4)';
+    ctx.beginPath(); ctx.arc(o.w * 0.18, 4, 2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(o.w * 0.82, 4, 2, 0, TAU); ctx.fill();
+
+    // placa pendurada na frente do carrinho: um cachorro-quente estilizado
+    // (pão + salsicha), pra ler de longe que é ESSE tipo de carrinho, mesmo
+    // no parado — sem esperar o jogador interagir para descobrir
+    ctx.save();
+    ctx.translate(o.w * 0.5, -o.h * 0.28);
+    ctx.fillStyle = 'rgba(20,10,30,0.9)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-19, -12, 38, 22, 5); else ctx.rect(-19, -12, 38, 22);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd870'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#d99a55';
+    ctx.beginPath(); ctx.ellipse(0, 0, 14, 5.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#a03020';
+    ctx.beginPath(); ctx.ellipse(0, -0.5, 10.5, 2.8, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,220,120,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-6, -2.5); ctx.lineTo(-3, -0.5); ctx.lineTo(0, -2.5);
+    ctx.lineTo(3, -0.5); ctx.lineTo(6, -2.5);
+    ctx.stroke();
+    ctx.restore();
 
     // guarda-sol listrado roxo/vermelho, tremulando de leve
     var poleX = o.w * 0.5;
@@ -1972,8 +2015,25 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Carrinho da montanha-russa: forma compartilhada entre o carrinho parado
+  // na estação (drawBehind, esperando passageiro) e o carrinho em movimento
+  // durante o passeio (drawFront) — mesmo desenho, chamado nos dois lugares.
+  function drawCoasterCart(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#a02030';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-20, -6, 40, 16, 5); else ctx.rect(-20, -6, 40, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd870'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#241436';
+    ctx.beginPath(); ctx.arc(-12, 10, 5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(12, 10, 5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
   // --- montanha-russa: trilho ondulado (decorativo) + carrinho -----------
-  function drawMontanhaRussaFundo(ctx, o, cam, t) {
+  function drawMontanhaRussaFundo(ctx, o, cam, t, p) {
     if (!visible(cam, o.x - 20, o.y - COASTER_AMP - 80, o.railW + 40, COASTER_AMP + 100)) return;
     ctx.save();
     ctx.translate(-cam.x, -cam.y);
@@ -2011,26 +2071,23 @@ window.FG = window.FG || {};
     ctx.lineWidth = 2;
     ctx.strokeRect(o.x - o.w * 0.3, o.y - 8, o.w * 1.3, 10);
 
+    // carrinho PARADO na estação, esperando o próximo passageiro — some
+    // assim que o.t começa a andar (p.ride === o), reaparece ao desembarcar
+    if (!p || p.ride !== o) {
+      var idle = coasterPoint(o, 0);
+      var bob = Math.sin(t * 1.8) * 2; // balancinho parado no trilho
+      drawCoasterCart(ctx, idle.x, idle.y + bob);
+    }
+
     ctx.restore();
   }
 
-  // Carrinho da montanha-russa: só aparece durante o passeio (camada da
-  // frente, para passar por cima do resto do cenário como um trem de verdade)
+  // Carrinho em movimento: só aparece durante o passeio (camada da frente,
+  // para passar por cima do resto do cenário como um trem de verdade)
   function drawMontanhaRussaFrente(ctx, o, cam, p) {
     if (!p || p.ride !== o) return;
     var pt = coasterPoint(o, o.t);
-    var sx = pt.x - cam.x, sy = pt.y - cam.y;
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.fillStyle = '#a02030';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-20, -6, 40, 16, 5); else ctx.rect(-20, -6, 40, 16);
-    ctx.fill();
-    ctx.strokeStyle = '#ffd870'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#241436';
-    ctx.beginPath(); ctx.arc(-12, 10, 5, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.arc(12, 10, 5, 0, TAU); ctx.fill();
-    ctx.restore();
+    drawCoasterCart(ctx, pt.x - cam.x, pt.y - cam.y);
   }
 
   // --- roda-gigante escalável: cabines-degrau + eixo/aros decorativos ----
@@ -2038,9 +2095,48 @@ window.FG = window.FG || {};
     ctx.save();
     ctx.translate(-cam.x, -cam.y);
 
-    // aros decorativos ligando as cabines ao "eixo" sugerido — dá a leitura
-    // de roda-gigante mesmo sem girar de verdade
-    ctx.strokeStyle = 'rgba(160,90,200,0.35)';
+    // A RODA em si: aro grande + gôndolas penduradas orbitando o eixo sem
+    // parar (paleta igual à roda-gigante decorativa do fundo — mesmo bicho,
+    // agora perto e escalável). Puramente visual: fica por FORA do raio das
+    // cabines-degrau, nunca colide, nunca atrasa quem está subindo.
+    var rot = t * o.rotSpeed;
+    ctx.strokeStyle = 'rgba(196,178,224,0.55)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(o.hubX, o.hubY, o.wheelR, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(160,142,196,0.4)';
+    for (var si = 0; si < o.nSat; si++) {
+      var ang = rot + (si / o.nSat) * TAU;
+      var gx = o.hubX + Math.cos(ang) * o.wheelR;
+      var gy = o.hubY + Math.sin(ang) * o.wheelR;
+      ctx.beginPath();
+      ctx.moveTo(o.hubX, o.hubY);
+      ctx.lineTo(gx, gy);
+      ctx.stroke();
+      // gôndola pendurada — balanço leve conforme a posição na volta, como
+      // se a gravidade puxasse sempre para baixo enquanto o aro gira
+      ctx.save();
+      ctx.translate(gx, gy);
+      ctx.rotate(Math.sin(ang) * 0.22);
+      ctx.fillStyle = (si % 2 === 0) ? '#c8304c' : '#7a9a3c';
+      ctx.fillRect(-9, -4, 18, 16);
+      ctx.fillStyle = 'rgba(255,230,140,0.85)';
+      ctx.beginPath(); ctx.arc(0, 4, 2, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    // eixo central da roda giratória
+    ctx.strokeStyle = 'rgba(255,216,112,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(o.hubX, o.hubY, 16, 0, TAU);
+    ctx.stroke();
+
+    // aros ligando o eixo à ESCADA de cabines (essa não gira — é o que se
+    // escala; um tom mais frio/metálico para diferenciar do aro que gira)
+    ctx.strokeStyle = 'rgba(140,140,160,0.4)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     for (var i = 0; i < o.cabins.length; i++) {
@@ -2048,11 +2144,6 @@ window.FG = window.FG || {};
       ctx.moveTo(o.hubX, o.hubY);
       ctx.lineTo(c.x + c.w / 2, c.y + c.h / 2);
     }
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,216,112,0.55)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(o.hubX, o.hubY, 18, 0, TAU);
     ctx.stroke();
 
     for (var k = 0; k < o.cabins.length; k++) {
@@ -2268,6 +2359,7 @@ window.FG = window.FG || {};
       if (!FG.engine) return;
       buildGrads(ctx);
       var t = FG.engine.time;
+      var p = FG.player;
       for (var i = 0; i < list.length; i++) {
         var o = list[i];
         if (o.type === 'plataforma') drawPlataforma(ctx, o, cam, t);
@@ -2280,7 +2372,7 @@ window.FG = window.FG || {};
         else if (o.type === 'tronco') drawTronco(ctx, o, cam, t);
         else if (o.type === 'brasa') drawBrasaFundo(ctx, o, cam, t);
         else if (o.type === 'cachorroquente') drawCachorroquente(ctx, o, cam, t);
-        else if (o.type === 'montanharussa') drawMontanhaRussaFundo(ctx, o, cam, t);
+        else if (o.type === 'montanharussa') drawMontanhaRussaFundo(ctx, o, cam, t, p);
         else if (o.type === 'rodagigante') drawRodagigante(ctx, o, cam, t);
         else if (o.type === 'trovao') drawTrovaoFundo(ctx, o, cam, t);
       }
