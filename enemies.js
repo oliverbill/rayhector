@@ -137,6 +137,7 @@ window.FG = window.FG || {};
     else if (e.type === 'lobo') { e.w = 52; e.h = 30; }     // mansão: rasteiro, rápido
     else if (e.type === 'fantasma') { e.w = 34; e.h = 40; } // mansão: aéreo, etéreo
     else if (e.type === 'ratazana') { e.w = 58; e.h = 32; } // mansão: rasteiro, robusto
+    else if (e.type === 'gladiador') { e.w = 104; e.h = 62; e.hp = 4; e.dmg = 2; } // coliseu: biga com gladiador montado
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
@@ -495,6 +496,27 @@ window.FG = window.FG || {};
         e.timer -= dt;
         if (e.timer <= 0) { e.st = 'parado'; e.timer = rand(1.2, 2.0); }
       }
+      const wantVx = e.vx;
+      FG.engine.moveAndCollide(e, dt);
+      if ((wantVx !== 0 && e.vx === 0) ||
+          (e.dir > 0 && e.x > e.spawnX + e.range) ||
+          (e.dir < 0 && e.x < e.spawnX - e.range)) {
+        e.dir = -e.dir;
+      }
+    } else if (e.type === 'gladiador') {
+      // Biga (carro de guerra) com gladiador montado: patrulha a arena a
+      // trote firme e, quando o jogador entra no range, dispara numa carga
+      // bem mais rápida — a "carga" É a biga acelerando e atropelando quem
+      // estiver na frente. Mesmo padrão do lobo (patrulha/perseguição no
+      // chão, vira nas bordas do range/parede), só que maior, mais pesada e
+      // com atropelamento mais forte.
+      const SPD_PATROL = 85, SPD_CARGA = 340;
+      e.vy += GRAV * dt;
+      const dx = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const perseguindo = Math.abs(dx) < e.range && Math.abs((p.y + p.h / 2) - (e.y + e.h / 2)) < 90;
+      if (perseguindo) e.dir = dx >= 0 ? 1 : -1;
+      e.vx = e.dir * (perseguindo ? SPD_CARGA : SPD_PATROL);
+      e.st = perseguindo ? 'carga' : 'trote';
       const wantVx = e.vx;
       FG.engine.moveAndCollide(e, dt);
       if ((wantVx !== 0 && e.vx === 0) ||
@@ -1262,6 +1284,130 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- gladiador de biga: carro de guerra de madeira com duas rodas raiadas,
+  // puxado por nada (a "tração" é a própria fúria da corrida), com o
+  // gladiador em pé atrás do peitoril — capacete emplumado, escudo redondo
+  // erguido à frente e lança pronta. Maior que qualquer bicho comum da fase,
+  // pé firme mesmo em carga. ---
+  function drawGladiador(ctx, e, t) {
+    const cx = e.x + e.w / 2, gy = e.y + e.h;
+    const correndo = e.st === 'carga';
+    const spin = t * (correndo ? 15 : 6) + e.phase;
+    const bounce = Math.sin(t * (correndo ? 16 : 7) + e.phase) * (correndo ? 3 : 1.2);
+    ctx.save();
+    ctx.translate(cx, gy + bounce);
+    ctx.scale(e.dir, 1);
+
+    // poeira sob as rodas quando em carga
+    if (correndo) {
+      ctx.fillStyle = 'rgba(180,140,90,0.35)';
+      for (let i = 0; i < 3; i++) {
+        const dx2 = -e.w * 0.3 - i * 14;
+        ctx.beginPath();
+        ctx.ellipse(dx2, -2, 10 - i * 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // rodas raiadas de madeira, uma um pouco atrás da outra
+    const wheelR = e.h * 0.3;
+    for (let s = 0; s < 2; s++) {
+      const wx = -e.w * 0.22 - s * (e.w * 0.28), wy = -wheelR;
+      ctx.save();
+      ctx.translate(wx, wy);
+      ctx.rotate(spin * (1 + s * 0.02));
+      ctx.fillStyle = '#3a2818';
+      ctx.beginPath(); ctx.arc(0, 0, wheelR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#6a4a2c'; ctx.lineWidth = wheelR * 0.32;
+      ctx.beginPath(); ctx.arc(0, 0, wheelR * 0.72, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#c99a58'; ctx.lineWidth = 2.2;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * wheelR * 0.8, Math.sin(a) * wheelR * 0.8);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#1c130c';
+      ctx.beginPath(); ctx.arc(0, 0, wheelR * 0.16, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // caixa da biga: trapézio de madeira com friso de bronze, peitoril alto
+    // na frente (protege as pernas do gladiador)
+    const bw = e.w * 0.62, bh = e.h * 0.42;
+    const bx = -e.w * 0.02, by = -wheelR * 1.55;
+    const bg = ctx.createLinearGradient(bx - bw * 0.5, by - bh, bx + bw * 0.5, by);
+    bg.addColorStop(0, '#8a5c34');
+    bg.addColorStop(0.55, '#5c3c20');
+    bg.addColorStop(1, '#2c1c10');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.moveTo(bx - bw * 0.5, by);
+    ctx.lineTo(bx - bw * 0.38, by - bh);
+    ctx.lineTo(bx + bw * 0.5, by - bh);
+    ctx.lineTo(bx + bw * 0.5, by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#d8a850'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx - bw * 0.38, by - bh);
+    ctx.lineTo(bx + bw * 0.5, by - bh);
+    ctx.stroke();
+
+    // gladiador em pé atrás do peitoril: tronco com peitoral, capacete com
+    // penacho vermelho, escudo redondo erguido à frente e lança
+    const px = bx + bw * 0.18, py = by - bh;
+    ctx.fillStyle = '#c98a5a'; // pele
+    ctx.beginPath();
+    ctx.rect(px - 8, py - 28, 16, 26);
+    ctx.fill();
+    // peitoral de bronze
+    ctx.fillStyle = '#b88848';
+    ctx.beginPath();
+    ctx.ellipse(px, py - 16, 10, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // escudo redondo, erguido à frente (lado do dir)
+    ctx.save();
+    ctx.translate(px + 14, py - 14);
+    const sg = ctx.createRadialGradient(-3, -3, 1, 0, 0, 13);
+    sg.addColorStop(0, '#e8c878');
+    sg.addColorStop(1, '#8a5c28');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a2810'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#7a2018';
+    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // capacete com penacho vermelho
+    ctx.fillStyle = '#9a9aa8';
+    ctx.beginPath();
+    ctx.arc(px, py - 32, 9, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#c8283a';
+    ctx.beginPath();
+    ctx.moveTo(px - 2, py - 40);
+    ctx.quadraticCurveTo(px + 1, py - 50, px + 6, py - 42 + Math.sin(t * 10 + e.phase) * 2);
+    ctx.quadraticCurveTo(px + 3, py - 44, px - 2, py - 40);
+    ctx.fill();
+    // lança erguida (mais visível em carga)
+    ctx.strokeStyle = '#5c4128'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px - 4, py - 20);
+    ctx.lineTo(px - 4 + e.w * 0.36, py - 46 - (correndo ? 6 : 0));
+    ctx.stroke();
+    ctx.fillStyle = '#c8c8d8';
+    ctx.beginPath();
+    ctx.moveTo(px - 4 + e.w * 0.36, py - 52 - (correndo ? 6 : 0));
+    ctx.lineTo(px - 4 + e.w * 0.42, py - 44 - (correndo ? 6 : 0));
+    ctx.lineTo(px - 4 + e.w * 0.30, py - 44 - (correndo ? 6 : 0));
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   // ==================================================================
   // Registro de chefões
   // Cada boss vive no seu arquivo (boss1.js, boss2.js, boss3.js) e regista-se
@@ -1353,6 +1499,7 @@ window.FG = window.FG || {};
         else if (e.type === 'lobo') drawLobo(ctx, e, t);
         else if (e.type === 'fantasma') drawFantasma(ctx, e, t);
         else if (e.type === 'ratazana') drawRatazana(ctx, e, t);
+        else if (e.type === 'gladiador') drawGladiador(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();

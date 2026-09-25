@@ -212,16 +212,22 @@ window.FG = window.FG || {};
   ];
 
   // ---------------------------------------------------------------
-  // INIMIGOS — reusa voadeira/espinhoco/sapeca. NENHUM antes de x=1800
-  // (vestíbulo limpo, agora com o dobro de comprimento).
+  // INIMIGOS — reusa voadeira/espinhoco/sapeca, mais o gladiador de biga
+  // (carro de guerra), tipo próprio do coliseu (ver enemies.js). NENHUM
+  // antes de x=1800 (vestíbulo limpo, agora com o dobro de comprimento).
+  // Gladiadores só em trechos de piso plano e contínuo — arquibancada e
+  // arena do chefão — nunca nas fendas da muralha nem na fossa de lâminas,
+  // onde não há chão firme o bastante para uma biga correr.
   // ---------------------------------------------------------------
   var enemyDefs = [
     { type: 'espinhoco', x: 1900, y: 594, range: 100 },
     { type: 'voadeira',  x: 2230, y: 460, range: 130 },
     { type: 'sapeca',    x: 2460, y: 480, range: 80 },
+    { type: 'gladiador', x: 1888, y: 558, range: 85 },   // biga na arquibancada, leva 1 (piso 1800..2080)
     { type: 'espinhoco', x: 2850, y: 594, range: 100 },
     { type: 'voadeira',  x: 3180, y: 460, range: 130 },
     { type: 'sapeca',    x: 3410, y: 480, range: 80 },
+    { type: 'gladiador', x: 2838, y: 558, range: 85 },   // biga na arquibancada, leva 2 (piso 2750..3030)
     { type: 'voadeira',  x: 3800, y: 430, range: 140 },
     { type: 'voadeira',  x: 4560, y: 130, range: 130 },   // sobre o adarve 1
     { type: 'voadeira',  x: 4900, y: 430, range: 140 },
@@ -240,26 +246,34 @@ window.FG = window.FG || {};
     { type: 'voadeira',  x: 10310, y: 420, range: 130 },
     { type: 'espinhoco', x: 11360, y: 594, range: 90 },
     { type: 'sapeca',    x: 11700, y: 588, range: 70 },
+    { type: 'gladiador', x: 11950, y: 558, range: 300 }, // biga correndo na clareira do chefão, leva 1
     { type: 'espinhoco', x: 12660, y: 594, range: 90 },
     { type: 'sapeca',    x: 13000, y: 588, range: 70 },
+    { type: 'gladiador', x: 12450, y: 558, range: 160 }, // biga correndo na clareira do chefão, leva 2 (fica antes do degrau 12720)
   ];
 
   // ---------------------------------------------------------------
-  // OBSTÁCULOS DINÂMICOS (FG.obstacles lê daqui) — reusa só os cinco tipos
-  // já existentes: plataforma, desmorona, sopro, pendulo, espinhorolo.
+  // OBSTÁCULOS DINÂMICOS (FG.obstacles lê daqui) — reusa os tipos já
+  // existentes, mais a plateia (nova, própria do coliseu).
   //   plataforma  {x,y,w,dx,dy,period,phase} — elevador de pedra da arena
   //   desmorona   {x,y,w} — laje que treme e cai (escombro instável)
   //   sopro       {x,y,w,h} — fornalha embaixo da arena, sopro quente
   //   pendulo     {x,y,len,arc,period} — flagelo/maça de gladiador
   //   espinhorolo {x,y,w,range,speed} — roda de lâminas num trilho
+  //   plateia     {x,w,topY,groundY,interval,jitter} — arquibancada de fundo
+  //               que arremessa comida periodicamente (telegraph + arco
+  //               parabólico + dano real, ver obstacles.js)
   // ---------------------------------------------------------------
   var obstacleDefs = [
     // (2) arquibancada: flagelo varrendo o degrau do meio, roda de lâminas
-    // no último degrau — repetido nas duas levas
+    // no último degrau — repetido nas duas levas — mais a plateia ao fundo
+    // cobrindo as duas levas inteiras, já jogando comida enquanto o jogador
+    // sobe e desce os degraus.
     { type: 'pendulo',     x: 2405, y: 300, len: 190, arc: 0.85, period: 2.8 },
     { type: 'espinhorolo', x: 2550, y: 576, w: 44, range: 110, speed: 130 },
     { type: 'pendulo',     x: 3355, y: 300, len: 190, arc: 0.85, period: 2.8 },
     { type: 'espinhorolo', x: 3555, y: 576, w: 44, range: 110, speed: 130 },
+    { type: 'plateia',     x: 1800, w: 2300, topY: 260, groundY: 620, interval: 3.6, jitter: 1.2 },
 
     // (3) muralha: NADA dentro das fendas — a subida ali é agarrando, e só.
 
@@ -277,10 +291,13 @@ window.FG = window.FG || {};
     { type: 'desmorona',   x: 9400, y: 512, w: 90 },
     { type: 'desmorona',   x: 10200, y: 512, w: 90 },
 
-    // (6) arena do chefão: rodas de lâminas antes do gatilho — nada dentro
-    // da própria arena do combate, a luta é do chefão.
+    // (6) arena do chefão: rodas de lâminas antes do gatilho — nada de
+    // obstáculo dentro da própria arena do combate, a luta é do chefão. A
+    // plateia cobre só até o gatilho (bossTriggerX=12860): a torcida grita e
+    // arremessa até o chefão entrar em cena, depois é silêncio de duelo.
     { type: 'espinhorolo', x: 11480, y: 576, w: 44, range: 120, speed: 145 },
     { type: 'espinhorolo', x: 12780, y: 576, w: 44, range: 120, speed: 145 },
+    { type: 'plateia',     x: 11300, w: 1500, topY: 260, groundY: 620, interval: 2.8, jitter: 1.0 },
   ];
 
   // ---------------------------------------------------------------

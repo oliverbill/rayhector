@@ -13,6 +13,9 @@
 //   brasa       — zona de chuva de brasa em rajadas telegrafadas (não sólida)
 //   trovao      — raio periódico numa faixa: clarão no céu, raio caindo,
 //                 dano se cair perto do player e screen shake (não sólida)
+//   plateia     — arquibancada decorativa ao fundo (coliseu) que arremessa
+//                 comida periodicamente: telegraph, arco parabólico, dano
+//                 real no impacto (não sólida)
 //
 // A colisão sai de graça: as peças sólidas vivas entram em `movers` e o engine
 // injeta esse array em FG.level.solids a cada frame. Aqui só se move a peça e
@@ -105,6 +108,17 @@ window.FG = window.FG || {};
   var TROVAO_DANO_R = 64;       // raio horizontal de dano no impacto
   var TROVAO_SHAKE_MAG = 13;    // intensidade do tremor de câmera
   var TROVAO_SHAKE_DUR = 0.5;   // duração do tremor
+
+  // --- plateia (coliseu) -----------------------------------------------
+  // Arquibancada decorativa ao fundo, ao longo de um trecho de x, que de
+  // tempos em tempos arremessa comida no jogador: mira (telegraph — um
+  // vulto se ergue e acena) → voo em arco parabólico → impacto com dano
+  // real se acertar, ou se perde no chão da arena. Só um arremesso por vez
+  // por zona, igual ao trovão.
+  var PLATEIA_MIRA = 0.55;      // telegraph antes do arremesso
+  var PLATEIA_VOO = 0.85;       // duração nominal do arco até o alvo
+  var PLATEIA_FOOD_SIZE = 16;   // lado do hitbox da comida em voo
+  var PLATEIA_STAND_H = 150;    // altura visual da arquibancada acima de topY
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
@@ -654,6 +668,26 @@ window.FG = window.FG || {};
       timer: rand(1, interval), // primeiro trovão dessincronizado por zona
       flashT: 0, raioT: 0,
       strikeX: d.x,
+    };
+    return o;
+  }
+
+  function makePlateia(d) {
+    var w = d.w || 500;
+    var interval = d.interval || 3.2;
+    var o = {
+      type: 'plateia',
+      x: d.x, w: w,
+      topY: d.topY != null ? d.topY : 260,     // altura (mundo) de onde a comida sai
+      groundY: d.groundY != null ? d.groundY : 620,
+      interval: interval,
+      jitter: d.jitter != null ? d.jitter : 1.0,
+      state: 'espera',      // espera → mira → voo → (impacto/queda) → espera
+      timer: rand(1, interval), // primeiro arremesso dessincronizado por zona
+      mirarT: 0,
+      origemX: d.x + w * 0.5,
+      seed: rand(0, 1000),  // semente fixa da plateia (crowd dots estáveis)
+      food: { active: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, hit: false, t: 0, dur: 0 },
     };
     return o;
   }
@@ -1232,6 +1266,61 @@ window.FG = window.FG || {};
         }
         o.state = 'espera';
         o.timer = Math.max(1.5, o.interval + rand(-o.jitter, o.jitter));
+      }
+    }
+  }
+
+  function updatePlateia(o, dt, p, t) {
+    if (o.state === 'espera') {
+      o.timer -= dt;
+      if (o.timer <= 0) {
+        o.state = 'mira';
+        o.mirarT = PLATEIA_MIRA;
+        o.origemX = o.x + rand(20, o.w - 20);
+      }
+    } else if (o.state === 'mira') {
+      o.mirarT -= dt;
+      if (o.mirarT <= 0) {
+        // arremesso: mira o jogador (com um pouco de espalhamento — não é
+        // pontaria de sniper, é gente jogando resto de comida) num arco
+        // parabólico de duração fixa.
+        var alvoX = p ? (p.x + p.w / 2) + rand(-50, 50) : o.origemX;
+        var alvoY = p ? (p.y + p.h * 0.5) : o.groundY;
+        var T = PLATEIA_VOO;
+        var f = o.food;
+        f.x = o.origemX; f.y = o.topY;
+        f.vx = (alvoX - f.x) / T;
+        f.vy = (alvoY - f.y - 0.5 * GRAV * T * T) / T;
+        f.kind = Math.floor(rand(0, 3));
+        f.t = 0; f.dur = T;
+        f.hit = false;
+        f.active = true;
+        o.state = 'voo';
+      }
+    } else if (o.state === 'voo') {
+      var fd = o.food;
+      fd.t += dt;
+      fd.vy += GRAV * dt;
+      fd.x += fd.vx * dt;
+      fd.y += fd.vy * dt;
+      if (!fd.hit && p) {
+        var half = PLATEIA_FOOD_SIZE / 2;
+        var fr = { x: fd.x - half, y: fd.y - half, w: PLATEIA_FOOD_SIZE, h: PLATEIA_FOOD_SIZE };
+        if (FG.engine.rectsOverlap(p, fr)) {
+          p.hurt(1, fd.x);
+          fd.hit = true;
+        }
+      }
+      // encerra o voo ao acertar, passar do chão da arena ou estourar o
+      // tempo previsto (o jogador pode ter se mexido e o alvo já não bate)
+      if (fd.hit || fd.y >= o.groundY || fd.t > fd.dur + 0.6) {
+        for (var k = 0; k < 6; k++) {
+          spawnParticle(fd.x, Math.min(fd.y, o.groundY), rand(-70, 70), rand(-120, -20),
+            rand(0.25, 0.45), rand(1.8, 3.2), 'rgba(150,110,50,0.75)', 700);
+        }
+        fd.active = false;
+        o.state = 'espera';
+        o.timer = Math.max(1.2, o.interval + rand(-o.jitter, o.jitter));
       }
     }
   }
@@ -2364,6 +2453,125 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Semente estável por "assento" (sem Math.random por frame): um seno com
+  // fase própria por índice já basta para o padrão de plateia parecer vivo
+  // sem tremer de frame a frame.
+  function seatSeed(i, seed) {
+    var v = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  }
+
+  // --- arquibancada com gente, ao fundo: fileiras de vultos coloridos
+  // acima do topY, mais o vulto que se ergue e acena durante o telegraph ---
+  function drawPlateiaFundo(ctx, o, cam, t) {
+    var top = o.topY - PLATEIA_STAND_H, bot = o.topY + 14;
+    if (!visible(cam, o.x - 20, top - 10, o.w + 40, bot - top + 20)) return;
+    var x0 = o.x - cam.x, y0 = o.topY - cam.y;
+
+    ctx.save();
+    // muro baixo da arquibancada, separando a plateia da arena
+    var wg = ctx.createLinearGradient(0, y0 - 14, 0, y0 + 14);
+    wg.addColorStop(0, '#6a4c34');
+    wg.addColorStop(1, '#241a10');
+    ctx.fillStyle = wg;
+    ctx.fillRect(x0, y0 - 6, o.w, 16);
+
+    // fileiras de assentos com gente — cores vivas fazendo contraste com o
+    // fundo escuro do coliseu
+    var cores = ['#e0a840', '#c85a3a', '#7ab850', '#4a90c8', '#c84a90', '#e8d050'];
+    var rows = 4, perRow = Math.max(6, Math.round(o.w / 26));
+    for (var r = 0; r < rows; r++) {
+      var ry = y0 - 20 - r * (PLATEIA_STAND_H - 20) / rows;
+      for (var i = 0; i < perRow; i++) {
+        var sd = seatSeed(i + r * 97, o.seed);
+        var px = x0 + 10 + sd * Math.max(1, o.w - 20);
+        var bob = Math.sin(t * 1.6 + sd * 30) * 2.2;
+        ctx.fillStyle = cores[(i + r) % cores.length];
+        ctx.beginPath();
+        ctx.ellipse(px, ry + bob, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#2a1c14';
+        ctx.beginPath();
+        ctx.arc(px, ry + bob - 9, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // telegraph: durante a mira, um vulto se ergue e acena onde a comida
+    // vai sair — brilho quente marcando o ponto de arremesso
+    if (o.state === 'mira') {
+      var glowA = 0.5 + 0.5 * Math.sin(t * 16);
+      var gx = o.origemX - cam.x, gy = o.topY - cam.y;
+      ctx.save();
+      ctx.globalAlpha = glowA;
+      var gg = ctx.createRadialGradient(gx, gy, 2, gx, gy, 26);
+      gg.addColorStop(0, 'rgba(255,220,140,0.85)');
+      gg.addColorStop(1, 'rgba(255,220,140,0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(gx, gy, 26, 0, TAU); ctx.fill();
+      ctx.restore();
+      // braço aceso erguido
+      ctx.strokeStyle = '#ffdca0'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + 6, gy - 16 - Math.sin(t * 10) * 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- comida em voo: coxa de frango / fruta podre / osso, girando no ar —
+  // fica na camada da FRENTE, cruzando por cima do jogador ---
+  function drawPlateiaFrente(ctx, o, cam, t) {
+    if (o.state !== 'voo' || !o.food.active) return;
+    var fd = o.food;
+    var sx = fd.x - cam.x, sy = fd.y - cam.y;
+    if (sx < -40 || sx > VIEW_W + 40 || sy < -40 || sy > VIEW_H + 40) return;
+    var spin = fd.t * 9;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(spin);
+    if (fd.kind === 0) {
+      // coxa de frango: corpo bege + ossinho
+      ctx.fillStyle = '#d8a868';
+      ctx.beginPath();
+      ctx.ellipse(-1, 0, 8, 5.4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#f0e8d8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(5, 3); ctx.lineTo(11, 8);
+      ctx.stroke();
+    } else if (fd.kind === 1) {
+      // fruta podre: bolha verde-acastanhada irregular
+      ctx.fillStyle = '#7a8a3a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 6.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(50,60,20,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(-2, -1, 3, 2.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // osso roído
+      ctx.strokeStyle = '#f0ead8'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
+      ctx.stroke();
+      ctx.fillStyle = '#f0ead8';
+      ctx.beginPath(); ctx.arc(-8, -2.4, 2.6, 0, Math.PI * 2); ctx.arc(-8, 2.4, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -2.4, 2.6, 0, Math.PI * 2); ctx.arc(8, 2.4, 2.6, 0, Math.PI * 2); ctx.fill();
+    }
+    // rastro leve
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#c8a860';
+    ctx.beginPath();
+    ctx.arc(sx - fd.vx * 0.02, sy - fd.vy * 0.02, 3, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // ==================================================================
   // API pública — FG.obstacles
   // ==================================================================
@@ -2413,6 +2621,7 @@ window.FG = window.FG || {};
         else if (d.type === 'montanharussa') list.push(makeMontanhaRussa(d));
         else if (d.type === 'rodagigante') list.push(makeRodagigante(d));
         else if (d.type === 'trovao') list.push(makeTrovao(d));
+        else if (d.type === 'plateia') list.push(makePlateia(d));
       }
     },
 
@@ -2463,6 +2672,8 @@ window.FG = window.FG || {};
           for (var c = 0; c < o.cabins.length; c++) movers.push(o.cabins[c]);
         } else if (o.type === 'trovao') {
           updateTrovao(o, dt, p, t);   // não é sólido: nada em movers
+        } else if (o.type === 'plateia') {
+          updatePlateia(o, dt, p, t);  // não é sólido: nada em movers
         }
       }
 
@@ -2490,6 +2701,7 @@ window.FG = window.FG || {};
         else if (o.type === 'montanharussa') drawMontanhaRussaFundo(ctx, o, cam, t, p);
         else if (o.type === 'rodagigante') drawRodagigante(ctx, o, cam, t);
         else if (o.type === 'trovao') drawTrovaoFundo(ctx, o, cam, t);
+        else if (o.type === 'plateia') drawPlateiaFundo(ctx, o, cam, t);
       }
     },
 
@@ -2507,6 +2719,7 @@ window.FG = window.FG || {};
         else if (o.type === 'brasa') drawBrasaFrente(ctx, o, cam, t);
         else if (o.type === 'montanharussa') drawMontanhaRussaFrente(ctx, o, cam, p);
         else if (o.type === 'trovao') drawTrovaoFrente(ctx, o, cam, t);
+        else if (o.type === 'plateia') drawPlateiaFrente(ctx, o, cam, t);
       }
       drawParticles(ctx, cam);
     },
