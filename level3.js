@@ -181,25 +181,39 @@ window.FG = window.FG || {};
   // poço negro isso não se lê como fauna da mansão, lê-se como bug — e o
   // desenho dele não é deste arquivo para eu repaginar. Sobre o fosso entra
   // voadeira (aqui lida como morcego).
+  //
+  // A ESSES SOMAM-SE os três bichos próprios da mansão (lobo, fantasma,
+  // ratazana — em enemies.js), espalhados um a dois por trecho, NUNCA
+  // empilhados no começo: lobo e ratazana são rasteiros com range curto o
+  // bastante para não saírem do piso real de cada trecho; fantasma não tem
+  // gravidade, então entra livremente sobre o fosso e as correntes, onde os
+  // outros dois não caberiam.
   // ---------------------------------------------------------------
   var enemyDefs = [
     { type: 'espinhoco', x: 700, y: 594, range: 80 },    // sopé, antes da 1ª brasa
     { type: 'voadeira',  x: 1180, y: 500, range: 120 },
+    { type: 'ratazana',  x: 1260, y: 588, range: 110 },  // campo de lápides: rasteira robusta
     { type: 'espinhoco', x: 1390, y: 594, range: 100 },
     { type: 'voadeira',  x: 1600, y: 470, range: 140 },
     { type: 'sapeca',    x: 1790, y: 588, range: 70 },
     { type: 'voadeira',  x: 2040, y: 480, range: 150 },
     { type: 'espinhoco', x: 2280, y: 594, range: 80 },
+    { type: 'lobo',      x: 2180, y: 590, range: 120 },  // fim do campo: caçada antes do fosso
+    { type: 'fantasma',  x: 2750, y: 340, range: 220 },  // sobre o fosso negro: só ele voa livre ali
     { type: 'voadeira',  x: 2860, y: 430, range: 190 },  // sobre o rio de lava
     { type: 'voadeira',  x: 3200, y: 420, range: 160 },
     { type: 'voadeira',  x: 3900, y: 90, range: 130 },   // sobre o platô
     { type: 'espinhoco', x: 4180, y: 144, range: 90 },   // platô (topo em 170)
     { type: 'voadeira',  x: 4560, y: 330, range: 120 },  // na descida
+    { type: 'ratazana',  x: 4400, y: 588, range: 70 },   // talude: antes da 2ª rajada
     { type: 'sapeca',    x: 4700, y: 588, range: 80 },   // talude
+    { type: 'fantasma',  x: 4900, y: 380, range: 170 },  // pátio dos fundos: sobre a corrente 1
     { type: 'voadeira',  x: 5200, y: 380, range: 170 },  // sobre a caldeira
+    { type: 'fantasma',  x: 5300, y: 380, range: 170 },  // pátio dos fundos: sobre o poço leste
     { type: 'voadeira',  x: 5450, y: 400, range: 150 },
     { type: 'espinhoco', x: 5820, y: 594, range: 90 },
     { type: 'sapeca',    x: 6060, y: 588, range: 70 },
+    { type: 'lobo',      x: 5980, y: 590, range: 150 },  // pátio do chefão: última caçada
   ];
 
   // ---------------------------------------------------------------
@@ -221,6 +235,11 @@ window.FG = window.FG || {};
   //   sopro       {x,y,w,h} — retângulo da coluna de vento gélido (y = topo).
   //   pendulo     {x,y,len,arc,period} — (x,y) = ponto de fixação da corrente.
   //   espinhorolo {x,y,w,range,speed} — y = TOPO do rolo (a base fica em y+w).
+  //   trovao      {x,w,groundY,interval,jitter} — (x,w) = faixa onde o raio
+  //               pode cair (ponto exato sorteado a cada disparo); groundY é
+  //               onde ele estoura (mesma regra da brasa: tem de ser piso
+  //               real). Não é sólido, não machuca à distância — só perto do
+  //               ponto de impacto — e sacode a câmera inteira ao cair.
   //
   // TODAS as zonas de fenda abaixo fecham em piso real:
   //   620 (chão do jardim, do campo, da base da torre, do talude e do pátio)
@@ -298,6 +317,15 @@ window.FG = window.FG || {};
     // dentro dela, a luta é do chefão.
     { type: 'espinhorolo', x: 5700, y: 576, w: 44, range: 130, speed: 140 },
     { type: 'brasa', x: 6020, y: 400, w: 180, h: 220, period: 3.2, phase: 0.6 },
+
+    // TROVÕES — só em trecho de chão RETO e sem fosso por baixo (jardim,
+    // campo de lápides, pátio do chefão): cair fora do lugar certo por causa
+    // de um raio não pode custar a fase. groundY é sempre 620, o piso real
+    // desses três trechos. Intervalos longos e com jitter (6..10s) para não
+    // virar metrônomo nem empilhar em cima das rajadas de brasa já existentes.
+    { type: 'trovao', x: 500, w: 900, groundY: 620, interval: 7, jitter: 2 },     // jardim + início do campo
+    { type: 'trovao', x: 1700, w: 700, groundY: 620, interval: 8, jitter: 2.5 },  // campo de lápides, 2ª metade
+    { type: 'trovao', x: 6200, w: 800, groundY: 620, interval: 7.5, jitter: 2.5 }, // pátio do chefão
   ];
 
   // ---------------------------------------------------------------
