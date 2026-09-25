@@ -21,7 +21,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 7200, H = 720;
+  var W = 14400, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -32,44 +32,83 @@ window.FG = window.FG || {};
   //    pedra com hera morta), 'h' = piso oculto (fundo do poço negro, não é
   //    desenhado).
   //
-  // RITMO EM 6 TRECHOS
-  //  (1) x 0..1020     O JARDIM DE ENTRADA: pedra em degraus, seguro, e UMA
-  //                    zona de fenda sombria isolada e lentíssima (period
-  //                    3.8, ainda `type: 'brasa'` no código) — o jogador
-  //                    aprende a ler a mancha no chão antes da rajada.
-  //  (2) x 1020..2320  O CAMPO DE LÁPIDES: três zonas alternadas com abrigos
-  //                    de pedra. O ritmo é esperar a rajada e correr; as
-  //                    zonas são dessincronizadas por `phase` para nunca
-  //                    virarem um metrônomo só.
-  //  (3) x 2320..3520  O FOSSO NEGRO: o chão vira `hazard` (água estagnada
-  //                    refletindo a lua) e a travessia é de disco em disco,
-  //                    com duas colunas de vento gélido dando altura. Quem
-  //                    cai não morre: há piso no fundo e dois afloramentos de
-  //                    pedra para se recompor.
-  //  (4) x 3520..4800  A TORRE DA MANSÃO: fenda de 70px entre o pilar e a
-  //                    fachada (450px de parede vertical), com névoa/energia
-  //                    sombria caindo pelo vão — subir tem de ser no
-  //                    intervalo. Prêmio no topo: o relicário com o casulo.
-  //                    Depois, a descida em degraus até a borda do pátio dos
-  //                    fundos, com o talude embaixo servindo de rede (e
-  //                    cobrando outra zona de fenda).
-  //  (5) x 4800..5660  AS CORRENTES SOBRE O PÁTIO: duas correntes de ferro
-  //                    ancoradas em três blocos — contraforte, pináculo
-  //                    central e contraforte — com um disco de descanso em
-  //                    cada poço. Cair custa caro (o fosso negro), mas todo
-  //                    poço é rente a uma face escalável: dá sempre para
-  //                    voltar.
-  //  (6) x 5660..7200  O PÁTIO DO CHEFÃO: reta com rolo e a última rajada
-  //                    antes da arena de Patriçola Drácula.
+  // A FASE DOBROU DE TAMANHO (W: 7200 → 14400) duplicando cada um dos 6
+  // trechos originais, não esticando um final vazio: cada trecho X..Y virou
+  // 2X..2Y, preenchido por DUAS cópias consecutivas do conteúdo original
+  // daquele trecho (solids/hazards/checkpoints/enemyDefs/obstacleDefs/
+  // lumis) — a função `expand()` abaixo faz isso deslocando a 1ª cópia pelo
+  // início antigo do trecho e a 2ª pelo fim antigo dele, o que empilha as
+  // duas cópias lado a lado sem buraco nem sobreposição (novo início do
+  // trecho i = 2×antigo início; novo fim = 2×antigo fim). O pátio do chefão
+  // (trecho 6) é tratado como DOIS subtrechos — aproximação e arena — para a
+  // arena dobrar de tamanho sem duplicar o chefão; ver SEG_BOUNDS.
+  //
+  // RITMO EM 6 TRECHOS (cotas NOVAS, já dobradas; cada trecho tem ~2x o
+  // comprimento e ~2x a densidade de conteúdo do original)
+  //  (1) x 0..2040      O JARDIM DE ENTRADA, em dobro: pedra em degraus,
+  //                    seguro, e DUAS zonas de fenda sombria isoladas e
+  //                    lentíssimas (period 3.8, `type: 'brasa'`) — uma por
+  //                    cópia do trecho.
+  //  (2) x 2040..4640  O CAMPO DE LÁPIDES, em dobro: seis zonas alternadas
+  //                    com abrigos de pedra (duas cópias das três zonas
+  //                    originais), o rolo e o pêndulo repetidos uma vez cada.
+  //  (3) x 4640..7040  O FOSSO NEGRO, em dobro: dez discos, quatro sopros de
+  //                    vento gélido e quatro afloramentos de pedra — piso
+  //                    oculto no fundo continua cobrindo o trecho inteiro.
+  //  (4) x 7040..9600  A TORRE DA MANSÃO, em dobro: DUAS torres seguidas
+  //                    (pilar + fachada + platô + relicário + descida em
+  //                    degraus + talude), a segunda logo depois da primeira.
+  //  (5) x 9600..11320 AS CORRENTES SOBRE O PÁTIO, em dobro: duas travessias
+  //                    de corrente seguidas, cada uma com os três blocos de
+  //                    ancoragem e o disco de descanso em cada poço.
+  //  (6) x 11320..14400 O PÁTIO DO CHEFÃO, em dobro: aproximação de 1080px
+  //                    (11320..12400, com o rolo e a rajada repetidos) e a
+  //                    ARENA dobrada de 2000px (12400..14400) de Patriçola
+  //                    Drácula.
   //
   // Nada de beco sem saída: do fundo do fosso negro sai-se pela margem
-  // direita (degrau de 70px); dos poços do pátio, escalando o pináculo
-  // (280px) ou os contrafortes (400px e 470px).
+  // direita (degrau de 70px, repetida nas duas cópias); dos poços do pátio,
+  // escalando o pináculo (280px) ou os contrafortes (400px e 470px) — regra
+  // preservada nas duas travessias de corrente.
   //
   // Alturas: pulo simples sobe ~118px, duplo ~236px, e uma parede vertical
   // contínua sobe indefinidamente agarrando (~120px por salto de parede).
   // ---------------------------------------------------------------
-  var solids = [
+  // DUPLICAÇÃO DE TRECHO — ver comentário acima. SEG_BOUNDS lista os 8
+  // pontos de corte ANTIGOS (mundo de 7200px) que definem os 6 trechos, com
+  // o trecho 6 partido em aproximação (5660..6200) e arena (6200..7200).
+  // `expand(arr)` devolve duas cópias de cada item: a 1ª deslocada pelo
+  // início do trecho a que o item pertence, a 2ª pelo fim dele. Itens que
+  // cruzam um corte (o chão único do pátio, e os dois trovões que atravessam
+  // jardim→campo e campo→fosso) são tratados à parte, fora desta função.
+  var SEG_BOUNDS = [0, 1020, 2320, 3520, 4800, 5660, 6200, 7200];
+  function segShift(x) {
+    for (var i = 0; i < SEG_BOUNDS.length - 1; i++) {
+      if (x >= SEG_BOUNDS[i] && x < SEG_BOUNDS[i + 1]) {
+        return { a: SEG_BOUNDS[i], b: SEG_BOUNDS[i + 1] };
+      }
+    }
+    return { a: SEG_BOUNDS[SEG_BOUNDS.length - 2], b: SEG_BOUNDS[SEG_BOUNDS.length - 1] };
+  }
+  function shiftItem(it, dx) {
+    var copy = {};
+    for (var k in it) if (it.hasOwnProperty(k)) copy[k] = it[k];
+    if (copy.x1 !== undefined) { copy.x1 += dx; copy.x2 += dx; }
+    else if (copy.x !== undefined) { copy.x += dx; }
+    return copy;
+  }
+  function expand(arr) {
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var it = arr[i];
+      var refX = (it.x1 !== undefined) ? it.x1 : it.x;
+      var sh = segShift(refX);
+      out.push(shiftItem(it, sh.a));
+      out.push(shiftItem(it, sh.b));
+    }
+    return out;
+  }
+  var solidsBase = [
     // ---- (1) o jardim de entrada — degraus curtos de pedra, nada de perigo até x=800 ----
     S(0, 620, 1020, 100, 'g'),        // [0] chão do jardim
     S(250, 580, 96, 40, 'r'),         // [1] +40
@@ -89,7 +128,7 @@ window.FG = window.FG || {};
     // saída. Quem cai anda para a direita tomando 1 de dano a cada 1.2s e sobe
     // 70px na margem. Os afloramentos são estreitos de propósito (70px, vãos
     // de 320..430px): servem para se recompor, não como rota alternativa.
-    S(2320, 690, 1200, 30, 'h'),      // [8] fundo do fosso 2320..3520
+    S(2320, 690, 1200, 30, 'h'),      // fundo do fosso 2320..3520
     S(2530, 596, 70, 94, 'r'),        // [9] afloramento 1
     S(3020, 584, 70, 106, 'r'),       // [10] afloramento 2
     S(3520, 620, 300, 100, 'g'),      // [11] margem direita / base da torre
@@ -129,10 +168,17 @@ window.FG = window.FG || {};
     S(5560, 230, 100, 490, 'c'),      // [23] contraforte direito (âncora da corrente 2)
 
     // ---- (6) o pátio do chefão ----
-    S(5660, 620, 1540, 100, 'g'),     // [24] pátio 5660..7200
-    S(5740, 540, 120, 24, 'r'),       // [25] (+80)
-    S(5880, 496, 110, 22, 'r'),       // [26] (+44 do anterior)
+    // O chão em si (S original 5660..7200) NÃO entra aqui: ele cruzava os
+    // dois subtrechos (aproximação/arena) e por isso é recriado à parte,
+    // já dobrado, logo depois do expand() abaixo.
+    S(5740, 540, 120, 24, 'r'),       // (+80)
+    S(5880, 496, 110, 22, 'r'),       // (+44 do anterior)
   ];
+
+  var solids = expand(solidsBase);
+  // chão do pátio do chefão: piso único cobrindo aproximação + arena já
+  // dobradas (11320..14400) — ver nota acima sobre por que fica de fora do expand().
+  solids.push(S(11320, 620, 3080, 100, 'g'));
 
   // ---------------------------------------------------------------
   // HAZARDS — t: 'l' = poço negro (era lava; só a pintura mudou), 's' = grade
@@ -143,7 +189,7 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
-  var hazards = [
+  var hazardsBase = [
     Hz(1560, 596, 90, 24, 's'),    // grade de ferro no meio do campo de lápides
     Hz(2160, 596, 90, 24, 's'),    // última mordida antes do fosso
     Hz(2320, 650, 210, 34, 'l'),   // fosso negro — trecho 1
@@ -155,23 +201,28 @@ window.FG = window.FG || {};
     Hz(5220, 656, 340, 34, 'l'),   // pátio: poço leste, sob a corrente 2
     Hz(5890, 596, 90, 24, 's'),    // pátio do chefão
   ];
+  var hazards = expand(hazardsBase);
 
-  // 4 velas-checkpoint (acendem quando ativadas)
-  var checkpoints = [
+  // 8 velas-checkpoint (acendem quando ativadas) — as 4 originais, cada uma
+  // duplicada uma vez por cópia do trecho a que pertence.
+  var checkpointsBase = [
     { x: 1050, y: 620 },   // entrada do campo de lápides
     { x: 3560, y: 620 },   // base da torre
     { x: 3880, y: 170 },   // topo da torre — o mais caro de todos
     { x: 5720, y: 620 },   // entrada do pátio do chefão
   ];
+  var checkpoints = expand(checkpointsBase);
 
   // ---------------------------------------------------------------
-  // RELICÁRIO COM CASULO — 5 lumis de uma vez. Um só, no topo da torre: é o
-  // prêmio dos 450px de escalada com névoa sombria caindo na cabeça, e fica
-  // logo na saída da fenda para não obrigar a um segundo desvio.
+  // RELICÁRIO COM CASULO — 5 lumis de uma vez. No trecho original havia um
+  // só, no topo da torre; agora há DUAS torres (trecho 4 dobrado), então o
+  // relicário se duplica também — um em cada topo, prêmio dos 450px de
+  // escalada com névoa sombria caindo na cabeça.
   // ---------------------------------------------------------------
-  var ninhos = [
+  var ninhosBase = [
     { x: 3900, y: 138, taken: false },
   ];
+  var ninhos = expand(ninhosBase);
 
   // ---------------------------------------------------------------
   // INIMIGOS — voadeira e espinhoco carregam a fase: névoa sombria cai de
@@ -189,7 +240,7 @@ window.FG = window.FG || {};
   // gravidade, então entra livremente sobre o fosso e as correntes, onde os
   // outros dois não caberiam.
   // ---------------------------------------------------------------
-  var enemyDefs = [
+  var enemyDefsBase = [
     { type: 'espinhoco', x: 700, y: 594, range: 80 },    // sopé, antes da 1ª brasa
     { type: 'voadeira',  x: 1180, y: 500, range: 120 },
     { type: 'ratazana',  x: 1260, y: 588, range: 110 },  // campo de lápides: rasteira robusta
@@ -215,6 +266,11 @@ window.FG = window.FG || {};
     { type: 'sapeca',    x: 6060, y: 588, range: 70 },
     { type: 'lobo',      x: 5980, y: 590, range: 150 },  // pátio do chefão: última caçada
   ];
+  // Cada inimigo acima se duplica junto com o trecho onde vive: lobo e
+  // ratazana continuam rasteiros dentro do piso real de cada cópia,
+  // fantasma continua livre sobre fosso/correntes duplicados, e as
+  // contagens de lobo/fantasma/ratazana dobram (2→4, 3→6, 2→4).
+  var enemyDefs = expand(enemyDefsBase);
 
   // ---------------------------------------------------------------
   // OBSTÁCULOS DINÂMICOS (FG.obstacles lê daqui)
@@ -245,7 +301,7 @@ window.FG = window.FG || {};
   //   620 (chão do jardim, do campo, da base da torre, do talude e do pátio)
   //   e 170 (topo da fachada). Fenda que estoura no ar não se lê.
   // ---------------------------------------------------------------
-  var obstacleDefs = [
+  var obstacleDefsBase = [
     // (1) jardim de entrada: uma zona só, larga e lenta. Period 3.8 dá quase
     // 2s de descanso entre rajadas — tempo de sobra para ver a mancha acender
     // e recuar.
@@ -323,19 +379,36 @@ window.FG = window.FG || {};
     // de um raio não pode custar a fase. groundY é sempre 620, o piso real
     // desses três trechos. Intervalos longos e com jitter (6..10s) para não
     // virar metrônomo nem empilhar em cima das rajadas de brasa já existentes.
-    { type: 'trovao', x: 500, w: 900, groundY: 620, interval: 7, jitter: 2 },     // jardim + início do campo
-    { type: 'trovao', x: 1700, w: 700, groundY: 620, interval: 8, jitter: 2.5 },  // campo de lápides, 2ª metade
+    // O trovão do pátio do chefão (x=6200) fica inteiro dentro do subtrecho
+    // "arena" (6200..7200) e por isso passa pelo expand() normal, lá embaixo,
+    // como qualquer outro item — vira 2 cópias, uma em cada metade da arena
+    // dobrada. Os outros dois trovões cruzavam a linha jardim→campo e
+    // campo→fosso no desenho original; o expand() genérico não sabe recortar
+    // isso, então são reconstruídos à mão logo depois do expand(), como duas
+    // zonas inteiras por cópia de trecho (ver comentário mais abaixo).
     { type: 'trovao', x: 6200, w: 800, groundY: 620, interval: 7.5, jitter: 2.5 }, // pátio do chefão
   ];
+
+  var obstacleDefs = expand(obstacleDefsBase);
+  // Os dois trovões que cruzavam trecho no desenho original (jardim/começo
+  // do campo, e 2ª metade do campo/fosso) viram QUATRO zonas — uma por cópia
+  // de cada trecho — sempre em chão plano, longe de fosso/escalada/corrente,
+  // como a regra original manda.
+  obstacleDefs.push(
+    { type: 'trovao', x: 150, w: 550, groundY: 620, interval: 7, jitter: 2 },      // jardim, 1ª cópia
+    { type: 'trovao', x: 1170, w: 550, groundY: 620, interval: 7, jitter: 2 },     // jardim, 2ª cópia
+    { type: 'trovao', x: 2200, w: 900, groundY: 620, interval: 8, jitter: 2.5 },   // campo de lápides, 1ª cópia
+    { type: 'trovao', x: 3500, w: 900, groundY: 620, interval: 8, jitter: 2.5 }    // campo de lápides, 2ª cópia
+  );
 
   // ---------------------------------------------------------------
   // LUMIS — linhas, arcos e COLUNAS. As colunas marcam o que se sobe: a
   // torre e as duas colunas de vento gélido do fosso.
   // ---------------------------------------------------------------
-  var lumis = [];
-  function lumiLine(x, y, n, dx) { kit.lumiLine(lumis, x, y, n, dx); }
-  function lumiCol(x, y, n, dy) { kit.lumiCol(lumis, x, y, n, dy); }
-  function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumis, cx, apexY, span, sag, n); }
+  var lumisBase = [];
+  function lumiLine(x, y, n, dx) { kit.lumiLine(lumisBase, x, y, n, dx); }
+  function lumiCol(x, y, n, dy) { kit.lumiCol(lumisBase, x, y, n, dy); }
+  function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumisBase, cx, apexY, span, sag, n); }
   // (1) jardim de entrada
   lumiLine(140, 578, 4, 60);
   lumiArc(520, 470, 5, 190, 34);
@@ -376,6 +449,11 @@ window.FG = window.FG || {};
   lumiLine(5910, 456, 3, 44);
   lumiArc(6110, 520, 4, 160, 40);      // última rajada
   lumiLine(6280, 570, 2, 60);
+
+  // Cada chamada acima se duplica pelo mesmo deslocamento de trecho que
+  // solids/hazards/etc usam — a fileira de lumis dobra de tamanho e
+  // densidade junto com o chão que ela acompanha.
+  var lumis = expand(lumisBase);
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC).
   // 80 e não 64 como no bosque: o estouro do relicário sozinho gasta 22.
@@ -1598,8 +1676,8 @@ window.FG = window.FG || {};
     obstacleDefs: obstacleDefs,
     ninhos: ninhos,
     bossId: 'draculina',
-    bossTriggerX: 6350,
-    arena: { x: 6200, w: 1000 },
+    bossTriggerX: 12700,
+    arena: { x: 12400, w: 2000 },
     reset: reset,
     update: update,
     drawBack: drawBack,

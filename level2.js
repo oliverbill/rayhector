@@ -16,7 +16,8 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 7200, H = 1040;   // H cresceu para caber a GRUTA SUBMERSA do trecho 1
+  var W = 14400, H = 1040;   // fase DOBRADA nesta sessão: cada trecho ~2x
+                              // comprimento e ~2x densidade (ver abaixo)
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -26,26 +27,36 @@ window.FG = window.FG || {};
   //    'b' = feixe de bambu deitado (plataforma estreita), 'c' = barranco de
   //    raízes escalável, 'h' = piso oculto (fundo das poças, não é desenhado).
   //
-  // RITMO EM 6 TRECHOS — cada um ensina uma coisa antes de cobrá-la
-  //  (1) x 0..880     MARGEM SECA. Chão firme, raízes em degrau, nenhum perigo.
-//  (2+3) x 880..4480 O LAGO SUBMERSO — METADE DA FASE debaixo d'água. Água
-//                   limpa (sem veneno): mergulhar é OBRIGATÓRIO em dois
-//                   pontos do traçado (o resto é respiro), com trilhas de
-//                   lumis, um ninho no fundo, pilares de pedra, piranhas,
-//                   carangos, e agora o jacaré (mordida forte, patrulha
-//                   lenta) e o candiru (minúsculo, só ativo com o jogador
-//                   molhado). Na superfície, troncos-boia e três ILHAS de
-//                   lodo (com nado por baixo delas) dão respiro entre os dois
-//                   mergulhos forçados — não mais uma rota seca ponta a
-//                   ponta: os troncos que fechavam ILHA A→B e B→C foram
-//                   removidos de propósito, então quem tenta ir só por cima
-//                   cai no vão e molha de qualquer jeito. O checkpoint do
-//                   meio fica na ILHA B, alcançável nadando e escalando a
-//                   face dela (toda face vertical contínua é escalável).
-//  (4) x 4480..5150 MARGEM LESTE. Sai da água, lodo raso, rumo à fenda.
-//  (5) x 5150..5560 A FENDA DAS RAÍZES. Duas paredes frente a frente: descida
-//                   controlada agarrando, e a saída de quem caiu no lamaçal.
-//  (6) x 5560..7200 LAMAÇAL FINAL e a clareira de lodo do chefão.
+  // RITMO EM 6 TRECHOS — cada um ensina uma coisa antes de cobrá-la. Fase
+  // DOBRADA nesta sessão: cada trecho manteve o "sabor" de dificuldade
+  // original, só que com o dobro de comprimento e o dobro de conteúdo
+  // (plataformas, hazards, inimigos, obstáculos e lumis).
+  //  (1) x 0..1760      MARGEM SECA. Chão firme, DUAS escadas de raiz em
+//                    degrau (a segunda é a repetição da primeira, mais
+//                    perto do lago), nenhum perigo.
+//  (2+3) x 1760..8960 O LAGO SUBMERSO — METADE DA FASE debaixo d'água. Água
+//                   limpa (sem veneno): agora são SEIS ILHAS de lodo
+//                   (A..F, com nado por baixo delas) e SEIS pilares
+//                   submersos. Mergulhar é OBRIGATÓRIO em TRÊS vãos do
+//                   traçado (A→B, C→D, E→F — ~650-660px, sem tronco nenhum,
+//                   patrulhados por jacaré+candiru cada um), intercalados
+//                   com DOIS respiros de superfície (B→C, D→E — pontes de
+//                   troncos-boia, um carango em cima de cada pilar de
+//                   respiro). Nos dois checkpoints do meio (ILHA B e ILHA E)
+//                   dá para chegar nadando e escalando a face da ilha (toda
+//                   face vertical contínua é escalável).
+//  (4) x 8960..10300 MARGEM LESTE. Sai da água, lodo raso → trecho seco →
+//                   lodo profundo, rumo à fenda.
+//  (5) x 10300..11120 A FENDA DAS RAÍZES — agora DUPLA: duas fendas em
+//                   sequência, cada uma com o mesmo par de paredes frente a
+//                   frente (descida controlada agarrando, saída de quem caiu
+//                   no lamaçal) e a mesma crista de espinhos na parede
+//                   direita suspensa.
+//  (6) x 11120..14400 LAMAÇAL FINAL — dois trechos de degrau/bônus sobre os
+//                   juncos, DUAS poças venenosas (piso oculto + tronco por
+//                   cima de cada uma) e a clareira de lodo do chefão no fim
+//                   (mesma largura de antes: a arena do chefão não muda de
+//                   tamanho, só de posição).
 //
 // Nada de beco sem saída: o lago se atravessa nadando por definição, as faces
 // das margens e das ilhas são escaláveis, e as poças do trecho 6 têm piso.
@@ -54,39 +65,57 @@ window.FG = window.FG || {};
   // face vertical contínua sobe indefinidamente agarrando (~120px por salto).
   // ---------------------------------------------------------------
   var solids = [
-    // ---- (1) MARGEM SECA — degraus de raiz, nada que machuque ----
-    S(0, 620, 880, 420, 'g'),        // [0] margem inicial 0..880 (parede oeste do lago)
+    // ---- (1) MARGEM SECA — DUAS escadas de raiz, nada que machuque ----
+    S(0, 620, 1760, 420, 'g'),       // [0] margem inicial 0..1760 (parede oeste do lago)
     S(230, 586, 90, 34, 'r'),        // [1] raiz baixa (+34)
     S(400, 544, 110, 26, 'g'),       // [2] (+42)
     S(590, 492, 120, 24, 'g'),       // [3] (+52)
     S(780, 438, 110, 22, 'g'),       // [4] bônus alto (+54)
+    S(1000, 560, 90, 30, 'r'),       // [5] repete a escada: raiz baixa (+30)
+    S(1150, 500, 110, 26, 'g'),      // [6] (+60)
+    S(1340, 450, 120, 24, 'g'),      // [7] (+50)
+    S(1520, 400, 110, 22, 'g'),      // [8] bônus alto, já perto do lago (+50)
 
     // ---- (2+3) O LAGO SUBMERSO — metade da fase debaixo d'água ----
-    // x 880..4480 (3600px = 50% do mundo). Superfície em 664, leito em 1000.
-    // A rota principal é NADAR; os troncos-boia e as ilhas dão a rota de
-    // superfície para quem preferir, e os pilares dão relevo ao mergulho.
-    S(836, 1000, 3688, 40, 'h'),     // [5] leito do lago (entra 44px sob as
+    // x 1760..8960 (7200px = 50% do mundo). Superfície em 664, leito em 1000.
+    // A rota principal é NADAR; os troncos-boia e as SEIS ilhas dão a rota de
+    // superfície para quem preferir, e os SEIS pilares dão relevo ao mergulho.
+    S(1716, 1000, 7288, 40, 'h'),    // [9] leito do lago (entra 44px sob as
                                      //     margens: rente às faces p/ escalada)
-    S(1750, 610, 240, 190, 'g'),     // [6] ILHA A (topo 610, base 800 — nado por baixo)
-    S(2650, 600, 260, 200, 'g'),     // [7] ILHA B (checkpoint; base 800)
-    S(3550, 610, 240, 190, 'g'),     // [8] ILHA C (base 800)
-    S(2200, 820, 90, 180, 'r'),      // [9] pilar submerso 1 (topo 820)
-    S(3080, 760, 100, 240, 'r'),     // [10] pilar submerso 2 (topo 760 — tem carango!)
-    S(4050, 840, 90, 160, 'r'),      // [11] pilar submerso 3 (topo 840)
+    S(2660, 610, 240, 190, 'g'),     // [10] ILHA A (topo 610, base 800 — nado por baixo)
+    S(3560, 600, 260, 200, 'g'),     // [11] ILHA B (checkpoint 1; base 800)
+    S(4300, 610, 240, 190, 'g'),     // [12] ILHA C (base 800)
+    S(5190, 600, 260, 200, 'g'),     // [13] ILHA D (base 800)
+    S(5920, 610, 240, 190, 'g'),     // [14] ILHA E (checkpoint 2; base 800)
+    S(6820, 600, 260, 200, 'g'),     // [15] ILHA F (base 800)
+    S(3230, 820, 90, 180, 'r'),      // [16] pilar submerso 1 — vão forçado A→B (topo 820)
+    S(3920, 760, 100, 240, 'r'),     // [17] pilar submerso 2 — respiro B→C (topo 760 — tem carango!)
+    S(4870, 840, 90, 160, 'r'),      // [18] pilar submerso 3 — vão forçado C→D (topo 840)
+    S(5600, 800, 95, 200, 'r'),      // [19] pilar submerso 4 — respiro D→E (topo 800 — tem carango!)
+    S(6480, 820, 90, 180, 'r'),      // [20] pilar submerso 5 — vão forçado E→F (topo 820)
+    S(7750, 840, 90, 160, 'r'),      // [21] pilar submerso 6 — trecho final antes da margem leste
 
     // ---- (4) MARGEM LESTE — a saída do lago, caminho para a fenda ----
-    S(4480, 640, 670, 400, 'g'),     // [12] margem leste 4480..5150 (parede do lago)
+    S(8960, 640, 1340, 400, 'g'),    // [22] margem leste 8960..10300 (parede do lago)
 
-    // ---- (5) FENDA DAS RAÍZES ----
-    S(5150, 210, 90, 510, 'c'),      // [13] parede esquerda (do fundo ao topo)
-    S(5240, 620, 800, 100, 'g'),     // [14] fundo da fenda + lamaçal 5240..6040
-    S(5390, 230, 110, 320, 'c'),     // [15] parede direita suspensa (arco de 70px por baixo)
+    // ---- (5) FENDA DAS RAÍZES — dupla ----
+    S(10300, 210, 90, 510, 'c'),     // [23] parede esquerda da fenda 1 (do fundo ao topo)
+    S(10390, 620, 1600, 100, 'g'),   // [24] fundo das duas fendas + início do lamaçal 10390..11990
+    S(10540, 230, 110, 320, 'c'),    // [25] parede direita suspensa da fenda 1 (arco de 70px por baixo)
+    S(10850, 210, 90, 510, 'c'),     // [26] parede esquerda da fenda 2
+    S(11090, 230, 110, 320, 'c'),    // [27] parede direita suspensa da fenda 2 (arco de 70px por baixo)
 
     // ---- (6) LAMAÇAL FINAL e a clareira do chefão ----
-    S(5700, 540, 120, 24, 'g'),      // [16] degrau por cima dos juncos
-    S(5880, 486, 110, 22, 'g'),      // [17] bônus
-    S(6040, 700, 140, 40, 'h'),      // [18] piso oculto da poça pré-clareira
-    S(6180, 620, 1020, 100, 'g'),    // [19] clareira de lodo do chefão
+    S(11260, 540, 120, 24, 'g'),     // [28] degrau 1 por cima dos juncos
+    S(11440, 486, 110, 22, 'g'),     // [29] bônus 1
+    S(11990, 620, 360, 100, 'g'),    // [30] lamaçal — trecho A (antes da poça 1)
+    S(11900, 540, 130, 24, 'g'),     // [31] degrau 2 por cima dos juncos
+    S(12100, 480, 110, 22, 'g'),     // [32] bônus 2
+    S(12350, 700, 150, 40, 'h'),     // [33] piso oculto da poça pré-clareira 1
+    S(12500, 620, 400, 100, 'g'),    // [34] lamaçal — trecho B (entre as duas poças)
+    S(12900, 700, 150, 40, 'h'),     // [35] piso oculto da poça pré-clareira 2
+    S(13050, 620, 330, 100, 'g'),    // [36] lamaçal — trecho C (até a clareira)
+    S(13380, 620, 1020, 100, 'g'),   // [37] clareira de lodo do chefão (mesma largura de antes)
   ];
 
   // ---------------------------------------------------------------
@@ -98,73 +127,114 @@ window.FG = window.FG || {};
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(4480, 616, 190, 26, 'p'),   // lodo raso na saída do lago
-    Hz(4780, 616, 370, 26, 'p'),   // lodo profundo antes da fenda
-    Hz(5390, 206, 110, 24, 's'),   // crista da parede direita: sem atalho por cima
-    Hz(5760, 596, 100, 24, 's'),   // reta final
-    Hz(6040, 676, 140, 26, 'p'),   // poça pré-clareira
+    Hz(8960, 616, 380, 26, 'p'),    // lodo raso na saída do lago
+    Hz(9560, 616, 740, 26, 'p'),    // lodo profundo antes da fenda
+    Hz(10540, 206, 110, 24, 's'),   // crista da parede direita da fenda 1: sem atalho por cima
+    Hz(11090, 206, 110, 24, 's'),   // crista da parede direita da fenda 2: sem atalho por cima
+    Hz(11320, 596, 100, 24, 's'),   // reta final 1
+    Hz(12000, 596, 110, 24, 's'),   // reta final 2
+    Hz(12350, 676, 150, 26, 'p'),   // poça pré-clareira 1
+    Hz(12900, 676, 150, 26, 'p'),   // poça pré-clareira 2
   ];
 
-  // 3 lanternas-checkpoint, nos três respiros do traçado
+  // 5 lanternas-checkpoint (dobrado de 3), distribuídas pelo dobro de
+  // distância: dois respiros no lago (ILHA B e ILHA E), a saída da água na
+  // margem leste, a saída da segunda fenda e o meio do lamaçal final.
   var checkpoints = [
-    { x: 2760, y: 600 },   // topo da ILHA B, no meio do lago
-    { x: 4560, y: 640 },   // margem leste, saindo da água
-    { x: 5580, y: 620 },   // saída da fenda, já no lamaçal
+    { x: 3690, y: 600 },    // topo da ILHA B, primeiro respiro do lago
+    { x: 6040, y: 610 },    // topo da ILHA E, segundo respiro do lago
+    { x: 9040, y: 640 },    // margem leste, saindo da água
+    { x: 11200, y: 620 },   // saída da fenda 2, já no lamaçal
+    { x: 12100, y: 620 },   // meio do lamaçal final, antes da segunda poça
   ];
 
   // ---------------------------------------------------------------
-  // INIMIGOS — o peixe voador é a assinatura da fase: fica bufando parado e
-  // dispara na horizontal quando o jogador entra no alcance. Ele estreia no
-  // chão firme do bambuzal (x=2700), onde dá para ler o disparo sem estar
-  // pendurado em nada, e só depois cruza os cipós.
-  // Nenhum inimigo antes de x=1000: o trecho 1 é margem limpa.
+  // INIMIGOS — dobrado em contagem e alcance, mesmo "sabor" de antes. O peixe
+  // voador é a assinatura da fase: fica bufando parado e dispara na
+  // horizontal quando o jogador entra no alcance.
+  // Nenhum inimigo antes de x=1900: o trecho 1 (agora com o dobro de
+  // comprimento) segue sendo margem limpa; o primeiro bicho aparece só na
+  // transição para o lago.
   //
-  // O jacaré patrulha bem os dois vãos onde os troncos-boia foram removidos
-  // (1990..2650 e 2910..3550): é ele quem cobra o pedágio de quem tenta
-  // atravessar por cima. O candiru fica espalhado pelo lago inteiro, mas só
-  // acorda (e só machuca) com o jogador dentro d'água — fora d'água é
-  // decoração inofensiva.
+  // O jacaré agora patrulha TRÊS vãos sem tronco (A→B, C→D, E→F — os
+  // "respiros" B→C e D→E continuam com pontes de troncos-boia e um carango
+  // em cima do pilar de respiro, como no pilar 2 original). O candiru fica
+  // espalhado pelo lago inteiro, mas só acorda (e só machuca) com o jogador
+  // dentro d'água — fora d'água é decoração inofensiva.
   // ---------------------------------------------------------------
   var enemyDefs = [
-    { type: 'voadeira',  x: 1030, y: 520, range: 110 },  // (1) fim da margem
+    { type: 'voadeira',  x: 1910, y: 520, range: 110 },  // (1) fim da margem seca
 
     // (2+3) O LAGO — piranhas patrulhando o volume, carangos no leito e nos
-    // pilares, os peixes voadores rasantes por cima da superfície, e agora
-    // jacarés e candirus nos dois vãos obrigatórios
-    { type: 'piranha',   x: 930,  y: 770, range: 110 },
-    { type: 'piranha',   x: 1060, y: 890, range: 100 },
-    { type: 'carango',   x: 970,  y: 968, range: 90 },
-    { type: 'candiru',   x: 1180, y: 840, range: 0 },
-    { type: 'piranha',   x: 1550, y: 810, range: 120 },
-    { type: 'carango',   x: 1900, y: 968, range: 90 },
-    { type: 'jacare',    x: 2300, y: 900, range: 260 },  // vão obrigatório ILHA A→B
-    { type: 'piranha',   x: 2150, y: 760, range: 130 },
-    { type: 'candiru',   x: 2080, y: 900, range: 0 },
-    { type: 'piranha',   x: 2450, y: 900, range: 110 },
-    { type: 'candiru',   x: 2560, y: 950, range: 0 },
-    { type: 'carango',   x: 3110, y: 734, range: 38 },   // em cima do pilar 2!
-    { type: 'jacare',    x: 3140, y: 900, range: 240 },  // vão obrigatório ILHA B→C
-    { type: 'piranha',   x: 2950, y: 880, range: 120 },
-    { type: 'candiru',   x: 3260, y: 860, range: 0 },
-    { type: 'carango',   x: 3300, y: 968, range: 100 },
-    { type: 'piranha',   x: 3450, y: 790, range: 110 },
-    { type: 'piranha',   x: 4100, y: 900, range: 120 },
-    { type: 'carango',   x: 4300, y: 968, range: 80 },
-    { type: 'peixe',     x: 2500, y: 600, range: 380, speed: 540 }, // rasante sobre a água
-    { type: 'peixe',     x: 3900, y: 590, range: 340, speed: 560 },
-    { type: 'voadeira',  x: 3550, y: 520, range: 140 },  // sobre a ILHA C
+    // pilares, os peixes voadores rasantes por cima da superfície, e jacarés
+    // + candirus nos TRÊS vãos obrigatórios (A→B, C→D, E→F)
+    { type: 'piranha',   x: 1900, y: 770, range: 110 },
+    { type: 'piranha',   x: 2050, y: 890, range: 100 },
+    { type: 'carango',   x: 1960, y: 968, range: 90 },
+    { type: 'candiru',   x: 2200, y: 840, range: 0 },
+    { type: 'piranha',   x: 2450, y: 810, range: 120 },
+    { type: 'piranha',   x: 2700, y: 850, range: 110 },
+    { type: 'candiru',   x: 2550, y: 920, range: 0 },
+
+    { type: 'jacare',    x: 3100, y: 900, range: 280 },  // vão obrigatório ILHA A→B
+    { type: 'piranha',   x: 3050, y: 760, range: 130 },
+    { type: 'candiru',   x: 2980, y: 900, range: 0 },
+    { type: 'candiru',   x: 3350, y: 940, range: 0 },
+
+    { type: 'carango',   x: 3960, y: 734, range: 38 },   // em cima do pilar 2 (respiro B→C)!
+    { type: 'piranha',   x: 3760, y: 880, range: 120 },
+    { type: 'candiru',   x: 3850, y: 860, range: 0 },
+
+    { type: 'carango',   x: 4400, y: 968, range: 100 },
+    { type: 'piranha',   x: 4150, y: 820, range: 120 },
+    { type: 'piranha',   x: 4650, y: 790, range: 110 },
+
+    { type: 'jacare',    x: 4750, y: 900, range: 260 },  // vão obrigatório ILHA C→D
+    { type: 'piranha',   x: 5020, y: 900, range: 110 },
+    { type: 'candiru',   x: 5060, y: 950, range: 0 },
+
+    { type: 'carango',   x: 5645, y: 774, range: 38 },   // em cima do pilar 4 (respiro D→E)!
+    { type: 'piranha',   x: 5450, y: 880, range: 120 },
+    { type: 'candiru',   x: 5550, y: 860, range: 0 },
+    { type: 'carango',   x: 5250, y: 968, range: 90 },
+
+    { type: 'piranha',   x: 6250, y: 900, range: 120 },
+    { type: 'carango',   x: 6300, y: 968, range: 80 },
+
+    { type: 'jacare',    x: 6700, y: 900, range: 280 },  // vão obrigatório ILHA E→F
+    { type: 'piranha',   x: 6600, y: 760, range: 130 },
+    { type: 'candiru',   x: 6720, y: 900, range: 0 },
+
+    { type: 'piranha',   x: 7100, y: 850, range: 110 },
+    { type: 'piranha',   x: 7250, y: 790, range: 110 },
+    { type: 'candiru',   x: 7350, y: 920, range: 0 },
+    { type: 'candiru',   x: 7500, y: 860, range: 0 },
+    { type: 'piranha',   x: 7900, y: 900, range: 120 },
+    { type: 'carango',   x: 8600, y: 968, range: 80 },
+
+    { type: 'peixe',     x: 3300, y: 600, range: 420, speed: 540 }, // rasante sobre a água
+    { type: 'peixe',     x: 5500, y: 590, range: 400, speed: 560 },
+    { type: 'peixe',     x: 7600, y: 600, range: 380, speed: 550 },
+    { type: 'voadeira',  x: 4420, y: 520, range: 140 },  // sobre a ILHA C
+    { type: 'voadeira',  x: 6940, y: 520, range: 140 },  // sobre a ILHA F
 
     // (4) margem leste
-    { type: 'espinhoco', x: 4600, y: 614, range: 100 },
+    { type: 'espinhoco', x: 9160, y: 614, range: 100 },
+    { type: 'espinhoco', x: 9700, y: 614, range: 100 },
 
-    // range curto de propósito: a fenda tem 150px de vão, e uma voadeira de
-    // range largo entraria e sairia de dentro das paredes (ela não colide)
-    { type: 'voadeira',  x: 5300, y: 430, range: 34 },   // (5) dentro da fenda
+    // range curto de propósito: cada fenda tem 150px de vão, e uma voadeira
+    // de range largo entraria e sairia de dentro das paredes (ela não colide)
+    { type: 'voadeira',  x: 10450, y: 430, range: 34 },  // (5) dentro da fenda 1
+    { type: 'voadeira',  x: 11000, y: 430, range: 34 },  // (5) dentro da fenda 2
 
-    { type: 'espinhoco', x: 5620, y: 590, range: 90 },   // (6) lamaçal final
-    { type: 'peixe',     x: 5980, y: 552, range: 300 },
-    { type: 'voadeira',  x: 6100, y: 500, range: 120 },
-    { type: 'sapeca',    x: 6250, y: 584, range: 60 },   // já na borda da clareira
+    { type: 'espinhoco', x: 11220, y: 590, range: 90 },  // (6) lamaçal final
+    { type: 'espinhoco', x: 11760, y: 590, range: 90 },
+    { type: 'peixe',     x: 12100, y: 552, range: 300 },
+    { type: 'voadeira',  x: 12450, y: 500, range: 120 },
+    { type: 'peixe',     x: 12950, y: 552, range: 300 },
+    { type: 'voadeira',  x: 13100, y: 500, range: 120 },
+    { type: 'sapeca',    x: 13250, y: 584, range: 60 },  // já na borda da clareira
+    { type: 'sapeca',    x: 13320, y: 584, range: 60 },
   ];
 
   // ---------------------------------------------------------------
@@ -187,17 +257,33 @@ window.FG = window.FG || {};
   var obstacleDefs = [
     // troncos-boia na superfície do lago: dão respiro entre os mergulhos,
     // mas NÃO fecham o lago ponta a ponta — de propósito faltam os troncos
-    // entre ILHA A e ILHA B e entre ILHA B e ILHA C (vãos de 640-660px, bem
-    // além do que pulo duplo + planagem cobrem), então esses dois trechos só
-    // se atravessam nadando, cara a cara com o jacaré. Afundam com o peso
-    // (556+70+22 = 648 < 664, nunca somem).
-    { type: 'tronco', x: 960,  y: 556, w: 130 },
-    { type: 'tronco', x: 1440, y: 568, w: 110 },
-    { type: 'tronco', x: 1640, y: 568, w: 110 },
-    { type: 'tronco', x: 4180, y: 560, w: 110 },
+    // nos TRÊS vãos obrigatórios (A→B, C→D, E→F: 640-660px, bem além do que
+    // pulo duplo + planagem cobrem), então esses trechos só se atravessam
+    // nadando, cara a cara com o jacaré. Afundam com o peso (556+70+22 = 648
+    // < 664, nunca somem).
 
-    // (6) lamaçal final: um tronco sobre a poça pré-clareira, como despedida.
-    { type: 'tronco', x: 6060, y: 570, w: 110 },
+    // entrada do lago, antes da ILHA A (o mesmo tutorial de tronco de antes,
+    // agora com uma cana a mais)
+    { type: 'tronco', x: 1840, y: 556, w: 130 },
+    { type: 'tronco', x: 2190, y: 568, w: 110 },
+    { type: 'tronco', x: 2390, y: 568, w: 110 },
+    { type: 'tronco', x: 2560, y: 568, w: 100 },
+
+    // respiro B→C (ponte de troncos: NADA de vão forçado aqui)
+    { type: 'tronco', x: 3860, y: 568, w: 130 },
+    { type: 'tronco', x: 4060, y: 568, w: 120 },
+
+    // respiro D→E (ponte de troncos)
+    { type: 'tronco', x: 5490, y: 568, w: 130 },
+    { type: 'tronco', x: 5680, y: 568, w: 110 },
+
+    // trecho final do lago, depois da ILHA F, rumo à margem leste
+    { type: 'tronco', x: 7180, y: 560, w: 120 },
+    { type: 'tronco', x: 7420, y: 560, w: 110 },
+
+    // (6) lamaçal final: um tronco sobre cada poça pré-clareira, como despedida.
+    { type: 'tronco', x: 12360, y: 570, w: 130 },
+    { type: 'tronco', x: 12910, y: 570, w: 130 },
   ];
 
   // ---------------------------------------------------------------
@@ -208,9 +294,13 @@ window.FG = window.FG || {};
   // caminho de quem desce controlando a queda em vez de despencar colado.
   // ---------------------------------------------------------------
   var NINHO_R = 34;      // raio de coleta: é um casulo gordo, não uma fagulha
+  // Continuam só DOIS na fase inteira mesmo depois de dobrar — a raridade é
+  // o ponto, não o comprimento do traçado — só reposicionados na nova
+  // geometria (mesma lógica de risco: fundo do vão forçado A→B, e o eixo da
+  // segunda fenda).
   var ninhos = [
-    { x: 2450, y: 930, taken: false, ph: 0.0 },   // no fundo do lago, entre as piranhas
-    { x: 5312, y: 396, taken: false, ph: 1.7 },
+    { x: 3200, y: 930, taken: false, ph: 0.0 },   // no fundo do lago, no vão forçado A→B
+    { x: 11012, y: 396, taken: false, ph: 1.7 },  // no eixo da fenda 2
   ];
 
   // ---------------------------------------------------------------
@@ -219,7 +309,7 @@ window.FG = window.FG || {};
   // um lugar em que afundar não seja punição.
   // ---------------------------------------------------------------
   var rasos = [
-    { x: 880, y: 662, w: 3600, h: 378 },  // o LAGO inteiro, metade da fase
+    { x: 1760, y: 662, w: 7200, h: 378 },  // o LAGO inteiro, metade da fase
   ];
 
   // ---------------------------------------------------------------
@@ -229,7 +319,7 @@ window.FG = window.FG || {};
   // continuam sendo hazard, não piscina.
   // ---------------------------------------------------------------
   var waters = [
-    { x: 880, y: 664, w: 3600, h: 336 },
+    { x: 1760, y: 664, w: 7200, h: 336 },
   ];
 
   // ---------------------------------------------------------------
@@ -299,14 +389,20 @@ window.FG = window.FG || {};
     var r = makeRand(20260912);
     var LEITO = 1000, SUP = 666;   // leito do lago e linha d'água
     var st = [
-      // as 3 ilhas de lodo flutuantes (topo fora d'água, base em 800)
-      { x: 1750, w: 240, top: SUP, bot: 800, ilha: true },
-      { x: 2650, w: 260, top: SUP, bot: 800, ilha: true },
-      { x: 3550, w: 240, top: SUP, bot: 800, ilha: true },
-      // os 3 pilares submersos (assentam no leito)
-      { x: 2200, w: 90, top: 822, bot: LEITO, ilha: false },
-      { x: 3080, w: 100, top: 762, bot: LEITO, ilha: false },
-      { x: 4050, w: 90, top: 842, bot: LEITO, ilha: false },
+      // as 6 ilhas de lodo flutuantes (topo fora d'água, base em 800)
+      { x: 2660, w: 240, top: SUP, bot: 800, ilha: true },
+      { x: 3560, w: 260, top: SUP, bot: 800, ilha: true },
+      { x: 4300, w: 240, top: SUP, bot: 800, ilha: true },
+      { x: 5190, w: 260, top: SUP, bot: 800, ilha: true },
+      { x: 5920, w: 240, top: SUP, bot: 800, ilha: true },
+      { x: 6820, w: 260, top: SUP, bot: 800, ilha: true },
+      // os 6 pilares submersos (assentam no leito)
+      { x: 3230, w: 90, top: 822, bot: LEITO, ilha: false },
+      { x: 3920, w: 100, top: 762, bot: LEITO, ilha: false },
+      { x: 4870, w: 90, top: 842, bot: LEITO, ilha: false },
+      { x: 5600, w: 95, top: 802, bot: LEITO, ilha: false },
+      { x: 6480, w: 90, top: 822, bot: LEITO, ilha: false },
+      { x: 7750, w: 90, top: 842, bot: LEITO, ilha: false },
     ];
     for (var si = 0; si < st.length; si++) {
       var s = st[si];
@@ -363,37 +459,56 @@ window.FG = window.FG || {};
   function lumiCol(x, y, n, dy) { kit.lumiCol(lumis, x, y, n, dy); }
   function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumis, cx, apexY, span, sag, n); }
 
-  // (1) margem seca
+  // (1) margem seca — duas escadas
   lumiLine(150, 578, 4, 62);
   lumiArc(500, 500, 5, 190, 34);
   lumiLine(800, 396, 3, 36);
-  lumiArc(1035, 556, 4, 190, 44);      // por cima do tronco-boia tutorial
-  // (2+3) O LAGO — trilha de superfície pelos troncos e ilhas...
-  lumiLine(1470, 630, 3, 60);
-  lumiArc(1870, 560, 3, 130, 30);      // sobre a ILHA A
-  lumiArc(2780, 550, 3, 140, 30);      // sobre a ILHA B
-  lumiArc(3670, 560, 3, 130, 30);      // sobre a ILHA C
+  lumiLine(1050, 538, 3, 56);          // sobre a segunda raiz baixa
+  lumiArc(1370, 458, 4, 180, 32);      // arco sobre o segundo conjunto de escadas
+  lumiLine(1600, 378, 3, 34);          // por cima do segundo bônus alto
+  lumiArc(1905, 556, 4, 190, 44);      // por cima do tronco-boia tutorial (já no lago)
+  // (2+3) O LAGO — trilha de superfície pelos troncos e SEIS ilhas...
+  lumiLine(2280, 630, 3, 60);
+  lumiArc(2780, 560, 3, 130, 30);      // sobre a ILHA A
+  lumiArc(3690, 550, 3, 140, 30);      // sobre a ILHA B (checkpoint 1)
+  lumiArc(4420, 560, 3, 130, 30);      // sobre a ILHA C
+  lumiArc(5320, 550, 3, 140, 30);      // sobre a ILHA D
+  lumiArc(6040, 560, 3, 130, 30);      // sobre a ILHA E (checkpoint 2)
+  lumiArc(6940, 550, 3, 140, 30);      // sobre a ILHA F
   // ...e as trilhas SUBMERSAS: o convite pro mergulho é a luz lá embaixo
-  lumiCol(1030, 940, 4, -72);          // a escada que convida a descer
-  lumiLine(920, 972, 3, 56);
-  lumiLine(1300, 800, 4, 90);
-  lumiArc(2000, 770, 4, 220, 50);      // por cima do pilar 1
-  lumiLine(2330, 900, 4, 80);          // rumo ao ninho submerso
-  lumiCol(2770, 940, 4, -70);          // debaixo da ILHA B
-  lumiLine(3000, 724, 4, 90);          // por cima do pilar 2 (cuidado co'o carango)
-  lumiArc(3600, 850, 4, 220, 50);
-  lumiLine(4000, 800, 3, 90);
-  lumiCol(4430, 950, 4, -75);          // a subida para a margem leste
-  // (5) fenda das raízes — a coluna da esquerda é a placa de "sobe por aqui"
-  lumiCol(5132, 578, 6, -56);
-  lumiCol(5312, 268, 5, 58);
-  lumiArc(5300, 570, 3, 110, 30);
+  lumiCol(1910, 940, 4, -72);          // a escada que convida a descer
+  lumiLine(2000, 972, 3, 56);
+  lumiLine(2300, 800, 4, 90);
+  lumiArc(3000, 780, 4, 220, 50);      // por cima do pilar 1
+  lumiLine(3200, 900, 4, 80);          // rumo ao ninho submerso (vão A→B)
+  lumiCol(3690, 940, 4, -70);          // debaixo da ILHA B
+  lumiLine(3880, 724, 4, 90);          // por cima do pilar 2 (cuidado co'o carango)
+  lumiArc(4700, 850, 4, 220, 50);
+  lumiLine(4900, 800, 3, 90);          // rumo ao vão forçado C→D
+  lumiArc(5750, 780, 4, 220, 50);      // por cima do pilar 4 (cuidado co'o carango)
+  lumiCol(6040, 940, 4, -70);          // debaixo da ILHA E
+  lumiLine(6350, 900, 4, 90);          // rumo ao vão forçado E→F
+  lumiArc(6560, 850, 4, 220, 50);      // por cima do pilar 5
+  lumiLine(7000, 800, 3, 90);
+  lumiCol(8910, 950, 4, -75);          // a subida para a margem leste
+  // (5) fenda das raízes DUPLA — a coluna da esquerda é a placa de "sobe por aqui"
+  lumiCol(10282, 578, 6, -56);
+  lumiCol(10462, 268, 5, 58);
+  lumiArc(10450, 570, 3, 110, 30);
+  lumiCol(10832, 578, 6, -56);
+  lumiCol(11012, 268, 5, 58);          // perto do ninho, no eixo da fenda 2
+  lumiArc(11000, 570, 3, 110, 30);
   // (6) lamaçal final e clareira
-  lumiLine(5570, 572, 3, 54);
-  lumiLine(5730, 494, 3, 44);
-  lumiLine(5910, 440, 2, 44);
-  lumiArc(6110, 550, 4, 150, 42);
-  lumiLine(6260, 566, 2, 60);
+  lumiLine(11180, 572, 3, 54);
+  lumiLine(11340, 494, 3, 44);
+  lumiLine(11520, 440, 2, 44);
+  lumiLine(11780, 572, 3, 54);
+  lumiLine(11960, 494, 3, 44);
+  lumiArc(12200, 550, 4, 150, 42);
+  lumiLine(12350, 566, 2, 60);
+  lumiArc(12750, 550, 4, 150, 42);
+  lumiLine(12900, 566, 2, 60);
+  lumiLine(13250, 566, 2, 60);
 
   // FAÍSCAS — brilho de despedida do coletável (pool fixa do kit, sem GC)
   var sparks = kit.makeSparks(72);
@@ -1854,8 +1969,8 @@ window.FG = window.FG || {};
     obstacleDefs: obstacleDefs,
     ninhos: ninhos,
     bossId: 'sandrola',
-    bossTriggerX: 6350,
-    arena: { x: 6200, w: 1000 },
+    bossTriggerX: 13550,
+    arena: { x: 13400, w: 1000 },
     waters: waters,
     reset: reset,
     update: update,

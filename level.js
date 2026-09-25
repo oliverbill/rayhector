@@ -15,7 +15,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 7200, H = 720;
+  var W = 14400, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -24,77 +24,116 @@ window.FG = window.FG || {};
   //    empilhada, escalável), 'i' = ilha flutuante, 'h' = piso oculto
   //    (fundo das poças venenosas, não é desenhado).
   //
-  // RITMO EM 6 TRECHOS
-  //  (1) x 0..1180    tutorial plano, degraus suaves, sem perigo
-  //  (2) x 1180..2450 mesas em vários níveis + saliências estreitas
-  //  (3) x 2450..3700 gorge, maciço de pedra com arco de caverna na base e a
-  //                   CHAMINÉ ESCALÁVEL (fenda de 70px em 3100..3170, 400px
-  //                   de parede vertical) até o platô superior
-  //  (4) x 3700..5060 travessia de ilhas flutuantes sobre o abismo; quem cai
-  //                   vai parar no pântano e volta pela SEGUNDA CHAMINÉ, a
-  //                   fenda de 80px entre a agulha de pedra e o desfiladeiro
-  //  (5) x 5060..5420 DESFILADEIRO: duas paredes frente a frente, descida
-  //                   controlada agarrando (fenda de 140px, 390px de queda)
-  //  (6) x 5420..7200 reta final e a clareira plana do chefão
+  // RITMO EM 6 TRECHOS — fase dobrada (W = 14400): cada trecho abaixo é o
+  // trecho original seguido de uma repetição dele mesmo (cópia A + cópia B),
+  // então cada junção nova (A→B) é geometricamente idêntica a uma junção que
+  // já existia e funcionava no desenho original — só maior e mais cheia.
+  //  (1) x 0..2360      tutorial dobrado: dois blocos de degraus suaves,
+  //                     sem perigo (nenhum inimigo/hazard nos dois blocos)
+  //  (2) x 2360..4900   mesas em vários níveis + saliências, dois fossos e
+  //                     duas mesas-base (a 2ª tem o checkpoint 2)
+  //  (3) x 4900..7400   dois gorges seguidos, cada um com sua própria
+  //                     CHAMINÉ ESCALÁVEL (400px) até o platô superior — ao
+  //                     sair do 1º platô cai-se ~400px no chão do 2º gorge
+  //  (4) x 7400..10120  travessia dupla de ilhas flutuantes sobre o abismo;
+  //                     quem cai vai parar no pântano e volta pela chaminé
+  //                     da fenda seguinte, em cada uma das duas metades
+  //  (5) x 10120..10840 dois DESFILADEIROS seguidos, paredes frente a frente
+  //                     (fenda de 140px, 390px de queda cada um)
+  //  (6) x 10840..14400 reta final dobrada (dois blocos de obstáculos) e,
+  //                     entre eles, uma clareira de descanso; a clareira
+  //                     final (13230..14400) é a arena do chefão
   //
-  // As duas escaladas: a chaminé do gorge (única saída de lá, 400px) e a
-  // fenda do pântano (415px, única saída de quem cai do arquipélago).
-  // Nada de beco sem saída: de todo lugar onde se cai dá para voltar.
+  // As escaladas (uma por chaminé/fenda) e a regra de nunca ter beco sem
+  // saída se repetem em cada metade, exatamente como no desenho original.
   //
   // Alturas: pulo simples sobe ~118px, duplo ~236px, e uma parede vertical
   // contínua sobe indefinidamente agarrando (~120px por salto de parede).
   // ---------------------------------------------------------------
   var solids = [
-    // ---- (1) tutorial — chão plano e degraus curtos, nada de perigo ----
-    S(0, 620, 1180, 100, 'g'),        // [0] chão inicial
-    S(250, 588, 90, 32, 'r'),         // [1] +32
-    S(420, 552, 110, 68, 'r'),        // [2] +36
-    S(620, 508, 130, 26, 'g'),        // [3] +44
-    S(810, 448, 120, 24, 'g'),        // [4] +60
-    S(980, 396, 110, 22, 'g'),        // [5] +52
-    S(1070, 300, 100, 20, 'g'),       // [6] bônus alto (+96)
+    // ---- (1) tutorial dobrado — dois blocos de chão plano + degraus, nada
+    // de perigo em nenhum dos dois ----
+    S(0, 620, 1180, 100, 'g'),        // chão inicial A
+    S(250, 588, 90, 32, 'r'),
+    S(420, 552, 110, 68, 'r'),
+    S(620, 508, 130, 26, 'g'),
+    S(810, 448, 120, 24, 'g'),
+    S(980, 396, 110, 22, 'g'),
+    S(1070, 300, 100, 20, 'g'),       // bônus alto A
+    S(1180, 620, 1180, 100, 'g'),     // chão inicial B
+    S(1430, 588, 90, 32, 'r'),
+    S(1600, 552, 110, 68, 'r'),
+    S(1800, 508, 130, 26, 'g'),
+    S(1990, 448, 120, 24, 'g'),
+    S(2160, 396, 110, 22, 'g'),
+    S(2250, 300, 100, 20, 'g'),       // bônus alto B
 
-    // ---- fosso A: poça venenosa com piso oculto no fundo ----
-    S(1180, 724, 170, 40, 'h'),       // [7]
+    // ---- (2) mesas dobradas: dois fossos + duas mesas-base + saliências ----
+    S(2360, 724, 170, 40, 'h'),       // fosso A (poça venenosa)
+    S(2530, 620, 300, 100, 'g'),      // mesa base A (checkpoint)
+    S(2830, 556, 250, 164, 'g'),
+    S(3140, 500, 90, 20, 'r'),
+    S(3290, 452, 90, 20, 'r'),
+    S(3430, 496, 200, 224, 'g'),      // mesa alta A, desce para o 2º fosso
+    S(3630, 724, 170, 40, 'h'),       // fosso B (poça venenosa)
+    S(3800, 620, 300, 100, 'g'),      // mesa base B (checkpoint)
+    S(4100, 556, 250, 164, 'g'),
+    S(4410, 500, 90, 20, 'r'),
+    S(4560, 452, 90, 20, 'r'),
+    S(4700, 496, 200, 224, 'g'),      // mesa alta B, desce para o 1º gorge
 
-    // ---- (2) mesas de alturas variadas e saliências estreitas ----
-    S(1350, 620, 300, 100, 'g'),      // [8] mesa base (checkpoint 1)
-    S(1650, 556, 250, 164, 'g'),      // [9] mesa média (+64)
-    S(1960, 500, 90, 20, 'r'),        // [10] saliência estreita (+56)
-    S(2110, 452, 90, 20, 'r'),        // [11] saliência estreita (+48)
-    S(2250, 496, 200, 224, 'g'),      // [12] mesa alta, desce para o gorge
+    // ---- (3) dois gorges seguidos, cada um com sua CHAMINÉ ESCALÁVEL ----
+    // Cada chão de gorge passa por baixo do arco do pilar e morre na fenda
+    // entre o pilar e o penhasco: só se sai por cima, agarrando e saltando
+    // de face em face, ganhando ~120px por salto, até o platô (400px).
+    S(4900, 620, 720, 100, 'g'),      // chão do gorge A
+    S(5470, 250, 80, 300, 'c'),       // pilar A (arco de 70px por baixo)
+    S(5620, 220, 130, 500, 'c'),      // penhasco A (face esquerda = chaminé)
+    S(5750, 220, 400, 500, 'c'),      // platô superior A (checkpoint) — dali
+                                       // cai-se ~400px direto no chão do gorge B
+    S(6150, 620, 720, 100, 'g'),      // chão do gorge B
+    S(6720, 250, 80, 300, 'c'),       // pilar B
+    S(6870, 220, 130, 500, 'c'),      // penhasco B (face esquerda = chaminé)
+    S(7000, 220, 400, 500, 'c'),      // platô superior B (checkpoint)
 
-    // ---- (3) gorge + maciço de pedra com a CHAMINÉ ESCALÁVEL ----
-    // O chão do gorge passa por baixo do arco do pilar (70px) e morre dentro
-    // da fenda de 70px entre o pilar e o penhasco. Dali só se sai por cima:
-    // agarrar, saltar de face em face e ganhar ~120px a cada salto, de 620
-    // até 220 — 400px de parede vertical contínua.
-    S(2450, 620, 720, 100, 'g'),      // [13] chão do gorge 2450..3170
-    S(3020, 250, 80, 300, 'c'),       // [14] pilar (arco de 70px por baixo)
-    S(3170, 220, 130, 500, 'c'),      // [15] penhasco (face esquerda = chaminé)
-    S(3300, 220, 400, 500, 'c'),      // [16] maciço/platô superior (checkpoint 2)
+    // ---- (4) travessia dupla de ilhas flutuantes sobre o abismo ----
+    S(7400, 620, 1280, 100, 'g'),     // fundo do abismo A (pântano)
+    S(7590, 290, 150, 110, 'i'),      // ilha 1 A
+    S(8030, 350, 130, 110, 'i'),      // ilha 2 A
+    S(8340, 130, 110, 50, 'i'),       // ilha-mirante A
+    S(8440, 300, 140, 110, 'i'),      // ilha 3 A
+    S(8600, 250, 80, 300, 'c'),       // agulha de pedra A (arco de 70px)
+    S(8680, 620, 80, 100, 'g'),       // chão da fenda do pântano A
+    S(8760, 620, 1280, 100, 'g'),     // fundo do abismo B (pântano)
+    S(8950, 290, 150, 110, 'i'),      // ilha 1 B
+    S(9390, 350, 130, 110, 'i'),      // ilha 2 B (checkpoint em cima)
+    S(9700, 130, 110, 50, 'i'),       // ilha-mirante B
+    S(9800, 300, 140, 110, 'i'),      // ilha 3 B
+    S(9960, 250, 80, 300, 'c'),       // agulha de pedra B
+    S(10040, 620, 80, 100, 'g'),      // chão da fenda do pântano B
 
-    // ---- (4) ilhas flutuantes de pedra sobre o abismo ----
-    S(3700, 620, 1280, 100, 'g'),     // [17] fundo do abismo (pântano) 3700..4980
-    S(3890, 290, 150, 110, 'i'),      // [18] ilha 1
-    S(4330, 350, 130, 110, 'i'),      // [19] ilha 2
-    S(4640, 130, 110, 50, 'i'),       // [20] ilha-mirante (o sopro abre o caminho)
-    S(4740, 300, 140, 110, 'i'),      // [21] ilha 3
+    // ---- (5) dois DESFILADEIROS seguidos, paredes frente a frente ----
+    // Quem cai no pântano volta escalando a parede esquerda (390px do chão
+    // ao topo); quem vem das ilhas desce a fenda agarrado, controlando a
+    // queda; o topo da parede direita A já entrega o topo da parede
+    // esquerda B, sem precisar cair de novo.
+    S(10120, 205, 90, 515, 'c'),      // parede esquerda A
+    S(10210, 620, 760, 100, 'g'),     // fundo do desfiladeiro A + reta
+    S(10350, 210, 130, 340, 'c'),     // parede direita A (crista de espinhos)
+    S(10480, 205, 90, 515, 'c'),      // parede esquerda B
+    S(10570, 620, 760, 100, 'g'),     // fundo do desfiladeiro B + reta
+    S(10710, 210, 130, 340, 'c'),     // parede direita B (crista de espinhos)
 
-    // ---- (5) desfiladeiro: duas paredes frente a frente, fenda de 140px ----
-    // Quem cai no pântano volta escalando a parede esquerda (390px, do chão
-    // ao topo); quem vem das ilhas desce a fenda agarrado, controlando a queda.
-    S(4900, 250, 80, 300, 'c'),       // [22] agulha de pedra (arco de 70px por baixo)
-    S(4980, 620, 80, 100, 'g'),       // [23] chão da fenda do pântano 4980..5060
-    S(5060, 205, 90, 515, 'c'),       // [24] parede esquerda (do chão ao topo, 515px)
-    S(5150, 620, 760, 100, 'g'),      // [25] fundo do desfiladeiro + reta final
-    S(5290, 210, 130, 340, 'c'),      // [26] parede direita (arco de 70px, crista de espinhos)
-
-    // ---- (6) reta final e clareira do chefão ----
-    S(5560, 530, 130, 26, 'g'),       // [27] passa por cima dos espinhos
-    S(5750, 480, 110, 22, 'g'),       // [28] bônus
-    S(5910, 724, 120, 40, 'h'),       // [29] piso oculto da poça pré-clareira
-    S(6030, 620, 1170, 100, 'g'),     // [30] clareira plana do chefão
+    // ---- (6) reta final dobrada: dois blocos de obstáculos, uma clareira
+    // de descanso entre eles e a clareira final (arena do chefão) ----
+    S(10980, 530, 130, 26, 'g'),      // passa por cima dos espinhos A
+    S(11170, 480, 110, 22, 'g'),      // bônus A
+    S(11330, 724, 120, 40, 'h'),      // piso oculto da poça pré-clareira A
+    S(11450, 620, 1170, 100, 'g'),    // clareira de descanso (não é a arena)
+    S(12760, 530, 130, 26, 'g'),      // passa por cima dos espinhos B
+    S(12950, 480, 110, 22, 'g'),      // bônus B
+    S(13110, 724, 120, 40, 'h'),      // piso oculto da poça pré-clareira B
+    S(13230, 620, 1170, 100, 'g'),    // clareira plana do chefão (arena)
   ];
 
   // ---------------------------------------------------------------
@@ -103,41 +142,68 @@ window.FG = window.FG || {};
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(1180, 698, 170, 26, 'p'),   // poça do fosso A
-    Hz(1780, 532, 100, 24, 's'),   // espinhos na mesa média
-    Hz(2280, 472, 90, 24, 's'),    // espinhos na mesa alta
-    Hz(2820, 596, 110, 24, 's'),   // espinhos no fundo do gorge
-    Hz(3760, 596, 1120, 26, 'p'),  // pântano no fundo do abismo: cair custa caro
-    Hz(5200, 596, 90, 24, 's'),    // fundo do desfiladeiro (metade direita)
-    Hz(5290, 186, 130, 24, 's'),   // crista da parede direita: não dá para cortar caminho
-    Hz(5620, 596, 120, 24, 's'),   // reta final
-    Hz(5910, 698, 120, 26, 'p'),   // poça pré-clareira
+    Hz(2360, 698, 170, 26, 'p'),      // poça do fosso A
+    Hz(2960, 532, 100, 24, 's'),      // espinhos na mesa média A
+    Hz(3460, 472, 90, 24, 's'),       // espinhos na mesa alta A
+    Hz(3630, 698, 195.5, 26, 'p'),    // poça do fosso B
+    Hz(4230, 532, 115, 24, 's'),      // espinhos na mesa média B
+    Hz(4730, 472, 103.5, 24, 's'),    // espinhos na mesa alta B
+    Hz(5270, 596, 110, 24, 's'),      // espinhos no fundo do gorge A
+    Hz(6520, 596, 126.5, 24, 's'),    // espinhos no fundo do gorge B
+    Hz(7460, 596, 1120, 26, 'p'),     // pântano do abismo A: cair custa caro
+    Hz(8820, 596, 1288, 26, 'p'),     // pântano do abismo B
+    Hz(10260, 596, 90, 24, 's'),      // fundo do desfiladeiro A
+    Hz(10350, 186, 130, 24, 's'),     // crista da parede direita A
+    Hz(10620, 596, 103.5, 24, 's'),   // fundo do desfiladeiro B
+    Hz(10710, 186, 149.5, 24, 's'),   // crista da parede direita B
+    Hz(11040, 596, 120, 24, 's'),     // reta final A
+    Hz(11330, 698, 120, 26, 'p'),     // poça pré-clareira de descanso
+    Hz(12820, 596, 138, 24, 's'),     // reta final B
+    Hz(13110, 698, 138, 26, 'p'),     // poça pré-clareira do chefão
   ];
 
-  // 3 lanternas-checkpoint (acendem quando ativadas)
+  // 7 lanternas-checkpoint (acendem quando ativadas) — fase dobrada, uma
+  // lanterna por marco de alívio em cada metade dos trechos 2/3/4/6
   var checkpoints = [
-    { x: 1470, y: 620 },   // mesa base do trecho 2
-    { x: 3340, y: 220 },   // platô superior — prêmio de escalar a chaminé
-    { x: 5440, y: 620 },   // saída do desfiladeiro, já na reta final
+    { x: 2650, y: 620 },   // mesa base A do trecho 2
+    { x: 3920, y: 620 },   // mesa base B do trecho 2
+    { x: 5790, y: 220 },   // platô superior A — prêmio de escalar a 1ª chaminé
+    { x: 7040, y: 220 },   // platô superior B — prêmio de escalar a 2ª chaminé
+    { x: 9450, y: 350 },   // ilha 2 B, no meio da travessia do trecho 4
+    { x: 10860, y: 620 },  // saída do 1º desfiladeiro, já na reta final A
+    { x: 12640, y: 620 },  // clareira de descanso, antes da reta final B
   ];
 
   // ---------------------------------------------------------------
   // INIMIGOS — nenhum antes de x=900 (tutorial limpo)
   // ---------------------------------------------------------------
   var enemyDefs = [
-    { type: 'voadeira',  x: 1255, y: 520, range: 120 },
-    { type: 'espinhoco', x: 1450, y: 590, range: 100 },
-    { type: 'sapeca',    x: 1720, y: 520, range: 70 },
-    { type: 'voadeira',  x: 2050, y: 390, range: 140 },
-    { type: 'espinhoco', x: 2380, y: 462, range: 80 },
-    { type: 'sapeca',    x: 2650, y: 584, range: 90 },   // chão do gorge
-    { type: 'voadeira',  x: 3600, y: 140, range: 130 },  // sobre o platô
-    { type: 'voadeira',  x: 3960, y: 230, range: 150 },  // ilhas
-    { type: 'voadeira',  x: 4400, y: 270, range: 170 },
-    { type: 'espinhoco', x: 4790, y: 270, range: 90 },   // ilha 3
-    { type: 'voadeira',  x: 5150, y: 400, range: 110 },  // dentro do desfiladeiro
-    { type: 'espinhoco', x: 5500, y: 590, range: 50 },
-    { type: 'sapeca',    x: 6120, y: 584, range: 60 },
+    { type: 'voadeira',  x: 2435, y: 520, range: 120 },
+    { type: 'espinhoco', x: 2630, y: 590, range: 100 },
+    { type: 'sapeca',    x: 2900, y: 520, range: 70 },
+    { type: 'voadeira',  x: 3230, y: 390, range: 140 },
+    { type: 'espinhoco', x: 3560, y: 462, range: 80 },
+    { type: 'voadeira',  x: 3705, y: 520, range: 144 },
+    { type: 'espinhoco', x: 3900, y: 590, range: 120 },
+    { type: 'sapeca',    x: 4170, y: 520, range: 84 },
+    { type: 'voadeira',  x: 4500, y: 390, range: 168 },
+    { type: 'espinhoco', x: 4830, y: 462, range: 96 },
+    { type: 'sapeca',    x: 5100, y: 584, range: 90 },   // chão do gorge A
+    { type: 'voadeira',  x: 6050, y: 140, range: 130 },  // sobre o platô A
+    { type: 'sapeca',    x: 6350, y: 584, range: 108 },  // chão do gorge B
+    { type: 'voadeira',  x: 7300, y: 140, range: 156 },  // sobre o platô B
+    { type: 'voadeira',  x: 7660, y: 230, range: 150 },  // ilhas A
+    { type: 'voadeira',  x: 8100, y: 270, range: 170 },
+    { type: 'espinhoco', x: 8490, y: 270, range: 90 },   // ilha 3 A
+    { type: 'voadeira',  x: 9020, y: 230, range: 180 },  // ilhas B
+    { type: 'voadeira',  x: 9460, y: 270, range: 204 },
+    { type: 'espinhoco', x: 9850, y: 270, range: 108 },  // ilha 3 B
+    { type: 'voadeira',  x: 10210, y: 400, range: 110 }, // dentro do 1º desfiladeiro
+    { type: 'voadeira',  x: 10570, y: 400, range: 132 }, // dentro do 2º desfiladeiro
+    { type: 'espinhoco', x: 10920, y: 590, range: 50 },
+    { type: 'sapeca',    x: 11540, y: 584, range: 60 },
+    { type: 'espinhoco', x: 12700, y: 590, range: 60 },
+    { type: 'sapeca',    x: 13320, y: 584, range: 72 },
   ];
 
   // ---------------------------------------------------------------
@@ -153,52 +219,79 @@ window.FG = window.FG || {};
   var obstacleDefs = [
     // (1) tutorial: banca de cachorro-quente — pura decoração interativa,
     // não dá lumi, não é checkpoint. Dá pra ignorar e seguir andando.
+    // Continua no início do trecho 1 (mesma posição de sempre).
     { type: 'cachorroquente', x: 780, y: 620 },
 
-    // (2) mesas: rolo curto, saliência que cai, coluna sobre o vão e a bola
-    { type: 'espinhorolo', x: 1670, y: 512, w: 44, range: 90, speed: 110 },
-    { type: 'desmorona',   x: 1870, y: 512, w: 80 },
-    { type: 'sopro',       x: 2054, y: 392, w: 52, h: 130 },
-    { type: 'pendulo',     x: 2350, y: 290, len: 175, arc: 0.9, period: 2.6 },
+    // (2) mesas A: rolo curto, saliência que cai, coluna sobre o vão e a bola
+    { type: 'espinhorolo', x: 2850, y: 512, w: 44, range: 90, speed: 110 },
+    { type: 'desmorona',   x: 3050, y: 512, w: 80 },
+    { type: 'sopro',       x: 3234, y: 392, w: 52, h: 130 },
+    { type: 'pendulo',     x: 3530, y: 290, len: 175, arc: 0.9, period: 2.6 },
 
-    // (2) mesa base: montanha-russa — embarca, 10s de passeio ondulado sobre
-    // a própria mesa e desce um pouco à frente, na mesma plataforma segura.
-    { type: 'montanharussa', x: 1560, y: 620, railW: 70 },
+    // (2) mesa base B (meio do trecho 2 dobrado): montanha-russa — embarca,
+    // passeio ondulado sobre a própria mesa e desce um pouco à frente.
+    { type: 'montanharussa', x: 3850, y: 620, railW: 70 },
 
-    // (3) gorge: rolo no corredor, coluna quente que faz flutuar por cima do
-    // espinheiro e a bola de ferro no vão antes da chaminé.
-    // NADA de sopro dentro da chaminé: a subida ali é agarrando, e só.
-    { type: 'espinhorolo', x: 2700, y: 576, w: 44, range: 260, speed: 140 },
-    { type: 'sopro',       x: 2800, y: 452, w: 130, h: 144 },
-    { type: 'pendulo',     x: 2900, y: 250, len: 230, arc: 0.85, period: 3.0 },
+    // (2) mesas B: repetição um pouco mais rápida do mesmo conjunto
+    { type: 'espinhorolo', x: 4120, y: 512, w: 44, range: 99, speed: 126 },
+    { type: 'desmorona',   x: 4320, y: 512, w: 80 },
+    { type: 'sopro',       x: 4504, y: 392, w: 52, h: 130 },
+    { type: 'pendulo',     x: 4800, y: 290, len: 175, arc: 0.9, period: 2.6 },
 
-    // (4) platô e ilhas: rolo de espinhos no corredor do platô, degrau que cai
-    // ao sair dele, plataforma móvel entre as ilhas 1 e 2, bola sobre o vazio
-    // e a coluna que abre a ilha-mirante
-    { type: 'espinhorolo', x: 3420, y: 176, w: 44, range: 240, speed: 150 },
-    { type: 'desmorona',   x: 3730, y: 250, w: 110 },
-    { type: 'plataforma',  x: 4080, y: 330, w: 110, dx: 170, dy: -30, period: 4.2, phase: 0 },
-    { type: 'pendulo',     x: 4530, y: 190, len: 165, arc: 0.7, period: 2.8 },
-    { type: 'sopro',       x: 4560, y: 180, w: 80, h: 230 },
-    { type: 'desmorona',   x: 4650, y: 240, w: 90 },
+    // (3) gorge A: rolo no corredor, coluna quente que faz flutuar por cima
+    // do espinheiro e a bola de ferro no vão antes da chaminé. NADA de sopro
+    // dentro da própria chaminé: a subida ali é agarrando, e só.
+    { type: 'espinhorolo', x: 5150, y: 576, w: 44, range: 260, speed: 140 },
+    { type: 'sopro',       x: 5250, y: 452, w: 130, h: 144 },
+    { type: 'pendulo',     x: 5350, y: 250, len: 230, arc: 0.85, period: 3.0 },
+    { type: 'espinhorolo', x: 5870, y: 176, w: 44, range: 240, speed: 150 },
 
-    // roda-gigante escalável, colada na ilha 2: pula de cabine em cabine até
-    // o topo, onde a câmera dá um zoom-out real por alguns segundos. Puro
-    // mirante opcional — quem não quiser subir passa reto por baixo/ao lado.
+    // (3) gorge B: mesmo conjunto, um pouco mais rápido/longo
+    { type: 'espinhorolo', x: 6400, y: 576, w: 44, range: 286, speed: 161 },
+    { type: 'sopro',       x: 6500, y: 452, w: 130, h: 144 },
+    { type: 'pendulo',     x: 6600, y: 250, len: 230, arc: 0.85, period: 3.0 },
+    { type: 'espinhorolo', x: 7120, y: 176, w: 44, range: 264, speed: 173 },
+
+    // (4) platô e ilhas A: degrau que cai ao sair do platô, plataforma móvel
+    // entre as ilhas 1 e 2, bola sobre o vazio e a coluna que abre a
+    // ilha-mirante
+    { type: 'desmorona',   x: 7430, y: 250, w: 110 },
+    { type: 'plataforma',  x: 7780, y: 330, w: 110, dx: 170, dy: -30, period: 4.2, phase: 0 },
+    { type: 'pendulo',     x: 8230, y: 190, len: 165, arc: 0.7, period: 2.8 },
+    { type: 'sopro',       x: 8260, y: 180, w: 80, h: 230 },
+    { type: 'desmorona',   x: 8350, y: 240, w: 90 },
+
+    // roda-gigante escalável, colada na ilha 2 A: pula de cabine em cabine
+    // até o topo, onde a câmera dá um zoom-out real por alguns segundos.
+    // Puro mirante opcional — quem não quiser subir passa reto por baixo/ao
+    // lado. Dentro do trecho 4 dobrado, como antes.
     {
-      type: 'rodagigante', x: 4460, y: 350,
+      type: 'rodagigante', x: 8160, y: 350,
       offsets: [
         { dx: 0, dy: 0 }, { dx: -90, dy: -75 }, { dx: -10, dy: -150 },
         { dx: -90, dy: -225 }, { dx: -10, dy: -300 },
       ],
     },
 
-    // (5) desfiladeiro: elevador na fenda, para quem não quiser descer agarrado
-    { type: 'plataforma',  x: 5170, y: 300, w: 100, dx: 0, dy: 240, period: 4.4, phase: 0 },
+    // (4) platô e ilhas B: mesmo conjunto na segunda travessia
+    { type: 'desmorona',   x: 8790, y: 250, w: 110 },
+    { type: 'plataforma',  x: 9140, y: 330, w: 110, dx: 170, dy: -30, period: 4.2, phase: 0 },
+    { type: 'pendulo',     x: 9590, y: 190, len: 165, arc: 0.7, period: 2.8 },
+    { type: 'sopro',       x: 9620, y: 180, w: 80, h: 230 },
+    { type: 'desmorona',   x: 9710, y: 240, w: 90 },
 
-    // (6) reta final: a bola varre a saliência que cai sobre a poça
-    { type: 'pendulo',     x: 5970, y: 430, len: 140, arc: 0.8, period: 2.4 },
-    { type: 'desmorona',   x: 5930, y: 600, w: 110 },
+    // (5) desfiladeiros A e B: elevador em cada fenda, para quem não quiser
+    // descer agarrado
+    { type: 'plataforma',  x: 10230, y: 300, w: 100, dx: 0, dy: 240, period: 4.4, phase: 0 },
+    { type: 'plataforma',  x: 10590, y: 300, w: 100, dx: 0, dy: 240, period: 4.4, phase: 0 },
+
+    // (6) reta final A: a bola varre a saliência que cai sobre a poça
+    { type: 'pendulo',     x: 11390, y: 430, len: 140, arc: 0.8, period: 2.4 },
+    { type: 'desmorona',   x: 11350, y: 600, w: 110 },
+
+    // (6) reta final B: o mesmo, já perto da clareira do chefão
+    { type: 'pendulo',     x: 13170, y: 430, len: 140, arc: 0.8, period: 2.4 },
+    { type: 'desmorona',   x: 13130, y: 600, w: 110 },
   ];
 
   // ---------------------------------------------------------------
@@ -210,43 +303,74 @@ window.FG = window.FG || {};
   function lumiLine(x, y, n, dx) { kit.lumiLine(lumis, x, y, n, dx); }
   function lumiCol(x, y, n, dy) { kit.lumiCol(lumis, x, y, n, dy); }
   function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumis, cx, apexY, span, sag, n); }
-  // (1) tutorial
+  // (1) tutorial A + B
   lumiLine(150, 578, 4, 62);
   lumiArc(555, 460, 5, 180, 30);
   lumiLine(830, 404, 3, 34);
   lumiLine(1000, 352, 3, 34);
   lumiLine(1085, 256, 2, 36);
-  // (2) mesas e saliências
-  lumiArc(1265, 540, 4, 150, 46);
-  lumiLine(1690, 512, 3, 44);
-  lumiArc(1900, 452, 3, 110, 32);
-  lumiArc(2080, 408, 3, 120, 36);
-  lumiCol(2082, 470, 3, -46);          // dentro da coluna de ar do vão
-  lumiLine(2300, 452, 3, 44);          // sobre a mesa alta
-  // (3) gorge e chaminé escalável
-  lumiArc(2530, 552, 3, 120, 34);
-  lumiArc(2640, 540, 3, 130, 38);
-  lumiArc(2900, 552, 3, 140, 38);
-  lumiCol(3135, 496, 6, -52);          // CHAMINÉ: a escada de lumis ensina a subir agarrado
-  lumiLine(3350, 160, 4, 62);          // platô (por cima do rolo de espinhos)
-  // (4) ilhas
-  lumiArc(3800, 236, 3, 140, 38);
-  lumiArc(4180, 296, 4, 200, 46);
-  lumiArc(4600, 262, 3, 180, 42);
-  lumiCol(4600, 350, 4, -50);          // coluna que abre a ilha-mirante
-  lumiLine(4670, 88, 2, 44);
-  lumiLine(4780, 258, 3, 42);
-  // (5) desfiladeiro
-  lumiCol(5020, 556, 4, -62);          // FENDA DO PÂNTANO: a segunda escalada
-  lumiCol(5215, 270, 5, 56);           // descida do desfiladeiro: colar e escorregar
-  lumiLine(5185, 200, 2, 50);
-  lumiArc(5220, 556, 3, 100, 34);
-  // (6) reta final e clareira
-  lumiLine(5460, 578, 3, 52);
-  lumiLine(5590, 488, 3, 42);
-  lumiLine(5780, 438, 2, 40);
-  lumiArc(5970, 546, 4, 140, 42);
-  lumiLine(6090, 570, 2, 60);
+  lumiLine(1330, 578, 4, 62);
+  lumiArc(1735, 460, 5, 180, 30);
+  lumiLine(2010, 404, 3, 34);
+  lumiLine(2180, 352, 3, 34);
+  lumiLine(2265, 256, 2, 36);
+  // (2) mesas e saliências A + B
+  lumiArc(2445, 540, 4, 150, 46);
+  lumiLine(2870, 512, 3, 44);
+  lumiArc(3080, 452, 3, 110, 32);
+  lumiArc(3260, 408, 3, 120, 36);
+  lumiCol(3262, 470, 3, -46);          // dentro da coluna de ar do vão A
+  lumiLine(3480, 452, 3, 44);          // sobre a mesa alta A
+  lumiArc(3715, 540, 4, 150, 46);
+  lumiLine(4140, 512, 3, 44);
+  lumiArc(4350, 452, 3, 110, 32);
+  lumiArc(4530, 408, 3, 120, 36);
+  lumiCol(4532, 470, 3, -46);          // dentro da coluna de ar do vão B
+  lumiLine(4750, 452, 3, 44);          // sobre a mesa alta B
+  // (3) dois gorges e duas chaminés escaláveis
+  lumiArc(4980, 552, 3, 120, 34);
+  lumiArc(5090, 540, 3, 130, 38);
+  lumiArc(5350, 552, 3, 140, 38);
+  lumiCol(5585, 496, 6, -52);          // CHAMINÉ A: a escada de lumis ensina a subir agarrado
+  lumiLine(5800, 160, 4, 62);          // platô A (por cima do rolo de espinhos)
+  lumiArc(6230, 552, 3, 120, 34);
+  lumiArc(6340, 540, 3, 130, 38);
+  lumiArc(6600, 552, 3, 140, 38);
+  lumiCol(6835, 496, 6, -52);          // CHAMINÉ B
+  lumiLine(7050, 160, 4, 62);          // platô B
+  // (4) travessia dupla de ilhas
+  lumiArc(7500, 236, 3, 140, 38);
+  lumiArc(7880, 296, 4, 200, 46);
+  lumiArc(8300, 262, 3, 180, 42);
+  lumiCol(8300, 350, 4, -50);          // coluna que abre a ilha-mirante A
+  lumiLine(8370, 88, 2, 44);
+  lumiLine(8480, 258, 3, 42);
+  lumiCol(8720, 556, 4, -62);
+  lumiArc(8860, 236, 3, 140, 38);
+  lumiArc(9240, 296, 4, 200, 46);
+  lumiArc(9660, 262, 3, 180, 42);
+  lumiCol(9660, 350, 4, -50);          // coluna que abre a ilha-mirante B
+  lumiLine(9730, 88, 2, 44);
+  lumiLine(9840, 258, 3, 42);
+  // (5) dois desfiladeiros
+  lumiCol(10080, 556, 4, -62);         // FENDA DO PÂNTANO A: a escalada
+  lumiLine(10245, 200, 2, 50);
+  lumiCol(10275, 270, 5, 56);          // descida do desfiladeiro A: colar e escorregar
+  lumiArc(10280, 556, 3, 100, 34);
+  lumiLine(10605, 200, 2, 50);
+  lumiCol(10635, 270, 5, 56);          // descida do desfiladeiro B
+  lumiArc(10640, 556, 3, 100, 34);
+  // (6) reta final dobrada e clareira do chefão
+  lumiLine(10880, 578, 3, 52);
+  lumiLine(11010, 488, 3, 42);
+  lumiLine(11200, 438, 2, 40);
+  lumiArc(11390, 546, 4, 140, 42);
+  lumiLine(11510, 570, 2, 60);
+  lumiLine(12660, 578, 3, 52);
+  lumiLine(12790, 488, 3, 42);
+  lumiLine(12980, 438, 2, 40);
+  lumiArc(13170, 546, 4, 140, 42);
+  lumiLine(13290, 570, 2, 60);
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC)
   var sparks = kit.makeSparks(64);
@@ -1673,8 +1797,8 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'hugo',
-    bossTriggerX: 6350,
-    arena: { x: 6200, w: 1000 },
+    bossTriggerX: 13550,
+    arena: { x: 13400, w: 1000 },
     reset: reset,
     update: update,
     drawBack: drawBack,

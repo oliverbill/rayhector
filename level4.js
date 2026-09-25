@@ -18,7 +18,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 6950, H = 720;
+  var W = 13900, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -28,37 +28,46 @@ window.FG = window.FG || {};
   //    pedra do coliseu, com tochas encaixadas), 'h' = piso oculto (fundo da
   //    fossa de lâminas, não é desenhado).
   //
+  // FASE DOBRADA: cada trecho abaixo é ~2x mais longo E ~2x mais denso que a
+  // versão original (mais plataformas, hazards, inimigos, obstáculos e
+  // lumis), construído em geral como DUAS levas seguidas do mesmo desenho
+  // original (mesmos vãos e alturas já validados por tests/reach.js e
+  // tests/parede.js, só deslocados) — garante o mesmo "sabor" de ritmo e
+  // dificuldade, dobrado em distância e conteúdo.
+  //
   // RITMO EM 6 TRECHOS
-  //  (1) x 0..900       O VESTÍBULO: piso plano, degraus curtos, seguro —
-  //                     nenhum inimigo, nenhum perigo.
-  //  (2) x 900..1900    A ARQUIBANCADA: degraus de pedra subindo e descendo
-  //                     sobre uma fossa de lâminas de gladiador (piso oculto
-  //                     no fundo: cair custa caro, mas nunca é beco sem
-  //                     saída), com rolo de lâminas e pêndulo (flagelo).
-  //  (3) x 1900..3000   A MURALHA ESCALÁVEL: fenda de 70px entre o pilar e o
-  //                     paredão (400px de parede vertical com tochas),
-  //                     subindo até o adarve — prêmio no topo (checkpoint).
-  //  (4) x 3000..4400   A FOSSA DE LÂMINAS: travessia sobre destroços do
-  //                     piso original da arena (pedaços de pedra soltos),
-  //                     com uma plataforma-elevador ajudando o trecho mais
-  //                     largo. Piso oculto no fundo: quem cai anda tomando
-  //                     dano e sobe de volta pela margem.
-  //  (5) x 4400..5650   AS RUÍNAS DE ESTÁTUAS: escombros que desmoronam sob
-  //                     o peso, coluna de ar quente da fornalha por baixo da
-  //                     arena, e o rolo de lâminas final antes da clareira.
-  //                     Em 5110..5650 o piso vira um poço de areia movediça —
-  //                     travessia obrigatória: NENHUM sólido cruza o vão
-  //                     (qualquer parede ali viraria escada, o motor deixa
-  //                     agarrar e subir qualquer face vertical), e o vão de
-  //                     540px é largo demais para pulo duplo + planagem
-  //                     cruzarem sem tocar a areia (ver tests/reach.js — só
-  //                     fica alcançável no modo "perito", nunca no "casual").
-  //                     Só se atravessa afundando e apertando pulo rápido
-  //                     para não afundar demais (ver FG.level.quicksand e o
-  //                     tratamento em player.js/engine.js).
-  //  (6) x 5650..6950   A ARENA DO CHEFÃO: clareira plana de areia batida,
-  //                     com as últimas lâminas antes do combate contra
-  //                     Sergiola Mutante.
+  //  (1) x 0..1800      O VESTÍBULO: piso plano, duas levas de degraus
+  //                     curtos, seguro — nenhum inimigo, nenhum perigo.
+  //  (2) x 1800..3800   A ARQUIBANCADA: duas levas de degraus de pedra
+  //                     subindo e descendo sobre fossas de lâminas de
+  //                     gladiador (piso oculto no fundo: cair custa caro,
+  //                     mas nunca é beco sem saída), com rolo de lâminas e
+  //                     pêndulo em cada leva.
+  //  (3) x 3800..6000   A MURALHA ESCALÁVEL (dupla): duas fendas de 70px
+  //                     entre pilar e paredão (400px de parede vertical com
+  //                     tochas cada), subindo até o adarve — prêmio no topo
+  //                     de cada uma (checkpoints 3 e 4).
+  //  (4) x 6000..8800   A FOSSA DE LÂMINAS (dupla): duas travessias sobre
+  //                     destroços do piso original da arena, cada uma com
+  //                     sua plataforma-elevador e sopro de fornalha. Piso
+  //                     oculto no fundo: quem cai anda tomando dano e sobe
+  //                     de volta pela margem.
+  //  (5) x 8800..11300  AS RUÍNAS DE ESTÁTUAS (duas levas de escombros que
+  //                     desmoronam sob o peso) terminando no poço de areia
+  //                     movediça obrigatório, agora em 10760..11300: NENHUM
+  //                     sólido cruza o vão (qualquer parede ali viraria
+  //                     escada, o motor deixa agarrar e subir qualquer face
+  //                     vertical), e o vão de 540px continua largo demais
+  //                     para pulo duplo + planagem cruzarem sem tocar a
+  //                     areia (ver tests/reach.js — só fica alcançável no
+  //                     modo "perito", nunca no "casual"). Só se atravessa
+  //                     afundando e apertando pulo rápido para não afundar
+  //                     demais (ver FG.level.quicksand e o tratamento em
+  //                     player.js/engine.js).
+  //  (6) x 11300..13900 A ARENA DO CHEFÃO: clareira plana de areia batida,
+  //                     agora com duas levas de plataformas/lâminas/rodas
+  //                     antes do gatilho e do combate contra Sergiola
+  //                     Mutante.
   //
   // Nada de beco sem saída: da fossa da arquibancada sobe-se pela margem
   // direita (degrau curto); da fossa de lâminas do trecho 4, a parede da
@@ -68,62 +77,90 @@ window.FG = window.FG || {};
   // contínua sobe indefinidamente agarrando (~120px por salto de parede).
   // ---------------------------------------------------------------
   var solids = [
-    // ---- (1) o vestíbulo — degraus curtos de pedra, nada de perigo ----
-    S(0, 620, 900, 100, 'g'),         // [0] piso do vestíbulo
-    S(280, 580, 96, 40, 'r'),         // [1] +40
-    S(460, 536, 110, 84, 'r'),        // [2] +44
-    S(650, 488, 120, 24, 'r'),        // [3] +48 (bônus alto)
+    // ---- (1) o vestíbulo — duas levas de degraus curtos, nada de perigo ----
+    S(0, 620, 1800, 100, 'g'),        // piso do vestíbulo (leva 1 + leva 2)
+    S(280, 580, 96, 40, 'r'),         // +40
+    S(460, 536, 110, 84, 'r'),        // +44
+    S(650, 488, 120, 24, 'r'),        // +48 (bônus alto)
+    S(1180, 580, 96, 40, 'r'),        // +40 (segunda leva)
+    S(1360, 536, 110, 84, 'r'),       // +44
+    S(1550, 488, 120, 24, 'r'),       // +48 (bônus alto)
 
-    // ---- (2) a arquibancada — degraus sobre a fossa de lâminas ----
-    // O piso corre 900..1180 e só volta em 1850: entre eles é a fossa, e os
-    // degraus [5..7] são a única rota. Cada subida é ~60px (bem dentro do
-    // pulo simples), e o último degrau desce de volta ao nível do piso do
-    // outro lado — nunca mais que um pulo simples de vão.
-    S(900, 620, 280, 100, 'g'),       // [4] piso 900..1180 (checkpoint 1)
-    S(1230, 560, 150, 26, 'r'),       // [5] degrau 1 (+60)
-    S(1430, 500, 150, 26, 'r'),       // [6] degrau 2 (+60)
-    S(1630, 560, 150, 26, 'r'),       // [7] degrau 3, descendo (-60)
-    S(1230, 700, 650, 30, 'h'),       // [8] piso oculto da fossa de lâminas
-    S(1850, 620, 350, 100, 'g'),      // [9] piso 1850..2200, entrando na muralha
+    // ---- (2) a arquibancada (dupla) — degraus sobre fossas de lâminas ----
+    // Leva 1: piso 1800..2080, fossa até 2750, degraus [2130..2680] são a
+    // única rota. Leva 2: mesmo desenho, mais adiante, terminando numa
+    // pista comprida (3700..4100) que já entra na muralha.
+    S(1800, 620, 280, 100, 'g'),      // piso 1800..2080 (checkpoint 1)
+    S(2130, 560, 150, 26, 'r'),       // degrau 1 (+60)
+    S(2330, 500, 150, 26, 'r'),       // degrau 2 (+60)
+    S(2530, 560, 150, 26, 'r'),       // degrau 3, descendo (-60)
+    S(2130, 700, 620, 30, 'h'),       // piso oculto da fossa de lâminas (leva 1)
+    S(2750, 620, 280, 100, 'g'),      // piso 2750..3030, entrada da leva 2 (checkpoint 2)
+    S(3080, 560, 150, 26, 'r'),       // degrau 1 (leva 2, +60)
+    S(3280, 500, 150, 26, 'r'),       // degrau 2 (leva 2, +60)
+    S(3480, 560, 150, 26, 'r'),       // degrau 3, descendo (leva 2, -60)
+    S(3080, 700, 620, 30, 'h'),       // piso oculto da fossa de lâminas (leva 2)
+    S(3700, 620, 400, 100, 'g'),      // piso 3700..4100, entrando na muralha
 
-    // ---- (3) a muralha escalável ----
-    // O piso passa por baixo do arco do pilar (70px de vão) e morre dentro da
-    // fenda de 70px. Dali só se sai por cima: agarrar e saltar de face em
-    // face, de 620 até 220 — 400px de parede vertical contínua, com tochas
-    // encaixadas marcando o caminho.
-    S(2200, 620, 100, 100, 'g'),      // [10] base da muralha
-    S(2300, 250, 90, 370, 'c'),       // [11] pilar (arco de 70px por baixo)
-    S(2460, 220, 400, 500, 'c'),      // [12] paredão/adarve superior (checkpoint 2)
-    S(2860, 620, 140, 100, 'g'),      // [13] talude ao pé do adarve, do outro lado
+    // ---- (3) a muralha escalável (dupla) ----
+    // Duas fendas seguidas: o piso passa por baixo do arco do pilar (70px
+    // de vão) e morre dentro da fenda. Dali só se sai por cima: agarrar e
+    // saltar de face em face, de 620 até 220 — 400px de parede vertical
+    // contínua, com tochas encaixadas marcando o caminho. A segunda fenda
+    // repete o desafio logo depois de descer da primeira.
+    S(4100, 620, 100, 100, 'g'),      // base da muralha 1
+    S(4200, 250, 90, 370, 'c'),       // pilar 1 (arco de 70px por baixo)
+    S(4360, 220, 400, 500, 'c'),      // paredão/adarve superior 1 (checkpoint 3)
+    S(4760, 620, 140, 100, 'g'),      // talude ao pé do adarve 1
+    S(5200, 620, 100, 100, 'g'),      // base da muralha 2
+    S(5300, 250, 90, 370, 'c'),       // pilar 2 (arco de 70px por baixo)
+    S(5460, 220, 400, 500, 'c'),      // paredão/adarve superior 2 (checkpoint 4)
+    S(5860, 620, 140, 100, 'g'),      // talude ao pé do adarve 2
 
-    // ---- (4) a fossa de lâminas — pedaços soltos do piso da arena ----
-    // Piso oculto no fundo (3000..4400): cair custa caro, mas a margem
-    // direita [23] devolve ao caminho, e a esquerda é a muralha do trecho 3.
-    S(3000, 700, 1400, 30, 'h'),      // [14] piso oculto da fossa
-    S(3120, 560, 130, 24, 'r'),       // [15] pedaço 1
-    S(3340, 500, 120, 24, 'r'),       // [16] pedaço 2
-    S(3560, 540, 120, 24, 'r'),       // [17] pedaço 3
-    S(3780, 480, 120, 24, 'r'),       // [18] pedaço 4
-    S(4000, 540, 120, 24, 'r'),       // [19] pedaço 5
-    S(4220, 600, 120, 24, 'r'),       // [20] pedaço 6, descendo de volta ao piso
-    S(4400, 620, 200, 100, 'g'),      // [21] piso 4400..4600, saída da fossa
+    // ---- (4) a fossa de lâminas (dupla) — pedaços soltos do piso ----
+    // Piso oculto no fundo em cada leva: cair custa caro, mas a margem
+    // devolve ao caminho, e a muralha do trecho 3 fica logo atrás para
+    // escalar de volta.
+    S(6000, 700, 1400, 30, 'h'),      // piso oculto da fossa (leva 1)
+    S(6120, 560, 130, 24, 'r'),       // pedaço 1
+    S(6340, 500, 120, 24, 'r'),       // pedaço 2
+    S(6560, 540, 120, 24, 'r'),       // pedaço 3
+    S(6780, 480, 120, 24, 'r'),       // pedaço 4
+    S(7000, 540, 120, 24, 'r'),       // pedaço 5
+    S(7220, 600, 120, 24, 'r'),       // pedaço 6, descendo de volta ao piso
+    S(7400, 700, 1400, 30, 'h'),      // piso oculto da fossa (leva 2)
+    S(7520, 560, 130, 24, 'r'),       // pedaço 1
+    S(7740, 500, 120, 24, 'r'),       // pedaço 2
+    S(7960, 540, 120, 24, 'r'),       // pedaço 3
+    S(8180, 480, 120, 24, 'r'),       // pedaço 4
+    S(8400, 540, 120, 24, 'r'),       // pedaço 5
+    S(8620, 600, 120, 24, 'r'),       // pedaço 6, descendo de volta ao piso
+    S(8800, 620, 200, 100, 'g'),      // piso 8800..9000, saída da fossa
 
-    // ---- (5) as ruínas de estátuas ----
-    S(4600, 620, 300, 100, 'g'),      // [22] piso 4600..4900 (checkpoint 3)
-    S(4980, 560, 130, 26, 'r'),       // [23] base de estátua caída (+60)
-    // SEM piso nem teto em 5110..5650: é o poço de areia movediça (ver
-    // FG.level.quicksand), mesma superfície y=560 da estátua — entrada sem
-    // degrau. NENHUM sólido cruza o vão de propósito: qualquer parede ali
-    // vira escada (o motor deixa agarrar e subir QUALQUER face vertical), e
-    // um teto que cobrisse o poço inteiro só criaria um desvio por cima dele
-    // andando. O vão de 540px é largo demais para pulo duplo + planagem
-    // cruzarem sem tocar a areia (ver tests/reach.js — só alcançável no modo
-    // "perito", nunca no "casual") — a travessia real é afundar na areia.
+    // ---- (5) as ruínas de estátuas (duas levas) ----
+    S(9000, 620, 300, 100, 'g'),      // piso 9000..9300 (checkpoint 5)
+    S(9380, 560, 130, 26, 'r'),       // base de estátua caída (+60)
+    S(9600, 520, 110, 24, 'r'),       // escombro suspenso (+40)
+    S(9800, 620, 300, 100, 'g'),      // piso 9800..10100 (checkpoint 6)
+    S(10180, 560, 130, 26, 'r'),      // base de estátua caída 2 (+60)
+    S(10400, 520, 110, 24, 'r'),      // escombro suspenso 2 (+40)
+    S(10600, 560, 160, 26, 'r'),      // base de estátua final, entrada sem degrau da areia
+    // SEM piso nem teto em 10760..11300: é o poço de areia movediça (ver
+    // FG.level.quicksand), mesma superfície y=560 da última estátua —
+    // entrada sem degrau. NENHUM sólido cruza o vão de propósito: qualquer
+    // parede ali vira escada (o motor deixa agarrar e subir QUALQUER face
+    // vertical), e um teto que cobrisse o poço inteiro só criaria um desvio
+    // por cima dele andando. O vão de 540px é largo demais para pulo duplo
+    // + planagem cruzarem sem tocar a areia (ver tests/reach.js — só
+    // alcançável no modo "perito", nunca no "casual") — a travessia real é
+    // afundar na areia.
 
-    // ---- (6) a arena do chefão ----
-    S(5650, 620, 1300, 100, 'g'),     // [25] clareira de areia batida
-    S(5770, 540, 120, 24, 'r'),       // [26] (+80)
-    S(5930, 496, 110, 22, 'r'),       // [27] (+44 do anterior)
+    // ---- (6) a arena do chefão (duas levas antes do gatilho) ----
+    S(11300, 620, 2600, 100, 'g'),    // clareira de areia batida
+    S(11420, 540, 120, 24, 'r'),      // (+80)
+    S(11580, 496, 110, 22, 'r'),      // (+44 do anterior)
+    S(12720, 540, 120, 24, 'r'),      // (+80, segunda leva)
+    S(12880, 496, 110, 22, 'r'),      // (+44 do anterior, segunda leva)
   ];
 
   // ---------------------------------------------------------------
@@ -132,13 +169,18 @@ window.FG = window.FG || {};
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(1230, 674, 650, 26, 's'),   // fossa da arquibancada
-    Hz(2280, 596, 90, 24, 's'),    // base da muralha, antes de subir
-    Hz(3000, 674, 1400, 26, 's'),  // fossa de destroços do trecho 4
-    Hz(4650, 596, 100, 24, 's'),   // ruínas, antes da estátua caída
-    // (o antigo hazard aqui saiu: 5110..5650 virou o poço de areia
-    // movediça — a própria areia já é o perigo, sem lâmina por cima)
-    Hz(6000, 596, 90, 24, 's'),    // arena do chefão
+    Hz(2130, 674, 620, 26, 's'),   // fossa da arquibancada, leva 1
+    Hz(3080, 674, 620, 26, 's'),   // fossa da arquibancada, leva 2
+    Hz(4180, 596, 90, 24, 's'),    // base da muralha 1, antes de subir
+    Hz(5280, 596, 90, 24, 's'),    // base da muralha 2, antes de subir
+    Hz(6000, 674, 1400, 26, 's'),  // fossa de destroços, leva 1
+    Hz(7400, 674, 1400, 26, 's'),  // fossa de destroços, leva 2
+    Hz(9050, 596, 100, 24, 's'),   // ruínas leva 1, antes da estátua caída
+    Hz(9850, 596, 100, 24, 's'),   // ruínas leva 2, antes da estátua caída 2
+    // (o antigo hazard antes da areia saiu: 10760..11300 virou o poço de
+    // areia movediça — a própria areia já é o perigo, sem lâmina por cima)
+    Hz(11650, 596, 90, 24, 's'),   // arena do chefão, leva 1
+    Hz(12950, 596, 90, 24, 's'),   // arena do chefão, leva 2
   ];
 
   // ---------------------------------------------------------------
@@ -149,41 +191,57 @@ window.FG = window.FG || {};
   // ("mash"). Afundar mais que QUICKSAND_FAIL_DEPTH desde a entrada é falha
   // (engine.js aplica dano + respawn no checkpoint mais próximo, igual à
   // queda no vazio).
-  // O poço de 5110..5650 (trecho 5) é o único da fase: não há sólido nenhum
-  // cruzando o vão (nem piso nem teto — ver o comentário em solids, logo
-  // antes da estátua caída), e o vão de 540px é largo demais para pulo
-  // duplo + planagem cruzarem — travessia obrigatória.
+  // O poço de 10760..11300 (trecho 5) é o único da fase: não há sólido
+  // nenhum cruzando o vão (nem piso nem teto — ver o comentário em solids,
+  // logo antes da estátua caída final), e o vão de 540px (mesma largura de
+  // sempre) é largo demais para pulo duplo + planagem cruzarem — travessia
+  // obrigatória.
   // ---------------------------------------------------------------
   var quicksand = [
-    { x: 5110, y: 560, w: 540, h: 340 },
+    { x: 10760, y: 560, w: 540, h: 340 },
   ];
 
-  // 3 tochas-checkpoint (acendem quando ativadas)
+  // 6 tochas-checkpoint (acendem quando ativadas)
   var checkpoints = [
-    { x: 950, y: 620 },    // entrada da arquibancada
-    { x: 2660, y: 220 },   // topo da muralha — prêmio de escalar
-    { x: 4650, y: 620 },   // entrada das ruínas de estátuas
+    { x: 1850, y: 620 },   // entrada da arquibancada, leva 1
+    { x: 2800, y: 620 },   // entrada da arquibancada, leva 2
+    { x: 4560, y: 220 },   // topo da muralha 1 — prêmio de escalar
+    { x: 5660, y: 220 },   // topo da muralha 2 — prêmio de escalar
+    { x: 9050, y: 620 },   // entrada das ruínas de estátuas, leva 1
+    { x: 9850, y: 620 },   // entrada das ruínas de estátuas, leva 2
   ];
 
   // ---------------------------------------------------------------
-  // INIMIGOS — reusa voadeira/espinhoco/sapeca. NENHUM antes de x=900
-  // (vestíbulo limpo).
+  // INIMIGOS — reusa voadeira/espinhoco/sapeca. NENHUM antes de x=1800
+  // (vestíbulo limpo, agora com o dobro de comprimento).
   // ---------------------------------------------------------------
   var enemyDefs = [
-    { type: 'espinhoco', x: 1000, y: 594, range: 100 },
-    { type: 'voadeira',  x: 1330, y: 460, range: 130 },
-    { type: 'sapeca',    x: 1560, y: 480, range: 80 },
-    { type: 'voadeira',  x: 1900, y: 430, range: 140 },
-    { type: 'voadeira',  x: 2660, y: 130, range: 130 },   // sobre o adarve
-    { type: 'espinhoco', x: 2900, y: 594, range: 90 },
-    { type: 'voadeira',  x: 3300, y: 420, range: 170 },   // sobre a fossa
-    { type: 'voadeira',  x: 3700, y: 380, range: 160 },
-    { type: 'voadeira',  x: 4100, y: 420, range: 150 },
-    { type: 'espinhoco', x: 4460, y: 594, range: 80 },
-    { type: 'sapeca',    x: 4720, y: 588, range: 90 },
-    { type: 'voadeira',  x: 5030, y: 420, range: 130 },
-    { type: 'espinhoco', x: 5710, y: 594, range: 90 },
-    { type: 'sapeca',    x: 6050, y: 588, range: 70 },
+    { type: 'espinhoco', x: 1900, y: 594, range: 100 },
+    { type: 'voadeira',  x: 2230, y: 460, range: 130 },
+    { type: 'sapeca',    x: 2460, y: 480, range: 80 },
+    { type: 'espinhoco', x: 2850, y: 594, range: 100 },
+    { type: 'voadeira',  x: 3180, y: 460, range: 130 },
+    { type: 'sapeca',    x: 3410, y: 480, range: 80 },
+    { type: 'voadeira',  x: 3800, y: 430, range: 140 },
+    { type: 'voadeira',  x: 4560, y: 130, range: 130 },   // sobre o adarve 1
+    { type: 'voadeira',  x: 4900, y: 430, range: 140 },
+    { type: 'voadeira',  x: 5660, y: 130, range: 130 },   // sobre o adarve 2
+    { type: 'voadeira',  x: 6300, y: 420, range: 170 },   // sobre a fossa, leva 1
+    { type: 'voadeira',  x: 6700, y: 380, range: 160 },
+    { type: 'voadeira',  x: 7100, y: 420, range: 150 },
+    { type: 'voadeira',  x: 7700, y: 420, range: 170 },   // sobre a fossa, leva 2
+    { type: 'voadeira',  x: 8100, y: 380, range: 160 },
+    { type: 'voadeira',  x: 8500, y: 420, range: 150 },
+    { type: 'espinhoco', x: 8860, y: 594, range: 80 },
+    { type: 'sapeca',    x: 9120, y: 588, range: 90 },
+    { type: 'voadeira',  x: 9430, y: 420, range: 130 },
+    { type: 'espinhoco', x: 9820, y: 594, range: 80 },
+    { type: 'sapeca',    x: 10000, y: 588, range: 90 },
+    { type: 'voadeira',  x: 10310, y: 420, range: 130 },
+    { type: 'espinhoco', x: 11360, y: 594, range: 90 },
+    { type: 'sapeca',    x: 11700, y: 588, range: 70 },
+    { type: 'espinhoco', x: 12660, y: 594, range: 90 },
+    { type: 'sapeca',    x: 13000, y: 588, range: 70 },
   ];
 
   // ---------------------------------------------------------------
@@ -197,26 +255,32 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   var obstacleDefs = [
     // (2) arquibancada: flagelo varrendo o degrau do meio, roda de lâminas
-    // no último degrau
-    { type: 'pendulo',     x: 1505, y: 300, len: 190, arc: 0.85, period: 2.8 },
-    { type: 'espinhorolo', x: 1650, y: 576, w: 44, range: 110, speed: 130 },
+    // no último degrau — repetido nas duas levas
+    { type: 'pendulo',     x: 2405, y: 300, len: 190, arc: 0.85, period: 2.8 },
+    { type: 'espinhorolo', x: 2550, y: 576, w: 44, range: 110, speed: 130 },
+    { type: 'pendulo',     x: 3355, y: 300, len: 190, arc: 0.85, period: 2.8 },
+    { type: 'espinhorolo', x: 3555, y: 576, w: 44, range: 110, speed: 130 },
 
-    // (3) muralha: NADA dentro da fenda — a subida ali é agarrando, e só.
+    // (3) muralha: NADA dentro das fendas — a subida ali é agarrando, e só.
 
-    // (4) fossa de destroços: um elevador de pedra no vão mais largo, para
-    // quem não quiser saltar pedaço a pedaço, e um sopro de ar quente da
-    // fornalha por baixo da arena erguendo sobre o trecho final.
-    { type: 'plataforma', x: 3860, y: 440, w: 110, dx: 140, dy: -40, period: 4.4, phase: 0 },
-    { type: 'sopro',      x: 4150, y: 300, w: 90, h: 240 },
+    // (4) fossa de destroços: um elevador de pedra no vão mais largo de
+    // cada leva, e um sopro de ar quente da fornalha erguendo sobre o
+    // trecho final de cada uma.
+    { type: 'plataforma', x: 6860, y: 440, w: 110, dx: 140, dy: -40, period: 4.4, phase: 0 },
+    { type: 'sopro',      x: 7150, y: 300, w: 90, h: 240 },
+    { type: 'plataforma', x: 8260, y: 440, w: 110, dx: 140, dy: -40, period: 4.4, phase: 0 },
+    { type: 'sopro',      x: 8550, y: 300, w: 90, h: 240 },
 
-    // (5) ruínas: a estátua caída é instável. (o antigo rolo de lâminas em
-    // 5220 saiu: aquele piso virou o poço de areia movediça — ver
-    // FG.level.quicksand logo abaixo do array de hazards.)
-    { type: 'desmorona',   x: 5000, y: 512, w: 90 },
+    // (5) ruínas: as duas estátuas caídas são instáveis. (o antigo rolo de
+    // lâminas antes da areia saiu: aquele piso virou o poço de areia
+    // movediça — ver FG.level.quicksand logo abaixo do array de hazards.)
+    { type: 'desmorona',   x: 9400, y: 512, w: 90 },
+    { type: 'desmorona',   x: 10200, y: 512, w: 90 },
 
-    // (6) arena do chefão: última roda de lâminas antes do combate — nada
-    // dentro da própria arena, a luta é do chefão.
-    { type: 'espinhorolo', x: 5830, y: 576, w: 44, range: 120, speed: 145 },
+    // (6) arena do chefão: rodas de lâminas antes do gatilho — nada dentro
+    // da própria arena do combate, a luta é do chefão.
+    { type: 'espinhorolo', x: 11480, y: 576, w: 44, range: 120, speed: 145 },
+    { type: 'espinhorolo', x: 12780, y: 576, w: 44, range: 120, speed: 145 },
   ];
 
   // ---------------------------------------------------------------
@@ -227,37 +291,63 @@ window.FG = window.FG || {};
   function lumiLine(x, y, n, dx) { kit.lumiLine(lumis, x, y, n, dx); }
   function lumiCol(x, y, n, dy) { kit.lumiCol(lumis, x, y, n, dy); }
   function lumiArc(cx, apexY, n, span, sag) { kit.lumiArc(lumis, cx, apexY, span, sag, n); }
-  // (1) vestíbulo
+  // (1) vestíbulo — duas levas
   lumiLine(140, 578, 4, 60);
   lumiArc(520, 470, 5, 190, 34);
   lumiLine(640, 442, 3, 40);
-  // (2) arquibancada
-  lumiArc(1060, 540, 4, 180, 42);
-  lumiLine(1290, 520, 3, 44);
-  lumiLine(1490, 460, 3, 44);
-  lumiArc(1730, 540, 4, 180, 44);
-  // (3) muralha
-  lumiArc(2000, 552, 3, 130, 36);
-  lumiCol(2335, 496, 6, -52);          // A MURALHA: a escada de lumis ensina a subir agarrado
-  lumiLine(2560, 160, 4, 62);          // adarve
-  lumiArc(2960, 552, 3, 130, 36);
-  // (4) fossa de destroços — um arco por pedaço solto
-  lumiArc(3180, 460, 3, 120, 32);
-  lumiArc(3400, 400, 3, 130, 34);
-  lumiArc(3620, 440, 3, 120, 32);
-  lumiArc(3840, 380, 3, 130, 34);
-  lumiCol(4155, 570, 5, -60);          // dentro do sopro da fornalha
-  lumiArc(4060, 440, 3, 120, 32);
-  lumiArc(4280, 500, 3, 120, 32);
-  // (5) ruínas de estátuas
-  lumiLine(4650, 578, 3, 54);
-  lumiArc(5040, 460, 4, 160, 40);
-  lumiLine(5240, 578, 3, 50);
-  // (6) arena do chefão
-  lumiLine(5810, 500, 3, 44);
-  lumiLine(5970, 456, 3, 44);
-  lumiArc(6250, 546, 4, 170, 42);
-  lumiLine(6430, 570, 2, 60);
+  lumiLine(1040, 578, 4, 60);
+  lumiArc(1420, 470, 5, 190, 34);
+  lumiLine(1540, 442, 3, 40);
+  // (2) arquibancada — duas levas
+  lumiArc(1960, 540, 4, 180, 42);
+  lumiLine(2190, 520, 3, 44);
+  lumiLine(2390, 460, 3, 44);
+  lumiArc(2630, 540, 4, 180, 44);
+  lumiArc(2910, 540, 4, 180, 42);
+  lumiLine(3140, 520, 3, 44);
+  lumiLine(3340, 460, 3, 44);
+  lumiArc(3580, 540, 4, 180, 44);
+  // (3) muralha — duas levas
+  lumiArc(3900, 552, 3, 130, 36);
+  lumiCol(4235, 496, 6, -52);          // A MURALHA 1: a escada de lumis ensina a subir agarrado
+  lumiLine(4460, 160, 4, 62);          // adarve 1
+  lumiArc(4860, 552, 3, 130, 36);
+  lumiArc(5000, 552, 3, 130, 36);
+  lumiCol(5335, 496, 6, -52);          // A MURALHA 2
+  lumiLine(5560, 160, 4, 62);          // adarve 2
+  lumiArc(5960, 552, 3, 130, 36);
+  // (4) fossa de destroços — um arco por pedaço solto, duas levas
+  lumiArc(6180, 460, 3, 120, 32);
+  lumiArc(6400, 400, 3, 130, 34);
+  lumiArc(6620, 440, 3, 120, 32);
+  lumiArc(6840, 380, 3, 130, 34);
+  lumiCol(7155, 570, 5, -60);          // dentro do sopro da fornalha 1
+  lumiArc(7060, 440, 3, 120, 32);
+  lumiArc(7280, 500, 3, 120, 32);
+  lumiArc(7580, 460, 3, 120, 32);
+  lumiArc(7800, 400, 3, 130, 34);
+  lumiArc(8020, 440, 3, 120, 32);
+  lumiArc(8240, 380, 3, 130, 34);
+  lumiCol(8555, 570, 5, -60);          // dentro do sopro da fornalha 2
+  lumiArc(8460, 440, 3, 120, 32);
+  lumiArc(8680, 500, 3, 120, 32);
+  // (5) ruínas de estátuas — duas levas
+  lumiLine(9050, 578, 3, 54);
+  lumiArc(9440, 460, 4, 160, 40);
+  lumiLine(9640, 578, 3, 50);
+  lumiLine(9850, 578, 3, 54);
+  lumiArc(10240, 460, 4, 160, 40);
+  lumiLine(10440, 578, 3, 50);
+  lumiLine(10680, 578, 2, 40);         // trilha final até a beira da areia
+  // (6) arena do chefão — duas levas
+  lumiLine(11460, 500, 3, 44);
+  lumiLine(11620, 456, 3, 44);
+  lumiArc(11900, 546, 4, 170, 42);
+  lumiLine(12080, 570, 2, 60);
+  lumiLine(12760, 500, 3, 44);
+  lumiLine(12920, 456, 3, 44);
+  lumiArc(13200, 546, 4, 170, 42);
+  lumiLine(13380, 570, 2, 60);
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC).
   var sparks = kit.makeSparks(64);
@@ -974,8 +1064,8 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'sergiola',
-    bossTriggerX: 5910,
-    arena: { x: 5850, w: 1100 },
+    bossTriggerX: 12860,
+    arena: { x: 11700, w: 2200 },
     reset: reset,
     update: update,
     drawBack: drawBack,
