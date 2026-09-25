@@ -45,6 +45,11 @@ window.FG = window.FG || {};
     { id: 'right',  action: 'right',  x: 216, y: 452, r: 52, hit: 74, tipo: 'seta', dir: 1 },
     { id: 'attack', action: 'attack', x: 748, y: 462, r: 46, hit: 64, tipo: 'texto', label: 'SOCO' },
     { id: 'jump',   action: 'jump',   x: 872, y: 404, r: 62, hit: 82, tipo: 'texto', label: 'PULO' },
+    // atrações do Parque do Terror (montanha-russa, roda-gigante, cachorro-
+    // quente): fica perto do SOCO/PULO, num canto que sobra — só aparece com
+    // uso, o botão em si é sempre desenhado, mas só faz algo perto de uma
+    // atração (ver FG.obstacles.activePrompt).
+    { id: 'interact', action: 'interact', x: 748, y: 350, r: 40, hit: 58, tipo: 'texto', label: 'AÇÃO' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)

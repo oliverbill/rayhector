@@ -117,8 +117,8 @@ window.FG = window.FG || {};
     started: false,
     active: false,
     dead: false,
-    hp: 8,
-    maxHp: 8,
+    hp: 10,
+    maxHp: 10,
 
     // --- geometria (resolvida em runtime, no start/reset) ---
     homeX: 0,        // o posto dele na arena
@@ -489,7 +489,7 @@ window.FG = window.FG || {};
           p.vx = lado * 300;
         }
       } else if (this.bent <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
-        p.hurt(1, this.x - 60);
+        p.hurt(2, this.x - 60);
       }
     },
 
@@ -560,7 +560,7 @@ window.FG = window.FG || {};
         }
       } else if (!janela && ov(p, circleRect(s.x, s.y, 12))) {
         s.active = false;
-        p.hurt(1, s.x);
+        p.hurt(2, s.x);
       }
       if (s.x < a.x - 120) s.active = false;
     }
@@ -574,7 +574,7 @@ window.FG = window.FG || {};
       if (Math.random() < 0.25) {
         spawnParticle(q.x + rand(0, q.w), q.y, rand(-15, 15), rand(-60, -20), 0.3, 3, 'rgba(140,120,100,0.8)', 300);
       }
-      if (!janela && ov(p, q)) p.hurt(1, q.x + q.w / 2);
+      if (!janela && ov(p, q)) p.hurt(2, q.x + q.w / 2);
     }
 
     // chuva de pinhas/maçãs: sombra → cai → some no chão
@@ -589,7 +589,7 @@ window.FG = window.FG || {};
         f.y += f.vy * dt;
         if (!janela && ov(p, f)) {
           f.active = false;
-          p.hurt(1, f.x + f.w / 2);
+          p.hurt(2, f.x + f.w / 2);
           continue;
         }
         if (f.y + f.h >= f.groundY) {
@@ -614,7 +614,7 @@ window.FG = window.FG || {};
       }
       if (!janela && ov(p, w)) {
         w.active = false;
-        p.hurt(1, w.x + w.w / 2);
+        p.hurt(2, w.x + w.w / 2);
       }
       if (w.x + w.w < a.x - 40 || w.x > a.x + a.w + 40) w.active = false;
     }

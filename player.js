@@ -132,10 +132,31 @@ window.FG = window.FG || {};
     // corrida, pulo, gravidade e colisão. O soco continua valendo, porque
     // dependurado ainda dá para socar quem vem.
     hang: null,
+    // Passageiro de uma atração (hoje só a montanha-russa): null quando livre.
+    // Mesmo contrato do hang — enquanto não for null, é o FG.obstacles dono
+    // do objeto (ex. FG.obstacles's montanharussa) que escreve p.x/p.y todo
+    // frame, e este update só mantém soco e timers vivos.
+    ride: null,
 
     // ---------- lógica ----------
     update(dt) {
       const input = FG.input;
+
+      // ---------- passageiro de atração: mesmo tratamento do cipó ----------
+      if (this.ride) {
+        clinging = false; gliding = false;
+        this.clinging = false;
+        wallLock = 0; wallCoyote = 0; lastWallDir = 0; this.wallDir = 0;
+        jumpsUsed = 0; jumpCut = false; jumpBuffer = 0; coyoteTimer = 0;
+        this.jumpsUsed = 0; this.wallCoyote = 0;
+        this.onGround = false;
+
+        swimBlend += (0 - swimBlend) * Math.min(1, dt * 9);
+        this.updateAttack(dt, input);
+        if (this.invuln > 0) this.invuln -= dt;
+        this.updateSparks(dt, false);
+        return;
+      }
 
       // ---------- dependurado: só o soco e os timers ----------
       if (this.hang) {
@@ -433,6 +454,7 @@ window.FG = window.FG || {};
       this.invuln = 0;
       this.onGround = false;
       this.hang = null;         // nunca renascer ainda pendurado num cipó
+      this.ride = null;         // nem no meio de um passeio de atração
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; glideLeft = GLIDE_TIME; attackTimer = 0; attackCooldown = 0;

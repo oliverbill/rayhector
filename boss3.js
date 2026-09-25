@@ -121,8 +121,8 @@ window.FG = window.FG || {};
     started: false,
     active: false,
     dead: false,
-    hp: 8,
-    maxHp: 8,
+    hp: 10,
+    maxHp: 10,
 
     // --- geometria (resolvida em runtime, no start/reset) ---
     homeX: 0,        // posto da vampira (lado direito da arena)
@@ -557,7 +557,7 @@ window.FG = window.FG || {};
       // `safe`, em que ela empurra em vez de machucar: sem isso, quem acerta o
       // soco levava dano de graça só por estar onde o soco exige estar.
       if (this.curl > 0.5) {
-        if (ov(p, this.ballBox)) p.hurt(1, this.x);
+        if (ov(p, this.ballBox)) p.hurt(2, this.x);
       } else if (this.safe > 0) {
         // Levantando-se: quem acabou de socar o coração está colado no peito
         // dela. Em vez de o esmagar, ela EMPURRA — acertar o ponto fraco não
@@ -568,7 +568,7 @@ window.FG = window.FG || {};
           p.vx = lado * 300;
         }
       } else if (this.kneel <= 0.15 && ov(p, this.bodyBox)) {
-        p.hurt(1, this.x);
+        p.hurt(2, this.x);
       }
     },
 
@@ -653,7 +653,7 @@ window.FG = window.FG || {};
         burstRock(r.x, gy);
       } else if (!janela && ov(p, scratch)) {
         r.active = false;
-        p.hurt(1, r.x);
+        p.hurt(2, r.x);
         burstRock(r.x, gy);
       }
       if (r.x < a.x - 120 || r.x > a.x + a.w + 120) r.active = false;
@@ -668,7 +668,7 @@ window.FG = window.FG || {};
       if (Math.random() < 0.4) {
         spawnParticle(b.x + rand(0, b.w), b.y + b.h, rand(-20, 20), rand(-110, -50), 0.4, 3.5, '#8a1030', 0);
       }
-      if (!janela && ov(p, b)) p.hurt(1, b.x + b.w / 2);
+      if (!janela && ov(p, b)) p.hurt(2, b.x + b.w / 2);
     }
 
     // ---- fendas de energia sombria (rachadura acende, depois jorra) ----
@@ -697,7 +697,7 @@ window.FG = window.FG || {};
             0.5, 4, '#c060ff', 500);
         }
         scratch.x = j.x - j.w / 2; scratch.y = j.groundY - j.h; scratch.w = j.w; scratch.h = j.h;
-        if (!janela && j.h > 12 && ov(p, scratch)) p.hurt(1, j.x);
+        if (!janela && j.h > 12 && ov(p, scratch)) p.hurt(2, j.x);
         if (j.timer <= 0) j.active = false;
       }
     }
@@ -714,7 +714,7 @@ window.FG = window.FG || {};
         s.y += s.vy * dt;
         if (!janela && ov(p, s)) {
           s.active = false;
-          p.hurt(1, s.x + s.w / 2);
+          p.hurt(2, s.x + s.w / 2);
           continue;
         }
         if (s.y + s.h >= s.groundY) {

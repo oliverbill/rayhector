@@ -8,8 +8,8 @@ window.FG = window.FG || {};
 
   // ---------- input ----------
   const input = {
-    left: false, right: false, down: false, jump: false, attack: false,
-    jumpPressed: false, attackPressed: false,
+    left: false, right: false, down: false, jump: false, attack: false, interact: false,
+    jumpPressed: false, attackPressed: false, interactPressed: false,
   };
   FG.input = input;
 
@@ -19,11 +19,12 @@ window.FG = window.FG || {};
     down: ['ArrowDown', 'KeyS'],
     jump: ['Space', 'KeyZ', 'ArrowUp', 'KeyW'],
     attack: ['KeyX', 'KeyK'],
+    interact: ['KeyE', 'KeyF'],
   };
   const keyToAction = {};
   for (const action in KEYS) for (const code of KEYS[action]) keyToAction[code] = action;
 
-  const pressBuffer = { jump: false, attack: false };
+  const pressBuffer = { jump: false, attack: false, interact: false };
 
   // Senha do "Pular Fase" no menu de pausa: o próprio #pularSenhaInput
   // (definido mais abaixo) é a ÚNICA fonte de verdade do que foi digitado —
@@ -42,6 +43,7 @@ window.FG = window.FG || {};
     if (!input[action]) {
       if (action === 'jump') pressBuffer.jump = true;
       if (action === 'attack') pressBuffer.attack = true;
+      if (action === 'interact') pressBuffer.interact = true;
     }
     input[action] = true;
     if (engine.state === 'menu' && (action === 'jump' || action === 'attack')) startGame();
@@ -145,6 +147,11 @@ window.FG = window.FG || {};
   // ---------- engine ----------
   const engine = {
     canvas, ctx, cam: { x: 0, y: 0 },
+    // Zoom da câmera: 1 = normal. Quem pede um zoom-out (ex. o topo da roda-
+    // gigante em FG.obstacles) só escreve camZoomTarget — updateCamera faz a
+    // interpolação suave e o draw() aplica o ctx.scale.
+    camZoom: 1,
+    camZoomTarget: 1,
     state: 'menu',
     time: 0,
     lumis: 0,
@@ -227,6 +234,7 @@ window.FG = window.FG || {};
     syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
+    engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
     // chefão, bem acima do chão, e deixa a gravidade normal do jogo assentar
     // — sem isso testar um chefão exige atravessar a fase inteira toda vez.
@@ -287,7 +295,7 @@ window.FG = window.FG || {};
   function pauseGame() {
     // solta o que estava segurado: sem isto o Heitor continua andando/socando
     // um frame depois de retomar, porque o dedo/tecla nunca soltou de verdade.
-    input.left = input.right = input.down = input.jump = input.attack = false;
+    input.left = input.right = input.down = input.jump = input.attack = input.interact = false;
     engine.setState('paused');
   }
   function resumeGame() { engine.setState('playing'); }
@@ -322,6 +330,7 @@ window.FG = window.FG || {};
     syncSolids();
     FG.enemies.reset();
     arenaLocked = false;
+    engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
     FG.audio.music(FG.level.musica || 'overworld');
   }
@@ -331,6 +340,7 @@ window.FG = window.FG || {};
     engine.time += dt;
     input.jumpPressed = pressBuffer.jump; pressBuffer.jump = false;
     input.attackPressed = pressBuffer.attack; pressBuffer.attack = false;
+    input.interactPressed = pressBuffer.interact; pressBuffer.interact = false;
 
     if (engine.state === 'playing') {
       const p = FG.player;
@@ -402,6 +412,11 @@ window.FG = window.FG || {};
     const k = 1 - Math.pow(0.001, dt); // suavização independente de fps
     cam.x += (targetX - cam.x) * k;
     cam.y += (targetY - cam.y) * k;
+
+    // zoom: mesma suavização independente de fps, mais lenta pra ficar
+    // perceptível (o zoom-out do topo da roda-gigante precisa DAR pra ver)
+    const zk = 1 - Math.pow(0.02, dt);
+    engine.camZoom += (engine.camZoomTarget - engine.camZoom) * zk;
   }
 
   // ---------- draw ----------
@@ -411,6 +426,17 @@ window.FG = window.FG || {};
 
     if (engine.state === 'menu') { drawMenu(); drawTouch(); return; }
 
+    // zoom-out (roda-gigante): escala tudo em torno do centro da tela, com a
+    // câmera ainda mandando na posição — é só uma lente, o mundo continua no
+    // mesmo lugar. HUD e overlays ficam FORA disto, sempre em tamanho normal.
+    const zoom = engine.camZoom;
+    const zoomed = Math.abs(zoom - 1) > 0.001;
+    if (zoomed) {
+      ctx.save();
+      ctx.translate(VIEW_W / 2, VIEW_H / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-VIEW_W / 2, -VIEW_H / 2);
+    }
     FG.level.drawBack(ctx, cam);
     FG.level.drawSolids(ctx, cam);
     if (FG.obstacles) FG.obstacles.drawBehind(ctx, cam);
@@ -418,7 +444,12 @@ window.FG = window.FG || {};
     FG.player.draw(ctx, cam);
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
+    if (zoomed) ctx.restore();
+
     drawHUD();
+    if (engine.state === 'playing' && FG.obstacles && FG.obstacles.activePrompt) {
+      drawInteractPrompt(FG.obstacles.activePrompt.text);
+    }
 
     if (engine.state === 'dead') drawDeadOverlay();
     if (engine.state === 'fase') drawFaseCompleta();
@@ -426,6 +457,22 @@ window.FG = window.FG || {};
     if (engine.state === 'paused') drawPausedOverlay();
     if (engine.state === 'pularSenha') drawPularSenhaOverlay();
     drawTouch();
+  }
+
+  // Prompt de interação genérico ("aperte E para..."/"toque em AÇÃO para...")
+  // — reaproveita painel()/botao() e fica sempre fixo na tela (nunca sob o
+  // zoom da câmera), pertinho de baixo, pra não brigar com o HUD de cima.
+  function drawInteractPrompt(texto) {
+    const w = Math.min(560, 60 + texto.length * 11), h = 44;
+    const x = VIEW_W / 2 - w / 2, y = VIEW_H - 92;
+    ctx.save();
+    painel(x, y, w, h, 'rgba(20,10,30,0.78)', 'rgba(255,190,90,0.8)');
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe8b0';
+    ctx.font = 'bold 18px "Trebuchet MS", sans-serif';
+    ctx.fillText(botao('aperte E para ' + texto, 'toque em AÇÃO para ' + texto),
+                 x + w / 2, y + h / 2 + 6);
+    ctx.restore();
   }
 
   // Os botões de toque são desenhados por último, por cima de tudo (inclusive

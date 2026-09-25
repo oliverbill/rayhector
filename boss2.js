@@ -149,8 +149,8 @@ window.FG = window.FG || {};
     started: false,
     active: false,
     dead: false,
-    hp: 8,
-    maxHp: 8,
+    hp: 10,
+    maxHp: 10,
 
     // --- geometria (resolvida em runtime, no start/reset) ---
     homeX: 0,        // o atoleiro dela, no fundo da arena
@@ -611,7 +611,7 @@ window.FG = window.FG || {};
           p.vx = lado * 300;
         }
       } else if (this.sag <= 0.15 && (ov(p, this.headBox) || ov(p, this.bodyBox))) {
-        p.hurt(1, this.x - 100);
+        p.hurt(2, this.x - 100);
       }
     },
 
@@ -676,7 +676,7 @@ window.FG = window.FG || {};
         }
       } else if (ov(p, circleRect(s.x, s.y, 11))) {
         s.active = false;
-        p.hurt(1, s.x);
+        p.hurt(2, s.x);
       }
       if (s.x < a.x - 120) s.active = false;
     }
@@ -690,7 +690,7 @@ window.FG = window.FG || {};
       if (Math.random() < 0.35) {
         spawnParticle(q.x + rand(0, q.w), q.y + q.h, rand(-15, 15), rand(-80, -30), 0.35, 3.5, '#c6ee66', 0);
       }
-      if (ov(p, q)) p.hurt(1, q.x + q.w / 2);
+      if (ov(p, q)) p.hurt(2, q.x + q.w / 2);
     }
 
     // bolhas venenosas: marca no chão → sobe → estoura
@@ -710,7 +710,7 @@ window.FG = window.FG || {};
         }
         if (ov(p, circleRect(b.x, b.y, b.r * 0.86))) {
           b.state = 'pop'; b.timer = 0.2;
-          p.hurt(1, b.x);
+          p.hurt(2, b.x);
         } else if (b.life <= 0 || b.y < b.groundY - 300) {
           b.state = 'pop';
           b.timer = 0.2;
@@ -722,7 +722,7 @@ window.FG = window.FG || {};
         // estouro: o respingo ainda machuca por um instante
         b.timer -= dt;
         if (b.timer <= 0) { b.active = false; continue; }
-        if (ov(p, circleRect(b.x, b.y, b.r * 1.25))) p.hurt(1, b.x);
+        if (ov(p, circleRect(b.x, b.y, b.r * 1.25))) p.hurt(2, b.x);
       }
     }
 
@@ -738,7 +738,7 @@ window.FG = window.FG || {};
       }
       if (ov(p, w)) {
         w.active = false;
-        p.hurt(1, w.x + w.w / 2);
+        p.hurt(2, w.x + w.w / 2);
       }
       if (w.x + w.w < a.x - 40 || w.x > a.x + a.w + 40) w.active = false;
     }
@@ -749,7 +749,7 @@ window.FG = window.FG || {};
       _rect.y = tongue.y - TONGUE_H / 2;
       _rect.w = tongue.len;
       _rect.h = TONGUE_H;
-      if (ov(p, _rect)) p.hurt(1, tongue.x);
+      if (ov(p, _rect)) p.hurt(2, tongue.x);
     }
   }
 

@@ -151,11 +151,19 @@ window.FG = window.FG || {};
   //   espinhorolo {x,y,w,range,speed} — y = TOPO do rolo (a base fica em y+w).
   // ---------------------------------------------------------------
   var obstacleDefs = [
+    // (1) tutorial: banca de cachorro-quente — pura decoração interativa,
+    // não dá lumi, não é checkpoint. Dá pra ignorar e seguir andando.
+    { type: 'cachorroquente', x: 780, y: 620 },
+
     // (2) mesas: rolo curto, saliência que cai, coluna sobre o vão e a bola
     { type: 'espinhorolo', x: 1670, y: 512, w: 44, range: 90, speed: 110 },
     { type: 'desmorona',   x: 1870, y: 512, w: 80 },
     { type: 'sopro',       x: 2054, y: 392, w: 52, h: 130 },
     { type: 'pendulo',     x: 2350, y: 290, len: 175, arc: 0.9, period: 2.6 },
+
+    // (2) mesa base: montanha-russa — embarca, 10s de passeio ondulado sobre
+    // a própria mesa e desce um pouco à frente, na mesma plataforma segura.
+    { type: 'montanharussa', x: 1560, y: 620, railW: 70 },
 
     // (3) gorge: rolo no corredor, coluna quente que faz flutuar por cima do
     // espinheiro e a bola de ferro no vão antes da chaminé.
@@ -173,6 +181,17 @@ window.FG = window.FG || {};
     { type: 'pendulo',     x: 4530, y: 190, len: 165, arc: 0.7, period: 2.8 },
     { type: 'sopro',       x: 4560, y: 180, w: 80, h: 230 },
     { type: 'desmorona',   x: 4650, y: 240, w: 90 },
+
+    // roda-gigante escalável, colada na ilha 2: pula de cabine em cabine até
+    // o topo, onde a câmera dá um zoom-out real por alguns segundos. Puro
+    // mirante opcional — quem não quiser subir passa reto por baixo/ao lado.
+    {
+      type: 'rodagigante', x: 4460, y: 350,
+      offsets: [
+        { dx: 0, dy: 0 }, { dx: -90, dy: -75 }, { dx: -10, dy: -150 },
+        { dx: -90, dy: -225 }, { dx: -10, dy: -300 },
+      ],
+    },
 
     // (5) desfiladeiro: elevador na fenda, para quem não quiser descer agarrado
     { type: 'plataforma',  x: 5170, y: 300, w: 100, dx: 0, dy: 240, period: 4.4, phase: 0 },

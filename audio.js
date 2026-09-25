@@ -255,6 +255,28 @@ window.FG = window.FG || {};
         tone({ t: t + 1.0, dur: 1.0, vol: 0.06, type: 'triangle', freq: nf(acorde[j]), attack: 0.04 });
       }
     },
+    // três blips subindo em arpejo — embarque na montanha-russa
+    coasterGo: function (t) {
+      var arp = [64, 68, 71]; // E4 G#4 B4
+      for (var i = 0; i < arp.length; i++) {
+        tone({ t: t + i * 0.06, dur: 0.14, vol: 0.16, type: 'square', freq: nf(arp[i]),
+               filtro: { type: 'lowpass', f0: 2400 } });
+      }
+      ruido({ t: t, dur: 0.3, vol: 0.08, ftype: 'bandpass', f0: 700, f1: 1600, q: 1.2 });
+    },
+    // mastigada curta (dois "crunch" de ruído) + gole satisfeito — cachorro-quente
+    eatHotdog: function (t) {
+      ruido({ t: t, dur: 0.09, vol: 0.14, ftype: 'lowpass', f0: 1200, f1: 500, q: 0.9 });
+      ruido({ t: t + 0.12, dur: 0.09, vol: 0.14, ftype: 'lowpass', f0: 1200, f1: 500, q: 0.9 });
+      tone({ t: t + 0.24, dur: 0.16, vol: 0.12, type: 'sine', freq: 260, freqEnd: 340 });
+    },
+    // acorde maior sustentado e brilhante — chegou ao topo da roda-gigante
+    ferrisTopo: function (t) {
+      var acorde = [79, 84, 88]; // G5 C6 E6
+      for (var i = 0; i < acorde.length; i++) {
+        tone({ t: t, dur: 1.1, vol: 0.1, type: 'triangle', freq: nf(acorde[i]), attack: 0.06 });
+      }
+    },
     // blip de menu
     select: function (t) {
       tone({ t: t, dur: 0.09, vol: 0.16, type: 'square', freq: 660, freqEnd: 880,

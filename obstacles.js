@@ -72,6 +72,21 @@ window.FG = window.FG || {};
   var BRASA_MAX = 30;        // brasas simultâneas por zona (pool fixa)
   var BRASA_GRAV = 900;      // brasa é leve: cai mais devagar que o player
 
+  // --- atrações do Parque do Terror (cosméticas: não dão lumi, não são
+  // checkpoint, não afetam a progressão — só uma pausa opcional) ----------
+  var HOTDOG_RANGE = 40;      // alcance horizontal de interação (px além da largura da banca)
+  var HOTDOG_EAT_TIME = 1.15; // duração da "mordida"
+  var HOTDOG_COOLDOWN = 0.5;  // carência depois de comer, antes de reabrir o prompt
+
+  var COASTER_RANGE = 36;     // alcance horizontal de interação
+  var COASTER_RIDE_TIME = 10; // segundos do passeio (pedido)
+  var COASTER_AMP = 78;       // amplitude vertical da ondulação do trilho
+  var COASTER_LOOPS = 3;      // quantos sobe-e-desce em 10s
+  var COASTER_COOLDOWN = 0.8; // carência ao desembarcar antes de poder reembarcar
+
+  var FERRIS_ZOOM_LEVEL = 0.24; // câmera nesta escala no topo (menor = mais afastada)
+  var FERRIS_ZOOM_HOLD = 3.6;   // segundos que o zoom-out fica ligado
+
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
   // Reuso total: spawnParticle nunca cria objeto.
@@ -493,6 +508,65 @@ window.FG = window.FG || {};
     return o;
   }
 
+  // 10) cachorroquente {x, y} — (x,y) = canto do chão onde a banca fica.
+  // Puramente cosmético: aproxima, aperta INTERAGIR, "come" um instante e
+  // segue andando. Nunca dá lumi nem vira checkpoint.
+  function makeCachorroquente(d) {
+    var w = d.w || 74, h = d.h || 58;
+    return {
+      type: 'cachorroquente',
+      x: d.x, y: d.y, w: w, h: h,
+      eating: false, eatTimer: 0, cool: 0,
+      steam: [], // fumacinha determinística saindo da grelha
+    };
+  }
+
+  // 11) montanharussa {x, y, w, h, railW} — (x,y) = ponto de embarque, no
+  // chão. Ao interagir, vira p.ride por COASTER_RIDE_TIME segundos, seguindo
+  // uma trajetória ondulada (sub-loops) e devolvendo o jogador um pouco à
+  // frente do embarque, num ponto seguro.
+  function makeMontanhaRussa(d) {
+    var w = d.w || 64, h = d.h || 46;
+    var railW = d.railW != null ? d.railW : 180;
+    return {
+      type: 'montanharussa',
+      x: d.x, y: d.y, w: w, h: h,
+      railW: railW,
+      exitX: d.exitX != null ? d.exitX : d.x + railW,
+      exitY: d.exitY != null ? d.exitY : d.y,
+      cool: 0, t: 0,
+    };
+  }
+
+  // 12) rodagigante {x, y, cabins?} — (x,y) = cabine da base. Cabines fixas
+  // dispostas em espiral ascendente (degraus, não giram — mais fácil e mais
+  // justo de escalar). A última é o "topo": pisar nela dispara o zoom-out.
+  function makeRodagigante(d) {
+    var cabW = d.cabW || 62, cabH = d.cabH || 18;
+    // deslocamentos relativos padrão: zigue-zague subindo (ver comentário no
+    // topo do arquivo sobre o posicionamento na fase). d.offsets sobrescreve.
+    var offsets = d.offsets || [
+      { dx: 0, dy: 0 },
+      { dx: -80, dy: -75 },
+      { dx: 80, dy: -150 },
+      { dx: -80, dy: -225 },
+      { dx: 80, dy: -300 },
+    ];
+    var cabins = [];
+    for (var i = 0; i < offsets.length; i++) {
+      var off = offsets[i];
+      cabins.push({ x: d.x + off.dx, y: d.y + off.dy, w: cabW, h: cabH });
+    }
+    return {
+      type: 'rodagigante',
+      x: d.x, y: d.y, cabins: cabins,
+      zooming: false, zoomTimer: 0,
+      // eixo/roda decorativa: centro aproximado do círculo que os degraus sugerem
+      hubX: d.x + (offsets[offsets.length - 1].dx) * 0.5,
+      hubY: d.y + (offsets[offsets.length - 1].dy) * 0.5,
+    };
+  }
+
   // ==================================================================
   // Auxiliares de runtime
   // ==================================================================
@@ -879,6 +953,103 @@ window.FG = window.FG || {};
         continue;
       }
       if (e.life <= 0) e.active = false;
+    }
+  }
+
+  // --- cachorro-quente -------------------------------------------------
+  // Puramente cosmético: aproxima, INTERAGIR, come, segue andando. Nunca
+  // trava o controle do player — só o timer, para a animação de mordida.
+  function updateCachorroquente(o, dt, p) {
+    if (o.cool > 0) o.cool -= dt;
+    if (o.eating) {
+      o.eatTimer -= dt;
+      if (o.eatTimer <= 0) { o.eating = false; o.cool = HOTDOG_COOLDOWN; }
+      return;
+    }
+    if (!p || p.hang || p.ride) return;
+    var cx = p.x + p.w / 2, standCx = o.x + o.w / 2;
+    var near = p.onGround &&
+      Math.abs(cx - standCx) < (HOTDOG_RANGE + o.w / 2) &&
+      Math.abs((p.y + p.h) - o.y) < 60;
+    if (near && o.cool <= 0) {
+      obstacles.activePrompt = { text: 'pedir um cachorro-quente' };
+      if (FG.input && FG.input.interactPressed) {
+        o.eating = true;
+        o.eatTimer = HOTDOG_EAT_TIME;
+        if (FG.audio) FG.audio.sfx('eatHotdog');
+      }
+    }
+  }
+
+  // --- montanha-russa ----------------------------------------------------
+  // Trajetória ondulada em coordenadas absolutas, u em 0..1. Começa e termina
+  // na mesma altura (o embarque/desembarque não pode nascer dentro do chão).
+  var _coasterPt = { x: 0, y: 0 }; // reuso: só existe UM passeio ativo por vez
+  function coasterPoint(o, u) {
+    var x = o.x + o.railW * u;
+    var wave = 0.5 - 0.5 * Math.cos(u * Math.PI * 2 * COASTER_LOOPS);
+    var y = o.y - 46 - COASTER_AMP * wave;
+    _coasterPt.x = x; _coasterPt.y = y;
+    return _coasterPt;
+  }
+
+  function updateMontanhaRussa(o, dt, p) {
+    if (o.cool > 0) o.cool -= dt;
+    var riding = !!(p && p.ride === o);
+
+    if (riding) {
+      o.t += dt / COASTER_RIDE_TIME;
+      if (o.t >= 1) {
+        p.ride = null;
+        p.x = o.exitX - p.w / 2;
+        p.y = o.exitY - p.h;
+        p.vx = 0; p.vy = 0;
+        o.cool = COASTER_COOLDOWN;
+        if (FG.audio) FG.audio.sfx('select');
+        return;
+      }
+      var pt = coasterPoint(o, o.t);
+      p.x = pt.x - p.w / 2;
+      p.y = pt.y - p.h / 2;
+      p.vx = 0; p.vy = 0;
+      return;
+    }
+
+    if (!p || p.hang || p.ride) return;
+    var cx = p.x + p.w / 2, standCx = o.x + o.w / 2;
+    var near = p.onGround &&
+      Math.abs(cx - standCx) < (COASTER_RANGE + o.w / 2) &&
+      Math.abs((p.y + p.h) - o.y) < 60;
+    if (near && o.cool <= 0) {
+      obstacles.activePrompt = { text: 'embarcar no carrinho' };
+      if (FG.input && FG.input.interactPressed) {
+        o.t = 0;
+        p.ride = o;
+        if (FG.audio) FG.audio.sfx('coasterGo');
+      }
+    }
+  }
+
+  // --- roda-gigante escalável ---------------------------------------------
+  // As cabines são degraus sólidos empilhados em espiral (entram em movers,
+  // como uma plataforma parada). Pisar na última — o "topo" — dá um zoom-out
+  // real na câmera por alguns segundos; depois volta sozinho ao normal.
+  function updateRodagigante(o, dt, p) {
+    var topo = o.cabins[o.cabins.length - 1];
+    var atTopo = !!(p && playerOnTop(topo, p));
+    if (atTopo && !o.zooming) {
+      o.zooming = true;
+      o.zoomTimer = FERRIS_ZOOM_HOLD;
+      if (FG.engine) FG.engine.camZoomTarget = FERRIS_ZOOM_LEVEL;
+      if (FG.audio) FG.audio.sfx('ferrisTopo');
+    }
+    if (!atTopo) o.zooming = false;
+    if (o.zoomTimer > 0) {
+      o.zoomTimer -= dt;
+      if (o.zoomTimer <= 0) {
+        o.zoomTimer = 0;
+        if (FG.engine) FG.engine.camZoomTarget = 1;
+      }
     }
   }
 
@@ -1653,6 +1824,200 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- cachorro-quente: banca de lona listrada, carrinho + guarda-sol -----
+  function drawCachorroquente(ctx, o, cam, t) {
+    if (!visible(cam, o.x - 10, o.y - o.h - 60, o.w + 20, o.h + 70)) return;
+    var sx = o.x - cam.x, sy = o.y - cam.y;
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // carrinho: caixa roxa sombria com friso verde-doentio
+    ctx.fillStyle = '#3a2050';
+    ctx.fillRect(0, -o.h * 0.55, o.w, o.h * 0.55);
+    ctx.fillStyle = '#241436';
+    ctx.fillRect(0, -o.h * 0.2, o.w, o.h * 0.2);
+    ctx.strokeStyle = '#7fd94a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(2, -o.h * 0.55 + 2, o.w - 4, o.h * 0.55 - 4);
+    // rodinhas
+    ctx.fillStyle = '#161018';
+    ctx.beginPath(); ctx.arc(o.w * 0.18, 4, 7, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(o.w * 0.82, 4, 7, 0, TAU); ctx.fill();
+
+    // guarda-sol listrado roxo/vermelho, tremulando de leve
+    var poleX = o.w * 0.5;
+    ctx.strokeStyle = '#5a4030';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(poleX, -o.h * 0.55); ctx.lineTo(poleX, -o.h - 16); ctx.stroke();
+    var sway = Math.sin(t * 1.6) * 3;
+    ctx.save();
+    ctx.translate(poleX, -o.h - 16);
+    ctx.rotate(sway * 0.02);
+    var segs = 8, r = 32;
+    for (var i = 0; i < segs; i++) {
+      ctx.fillStyle = (i % 2 === 0) ? '#a02030' : '#3a2050';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r, Math.PI + (i / segs) * Math.PI, Math.PI + ((i + 1) / segs) * Math.PI);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // fumacinha da grelha (não come): sobe e dissolve
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = 'rgba(200,220,190,0.6)';
+    ctx.lineWidth = 2;
+    for (var k = 0; k < 3; k++) {
+      var ph = (t * 0.6 + k * 0.9) % 1;
+      var fx = o.w * (0.3 + k * 0.22) + Math.sin(t * 2 + k) * 3;
+      var fy = -o.h * 0.55 - ph * 30;
+      ctx.globalAlpha = 0.5 * (1 - ph);
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(fx + 4, fy - 8, fx - 2, fy - 16);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Fagulho "comendo": balão simples com um cachorro-quente mordido, só
+    // enquanto o.eating — cosmético, some sozinho quando o timer zera.
+    if (o.eating) {
+      var k2 = o.eatTimer / HOTDOG_EAT_TIME;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k2 * 3);
+      ctx.translate(o.w * 0.5, -o.h - 46 - Math.sin(t * 10) * 2);
+      ctx.fillStyle = 'rgba(20,10,30,0.85)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-24, -14, 48, 24, 8); else ctx.rect(-24, -14, 48, 24);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,190,90,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+      // pão + salsicha bem simples
+      ctx.fillStyle = '#d99a55';
+      ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#a03020';
+      ctx.beginPath(); ctx.ellipse(0, -1, 12, 3.2, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // --- montanha-russa: trilho ondulado (decorativo) + carrinho -----------
+  function drawMontanhaRussaFundo(ctx, o, cam, t) {
+    if (!visible(cam, o.x - 20, o.y - COASTER_AMP - 80, o.railW + 40, COASTER_AMP + 100)) return;
+    ctx.save();
+    ctx.translate(-cam.x, -cam.y);
+
+    // trilho: amostra a mesma curva do passeio, desenhada como referência
+    ctx.strokeStyle = grad.trilho || '#33373e';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    var N = 40;
+    for (var i = 0; i <= N; i++) {
+      var u = i / N;
+      var pt = coasterPoint(o, u);
+      if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // pilares de sustentação a cada ~90px
+    ctx.strokeStyle = '#22232a';
+    ctx.lineWidth = 5;
+    for (var u2 = 0; u2 <= 1.001; u2 += 90 / o.railW) {
+      var pp = coasterPoint(o, Math.min(1, u2));
+      ctx.beginPath();
+      ctx.moveTo(pp.x, pp.y + 6);
+      ctx.lineTo(pp.x, o.y + 20);
+      ctx.stroke();
+    }
+
+    // estação de embarque: plataforma pequena roxa sob o ponto de partida
+    ctx.fillStyle = '#3a2050';
+    ctx.fillRect(o.x - o.w * 0.3, o.y - 8, o.w * 1.3, 10);
+    ctx.strokeStyle = '#7fd94a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(o.x - o.w * 0.3, o.y - 8, o.w * 1.3, 10);
+
+    ctx.restore();
+  }
+
+  // Carrinho da montanha-russa: só aparece durante o passeio (camada da
+  // frente, para passar por cima do resto do cenário como um trem de verdade)
+  function drawMontanhaRussaFrente(ctx, o, cam, p) {
+    if (!p || p.ride !== o) return;
+    var pt = coasterPoint(o, o.t);
+    var sx = pt.x - cam.x, sy = pt.y - cam.y;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = '#a02030';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-20, -6, 40, 16, 5); else ctx.rect(-20, -6, 40, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd870'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#241436';
+    ctx.beginPath(); ctx.arc(-12, 10, 5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(12, 10, 5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  // --- roda-gigante escalável: cabines-degrau + eixo/aros decorativos ----
+  function drawRodagigante(ctx, o, cam, t) {
+    ctx.save();
+    ctx.translate(-cam.x, -cam.y);
+
+    // aros decorativos ligando as cabines ao "eixo" sugerido — dá a leitura
+    // de roda-gigante mesmo sem girar de verdade
+    ctx.strokeStyle = 'rgba(160,90,200,0.35)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < o.cabins.length; i++) {
+      var c = o.cabins[i];
+      ctx.moveTo(o.hubX, o.hubY);
+      ctx.lineTo(c.x + c.w / 2, c.y + c.h / 2);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,216,112,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(o.hubX, o.hubY, 18, 0, TAU);
+    ctx.stroke();
+
+    for (var k = 0; k < o.cabins.length; k++) {
+      var cab = o.cabins[k];
+      if (!visible(cam, cab.x, cab.y - 20, cab.w, cab.h + 30)) continue;
+      var topo = k === o.cabins.length - 1;
+      ctx.save();
+      ctx.translate(cab.x, cab.y);
+      // gôndola: corpo arredondado + friso
+      ctx.fillStyle = topo ? '#5a2f66' : '#3a2050';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, 0, cab.w, cab.h, 6); else ctx.rect(0, 0, cab.w, cab.h);
+      ctx.fill();
+      ctx.strokeStyle = topo ? '#ffd870' : '#7fd94a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // vidraça
+      ctx.fillStyle = 'rgba(160,220,255,0.35)';
+      ctx.fillRect(cab.w * 0.15, cab.h * 0.15, cab.w * 0.7, cab.h * 0.4);
+      // lanterna pulsante no topo
+      if (topo) {
+        var pulse = 0.5 + 0.5 * Math.sin(t * 3);
+        ctx.shadowColor = '#ffd870';
+        ctx.shadowBlur = 10 + pulse * 8;
+        ctx.fillStyle = '#fff0b0';
+        ctx.beginPath();
+        ctx.arc(cab.w / 2, -6, 4 + pulse * 1.5, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // API pública — FG.obstacles
   // ==================================================================
@@ -1662,6 +2027,11 @@ window.FG = window.FG || {};
   var obstacles = {
     list: list,
     movers: movers,
+    // Prompt de interação ATIVO neste frame (ou null): { text }. Só um por
+    // vez — o engine lê isto no draw() para desenhar "aperte E para ...".
+    // Puramente informativo: quem decide se INTERAGIR faz algo é o próprio
+    // update do tipo (cachorroquente/montanharussa), lendo input.interactPressed.
+    activePrompt: null,
 
     // Repovoa tudo a partir de FG.level.obstacleDefs. Seguro de chamar
     // várias vezes e com a lista vazia ou ausente (o level pode ainda não
@@ -1669,12 +2039,15 @@ window.FG = window.FG || {};
     reset: function () {
       list.length = 0;
       movers.length = 0;
+      obstacles.activePrompt = null;
       for (var i = 0; i < MAXP; i++) particles[i].active = false;
       pNext = 0;
       // As cordas antigas morrem aqui; se o player ficasse pendurado numa
       // delas, o update dele continuaria desligado para sempre e ninguém o
-      // soltaria. Repovoar é sempre soltar.
-      if (FG.player) FG.player.hang = null;
+      // soltaria. Repovoar é sempre soltar. O mesmo vale pro passeio da
+      // montanha-russa: sem isso o player renasceria "montado" num carrinho
+      // que não existe mais.
+      if (FG.player) { FG.player.hang = null; FG.player.ride = null; }
 
       var lvl = FG.level;
       var defs = (lvl && lvl.obstacleDefs) || [];
@@ -1690,6 +2063,9 @@ window.FG = window.FG || {};
         else if (d.type === 'disco') list.push(makeDisco(d));
         else if (d.type === 'tronco') list.push(makeTronco(d));
         else if (d.type === 'brasa') list.push(makeBrasa(d));
+        else if (d.type === 'cachorroquente') list.push(makeCachorroquente(d));
+        else if (d.type === 'montanharussa') list.push(makeMontanhaRussa(d));
+        else if (d.type === 'rodagigante') list.push(makeRodagigante(d));
       }
     },
 
@@ -1701,6 +2077,7 @@ window.FG = window.FG || {};
       // `movers` é reconstruído por frame reaproveitando os MESMOS retângulos
       // (length=0 + push de objetos já existentes: zero alocação).
       movers.length = 0;
+      obstacles.activePrompt = null;
 
       for (var i = 0; i < list.length; i++) {
         var o = list[i];
@@ -1730,6 +2107,13 @@ window.FG = window.FG || {};
           movers.push(o.rect);
         } else if (o.type === 'brasa') {
           updateBrasa(o, dt, p, t);
+        } else if (o.type === 'cachorroquente') {
+          updateCachorroquente(o, dt, p);   // banca não é sólida
+        } else if (o.type === 'montanharussa') {
+          updateMontanhaRussa(o, dt, p);    // ponto de embarque não é sólido
+        } else if (o.type === 'rodagigante') {
+          updateRodagigante(o, dt, p);
+          for (var c = 0; c < o.cabins.length; c++) movers.push(o.cabins[c]);
         }
       }
 
@@ -1752,6 +2136,9 @@ window.FG = window.FG || {};
         else if (o.type === 'disco') drawDisco(ctx, o, cam, t);
         else if (o.type === 'tronco') drawTronco(ctx, o, cam, t);
         else if (o.type === 'brasa') drawBrasaFundo(ctx, o, cam, t);
+        else if (o.type === 'cachorroquente') drawCachorroquente(ctx, o, cam, t);
+        else if (o.type === 'montanharussa') drawMontanhaRussaFundo(ctx, o, cam, t);
+        else if (o.type === 'rodagigante') drawRodagigante(ctx, o, cam, t);
       }
     },
 
@@ -1760,12 +2147,14 @@ window.FG = window.FG || {};
       if (!FG.engine) return;
       buildGrads(ctx);
       var t = FG.engine.time;
+      var p = FG.player;
       for (var i = 0; i < list.length; i++) {
         var o = list[i];
         if (o.type === 'sopro') drawSoproFrente(ctx, o, cam, t);
         else if (o.type === 'pendulo') drawPenduloFrente(ctx, o, cam, t);
         else if (o.type === 'espinhorolo') drawEspinhorolo(ctx, o, cam, t);
         else if (o.type === 'brasa') drawBrasaFrente(ctx, o, cam, t);
+        else if (o.type === 'montanharussa') drawMontanhaRussaFrente(ctx, o, cam, p);
       }
       drawParticles(ctx, cam);
     },
