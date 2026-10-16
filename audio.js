@@ -69,15 +69,80 @@ window.FG = window.FG || {};
     } catch (e) { /* áudio quebrado não derruba o jogo */ }
   }
 
-  // Voltar do segundo plano: o iOS suspende o contexto sem avisar ninguém, e
-  // sem isto o jogo continua rodando mudo até o próximo gesto do usuário.
+  // ------------------------------------------------------- ciclo de vida --
+  // SAIR DE CENA TEM DE CALAR O JOGO. Isto não é zelo: a categoria
+  // 'playback' que o init pede (para o botão de silencioso do iPhone não
+  // calar o jogo) é a MESMA que autoriza áudio em segundo plano. Instalado
+  // como PWA no iPad, fechar/minimizar o jogo deixava a trilha tocando
+  // sozinha, sem nenhuma tela para pará-la — porque para o iOS aquilo era um
+  // tocador de música legítimo. A categoria fica (o silencioso é problema
+  // real); quem passa a responder pelo silêncio é este bloco.
+  //
+  // `dormir()` guarda a música que tocava, mata o scheduler e SUSPENDE o
+  // contexto — é o suspend que cala o alto-falante de verdade; parar o
+  // scheduler sozinho deixaria soar o que já estava agendado à frente
+  // (o lookahead) e manteria a sessão de áudio viva.
+  var dormindo = null;   // nome da música interrompida pela saída de cena
+
+  function dormir() {
+    try {
+      if (!actx) return;
+      if (dormindo === null) dormindo = mus.name || '';
+      pararMusica();
+      if (actx.state === 'running' && actx.suspend) actx.suspend();
+    } catch (e) { /* calar nunca pode derrubar o jogo */ }
+  }
+
+  function acordar() {
+    try {
+      init();                       // recria/resume (o resume é assíncrono)
+      var nome = dormindo;
+      dormindo = null;
+      if (nome) music(nome);        // retoma a trilha de onde o jogo está
+    } catch (e) { /* sem áudio, o jogo segue mudo */ }
+  }
+
+  // Encerrar de vez: além de calar, devolve o contexto ao sistema. Usado
+  // quando a página está mesmo a ir embora (pagehide não-persistido). Se o
+  // jogador voltar, o init() recria tudo no primeiro gesto.
+  function encerrar() {
+    dormir();
+    var nome = dormindo;        // dormir() já o guardou
+    try {
+      if (actx && actx.close) actx.close();
+    } catch (e) { /* idem */ }
+    actx = null; master = null; comp = null; noiseBuf = null;
+    // Se a página afinal voltar (o iOS dispara pagehide em casos que não
+    // matam a página), o acordar() recria o contexto e retoma ESTA trilha —
+    // sem isto o jogador voltava para um jogo mudo até trocar de tela.
+    dormindo = nome;
+  }
+
   try {
     if (document.addEventListener) {
       document.addEventListener('visibilitychange', function () {
-        if (!document.hidden) init();
+        if (document.hidden) dormir();
+        else acordar();
       });
+      // 'freeze' (Page Lifecycle): o sistema vai congelar a aba/PWA. Último
+      // instante útil para largar o áudio.
+      document.addEventListener('freeze', dormir);
+      document.addEventListener('resume', acordar);
     }
-  } catch (e) { /* sem document utilizável: segue sem o reparo automático */ }
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      // pagehide é o que o iOS dispara ao fechar ou trocar de app com o PWA;
+      // persisted=true significa que a página foi para o cache de retrocesso
+      // e pode voltar inteira — aí basta dormir, não destruir.
+      window.addEventListener('pagehide', function (e) {
+        if (e && e.persisted) dormir(); else encerrar();
+      });
+      window.addEventListener('pageshow', acordar);
+      // rede de segurança para o PWA em tela cheia, onde há casos em que o
+      // visibilitychange não chega: perder o foco também cala.
+      window.addEventListener('blur', dormir);
+      window.addEventListener('focus', acordar);
+    }
+  } catch (e) { /* sem document/window utilizáveis: segue sem o reparo */ }
 
   // Pronto para tocar AGORA (sfx exige isso; a música tolera 'suspended'
   // porque o resume() do init é assíncrono e o engine pede música no mesmo

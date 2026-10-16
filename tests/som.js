@@ -17,7 +17,7 @@ const DIR = path.join(__dirname, '..');
 function falha(msg) { console.error('FALHOU: ' + msg); process.exit(1); }
 
 // ---------- WebAudio de mentira, com contadores ----------
-const conta = { resume: 0, osc: 0, fontes: 0, ganhos: 0 };
+const conta = { resume: 0, osc: 0, fontes: 0, ganhos: 0, suspend: 0, close: 0 };
 function param(v) {
   const p = {
     value: v,
@@ -41,6 +41,16 @@ function FakeCtx() {
 FakeCtx.prototype.resume = function () {
   conta.resume++;
   this.state = 'running';
+  return { then() {}, catch() {} };
+};
+FakeCtx.prototype.suspend = function () {
+  conta.suspend++;
+  this.state = 'suspended';
+  return { then() {}, catch() {} };
+};
+FakeCtx.prototype.close = function () {
+  conta.close++;
+  this.state = 'closed';
   return { then() {}, catch() {} };
 };
 FakeCtx.prototype.createGain = function () { conta.ganhos++; return no({ gain: param(1) }); };
@@ -202,11 +212,40 @@ FG.engine.gesture();                      // o jogador toca a tela de novo
 if (conta.resume <= resumeAntes) falha("gesto não tentou resume() num contexto 'interrupted'");
 if (!FG.audio.ativo()) falha("o jogo ficou mudo depois de uma interrupção do iOS");
 
-// ---------- 7: voltar do segundo plano religa sozinho ----------
-ctxAtual().state = 'suspended';
+// ---------- 7: SAIR DE CENA CALA O JOGO ----------
+// A categoria 'playback' do teste 3 é a mesma que autoriza áudio em segundo
+// plano: instalado como PWA, fechar o jogo deixava a trilha tocando sozinha,
+// sem tela nenhuma para a parar. Esconder a página tem de suspender o
+// contexto (é o suspend que cala o alto-falante) e parar de agendar — parar
+// só o scheduler ainda deixaria soar o lookahead já agendado.
+const suspAntes = conta.suspend;
+doc.hidden = true;
+for (const fn of docL.visibilitychange || []) fn({});
+if (conta.suspend <= suspAntes) falha('ir para segundo plano não suspendeu o contexto');
+if (FG.audio.ativo()) falha('o áudio continuou ativo com o jogo em segundo plano');
+const oscEscondido = conta.osc;
+tocarUmPouco(2);
+if (conta.osc > oscEscondido) falha('a trilha continuou agendando notas com o jogo escondido');
+
+// ---------- 7b: voltar do segundo plano religa sozinho, e com música ----------
 doc.hidden = false;
 for (const fn of docL.visibilitychange || []) fn({});
 if (!FG.audio.ativo()) falha('voltar do segundo plano não religou o áudio');
+const oscVoltou = conta.osc;
+tocarUmPouco(2);
+if (conta.osc <= oscVoltou) falha('a trilha não voltou a tocar depois do segundo plano');
+
+// ---------- 7c: fechar de vez devolve o contexto ao sistema ----------
+// pagehide sem bfcache = a página está mesmo a ir embora. O contexto tem de
+// ser fechado, não só suspenso: é o que larga a sessão de áudio do iOS.
+const closeAntes = conta.close;
+for (const fn of winL.pagehide || []) fn({ persisted: false });
+if (conta.close <= closeAntes) falha('fechar a página não fechou o AudioContext');
+if (FG.audio.ativo()) falha('o áudio continuou ativo depois de a página ir embora');
+// e se a página afinal voltar (o iOS dispara pagehide sem matar a página),
+// o pageshow tem de reconstruir tudo do zero E retomar a trilha
+for (const fn of winL.pageshow || []) fn({});
+if (!FG.audio.ativo()) falha('o áudio não voltou a nascer depois de a página ter sido fechada');
 
 // ---------- 8: a música continua andando depois de tudo isso ----------
 const oscFim = conta.osc;
@@ -215,6 +254,7 @@ if (conta.osc <= oscFim) falha('a trilha parou de agendar depois da interrupçã
 
 global.setInterval = setIntervalReal;
 console.log('SOM OK — gesto destrava, categoria playback, trilha e efeitos soam, ' +
-            'interrupção e segundo plano se recuperam (%d osciladores, %d fontes)',
-            conta.osc, conta.fontes);
+            'interrupção e segundo plano se recuperam, sair de cena cala e fechar ' +
+            'encerra (%d osciladores, %d fontes, %d suspend, %d close)',
+            conta.osc, conta.fontes, conta.suspend, conta.close);
 process.exit(0);
