@@ -128,8 +128,11 @@ ser o último.
 - `checkpoints` — array `{x,y}` (3 ao longo do nível)
 - `lumis` — gerado internamente; coleta é do level: no `update`, se o player
   encosta, some com brilho, `FG.engine.addLumi()` + `FG.audio.sfx('lumi')`.
-- `enemyDefs` — array `{type:'espinhoco'|'voadeira'|'sapeca', x, y, range?}`
-  (~12 inimigos espalhados)
+- `enemyDefs` — array `{type, x, y, range?}` (~12 inimigos espalhados). Tipos
+  comuns: `espinhoco`, `voadeira`, `sapeca` (bosque) e os próprios de cada
+  fase depois dela — entre eles `aranha` (caverna: ancorada no teto por um fio,
+  desce em quem passa por baixo; `y` é a altura da ancoragem) e `morcego`
+  (caverna: dorme no teto e acorda em voo perseguindo o jogador).
 - `obstacleDefs` — array com os obstáculos dinâmicos (ver `FG.obstacles`).
 - **Sem cogumelos-plataforma**: eram repetitivos demais. O relevo agora se faz
   de penhascos escaláveis (paredes altas), patamares em vários níveis, bocas de
@@ -175,6 +178,16 @@ Tipos em `FG.level.obstacleDefs` (`{type, x, y, ...}`):
    a bola machuca (1 de dano) e a **corrente é sólida** — dá para pousar nela.
 5. `espinhorolo` — rolo de espinhos que corre num trilho. `{x, y, w, range, speed}`:
    machuca ao encostar, obriga a pular ou a subir na parede.
+6. `locomotiva` — comboio de mineração parado nos trilhos (fase 5, só na arena
+   do chefão). `{x, groundY, vagoes, interval}`: a máquina e os vagões são
+   **sólidos** (entram em `movers`, dá para subir neles) e cada vagão leva uma
+   topeira ajudante do chefão que ergue a picareta (telegraph ~0.5s) e dá a
+   picaretada — 1 de dano — em quem estiver ao alcance. As topeiras não morrem:
+   recuam e voltam a bater.
+
+(os demais tipos — `cipo`, `disco`, `tronco`, `brasa`, `cachorroquente`,
+`montanharussa`, `rodagigante`, `trovao`, `plateia` — estão documentados no
+cabeçalho do `obstacles.js`, que é a fonte de verdade.)
 
 Regras: todo perigo dá 1 de dano via `FG.player.hurt(1, xOrigem)`. Nada de
 alocar por frame (pools). Culling de ~1 tela em todo desenho. Visual pintado no
@@ -263,7 +276,8 @@ quadro, no topo do arquivo. Barra de HP é o engine que desenha, lendo
 - `sfx(name)` — `'jump','doublejump','glide','punch','hitEnemy','hurt','lumi',
   'checkpoint','death','bossRoar','bossHit','bossSpit','victory','select'`.
   Nomes desconhecidos: silêncio, sem throw.
-- `music(name)` — `'overworld' | 'boss' | null` (para). Loops agendados por
+- `music(name)` — `'overworld' | 'boss' | 'pantano' | 'mansao' | 'coliseu' |
+  'caverna' | null` (para). Cada fase pede a sua em `FG.level.musica`. Loops agendados por
   scheduler (lookahead ~0.1s): overworld = tema saltitante em maior (melodia +
   baixo + percussão de ruído); boss = tema tenso em menor, mais rápido.
   Trocar de música faz fade curto. Chamar com o mesmo nome não reinicia.
@@ -276,3 +290,25 @@ quadro, no topo do arquivo. Barra de HP é o engine que desenha, lendo
 - Todo texto do jogo em português.
 - `ctx.save()/restore()` sempre que mexer em transform/alpha/shadow.
 - 60fps: nada de alocar arrays/objetos grandes por frame; culling sempre.
+
+## Fase 5 — A Caverna (o escuro como mecânica)
+
+`level5.js` é a única fase sem luz ambiente. O contrato novo é um só, e mora
+dentro da própria fase: além dos campos de sempre, ela publica `lanternas` —
+um array `{x, y, r}` de lampiões de mineração. O `drawFront` pinta uma camada
+quase preta sobre a tela inteira e **recorta** nela (composite
+`destination-out`) um buraco de luz por lanterna visível, mais um em volta do
+jogador (ele é uma fagulha e carrega o próprio halo). Nenhum outro módulo
+precisa saber disso: para o engine, `drawFront` é só mais um desenho.
+
+Consequência de desenho a respeitar: as lanternas são, ao mesmo tempo,
+iluminação e mapa. Trecho sem lanterna é trecho que o jogador atravessa só com
+o halo próprio — use isso como ritmo (a travessia do veio de cristal é escura
+de propósito), nunca como armadilha num salto cego.
+
+O chefão é **Esbeltinho Otton** (`boss5.js`), mineiro comprido de capacete
+amarelo: 10 de vida e os 4 ataques da forma comum — arremesso de picaretas,
+desabamento de estalactites, investida e grisu (labaredas de gás saindo das
+rachaduras do chão). O ponto fraco é a **lanterna de peito**, que desce a
+~144px do chão na janela e acende com um anel pulsante — sem esse anel ela
+sumia contra a camisa amarela.

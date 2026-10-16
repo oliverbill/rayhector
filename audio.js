@@ -4,7 +4,8 @@
 // Contrato (ver SPEC.md):
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
-//   FG.audio.music(name) — 'overworld'|'boss'|'pantano'|'mansao'|'coliseu'|null;
+//   FG.audio.music(name) — 'overworld'|'boss'|'pantano'|'mansao'|'coliseu'|
+//                          'caverna'|null;
 //                          troca com fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
@@ -439,6 +440,28 @@ window.FG = window.FG || {};
     64, 60, 57, 55, 52, 0, 64, 0,  // Em: corrida descendente, cadência final
   ];
 
+  // ---- composição: CAVERNA — funda e cavernosa, lá menor eólio, 88 BPM ----
+  // O avesso do coliseu: lá a banda marchava junta e alto, aqui o espaço é
+  // que manda. Um PEDAL grave de lá, sustentado por 2 compassos, faz de
+  // "ar parado da galeria"; por cima, uma melodia de seno puro (a mais nua
+  // do jogo — nada de serra nem quadrada) em colcheias pares, como quem
+  // assobia sozinho no escuro; e a percussão é o único sinal de trabalho:
+  // picareta batendo na rocha nos tempos fortes, e um PINGO de água caindo
+  // de longe em longe, fora da grade do compasso, para a caverna nunca
+  // soar metronômica.
+  var CV_RAIZ = [33, 33, 36, 36, 29, 29, 32, 33]; // Am Am C C F F G Am (graves)
+
+  var CV_MEL = [
+    69, 0, 72, 0, 76, 0, 72, 0,   // Am:  lá dó mi dó
+    71, 0, 69, 0, 67, 0, 69, 0,   // Am:  si lá sol lá — ondula sem sair
+    72, 0, 76, 0, 79, 0, 76, 0,   // C:   dó mi sol mi
+    74, 0, 72, 0, 71, 0, 72, 0,   // C:   ré dó si dó
+    77, 0, 72, 0, 69, 0, 72, 0,   // F:   fá dó lá dó — o salto de 4ª, o "vão"
+    76, 0, 72, 0, 69, 0, 67, 0,   // F:   desce
+    67, 0, 71, 0, 74, 0, 71, 0,   // G:   sol si ré si
+    69, 0, 67, 0, 64, 0, 57, 0,   // Am:  afunda até o lá grave — fecho
+  ];
+
   var SONGS = {
     overworld: {
       bpm: 104,
@@ -469,6 +492,12 @@ window.FG = window.FG || {};
       stepDur: 60 / 132 / 2, // colcheia
       steps: 64,
       agenda: agendaColiseu,
+    },
+    caverna: {
+      bpm: 88,
+      stepDur: 60 / 88 / 2, // colcheia
+      steps: 64,
+      agenda: agendaCaverna,
     },
   };
 
@@ -670,6 +699,62 @@ window.FG = window.FG || {};
     if (dentro === 0 || dentro === 3 || dentro === 4 || dentro === 7) kick(t, dest);
     if (dentro === 2 || dentro === 6) snare(t, dest);
     hihat(t, (dentro % 2 === 1) ? 0.045 : 0.03, dest);
+  }
+
+  // picareta na rocha: estalo seco de ruído agudo com um corpo grave logo
+  // atrás — é o kick da caverna, mas soa a ferramenta, não a bumbo.
+  function picaretaBate(t, dest) {
+    ruido({ t: t, dur: 0.06, vol: 0.12, ftype: 'bandpass', f0: 3200, q: 2.2, dest: dest });
+    tone({ t: t, dur: 0.12, vol: 0.16, type: 'triangle', freq: 180, freqEnd: 70, attack: 0.003, dest: dest });
+  }
+
+  // pingo de água: seno agudo caindo um pouco, com cauda — o som que diz
+  // "isto aqui é fundo e vazio" melhor do que qualquer reverb que eu não tenho.
+  function pingo(t, dest) {
+    tone({ t: t, dur: 0.3, vol: 0.09, type: 'sine', freq: 1600, freqEnd: 900, attack: 0.004, dest: dest });
+    tone({ t: t, dur: 0.5, vol: 0.03, type: 'sine', freq: 2400, attack: 0.01, dest: dest });
+  }
+
+  function agendaCaverna(step, t, dest) {
+    var s = step % 64;
+    var volta = Math.floor(step / 64);
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.caverna.stepDur;
+
+    // pedal grave: renovado a cada 2 compassos, longo e quase imóvel — o ar
+    // parado da galeria
+    if (s % 16 === 0) {
+      tone({ t: t, dur: dur * 17, vol: 0.075, type: 'sine', freq: nf(CV_RAIZ[compasso]),
+             filtro: { type: 'lowpass', f0: 240 }, attack: 0.5, dest: dest });
+    }
+
+    // melodia de seno puro, nua: é uma pessoa assobiando sozinha no escuro
+    if (CV_MEL[s]) {
+      tone({ t: t, dur: dur * 1.8, vol: 0.1, type: 'sine', freq: nf(CV_MEL[s]),
+             attack: 0.03, dest: dest });
+      // oitava acima, bem baixinha: dá o "eco" sem precisar de reverb
+      tone({ t: t, dur: dur * 2.6, vol: 0.022, type: 'sine', freq: nf(CV_MEL[s]) * 2,
+             attack: 0.12, dest: dest });
+    }
+
+    // baixo andando, só nos tempos fortes — devagar, é uma caverna
+    if (dentro === 0 || dentro === 4) {
+      bassNote(t, CV_RAIZ[compasso] + 12, dur * 1.6, dest);
+    }
+
+    // picareta batendo lá adiante na galeria: tempos 1 e 3, e um eco da
+    // batida meia colcheia depois nos compassos ímpares
+    if (dentro === 0 || dentro === 4) picaretaBate(t, dest);
+    if (compasso % 2 === 1 && dentro === 5) picaretaBate(t + dur * 0.5, dest);
+
+    // chimbal só na segunda metade da volta: o loop "abre" e volta a fechar
+    if (s >= 32 && dentro % 2 === 0) hihat(t, 0.022, dest);
+
+    // pingo de água: duas vezes por volta, em passos primos que não caem no
+    // tempo — é o que impede a caverna de soar como um metrônomo
+    if (s === 11 || s === 45) pingo(t, dest);
+    if (volta % 3 === 1 && s === 29) pingo(t, dest);
   }
 
   // -- máquina do scheduler --

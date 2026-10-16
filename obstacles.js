@@ -16,6 +16,10 @@
 //   plateia     — arquibancada decorativa ao fundo (coliseu) que arremessa
 //                 comida periodicamente: telegraph, arco parabólico, dano
 //                 real no impacto (não sólida)
+//   locomotiva  — comboio de mineração parado nos trilhos (caverna, só na
+//                 arena do chefão): locomotiva e vagões SÓLIDOS (dá para subir
+//                 neles) com uma topeira de capacete em cada vagão que ergue a
+//                 picareta e dá a picaretada em quem chega ao alcance
 //
 // A colisão sai de graça: as peças sólidas vivas entram em `movers` e o engine
 // injeta esse array em FG.level.solids a cada frame. Aqui só se move a peça e
@@ -119,6 +123,24 @@ window.FG = window.FG || {};
   var PLATEIA_VOO = 0.85;       // duração nominal do arco até o alvo
   var PLATEIA_FOOD_SIZE = 16;   // lado do hitbox da comida em voo
   var PLATEIA_STAND_H = 150;    // altura visual da arquibancada acima de topY
+
+  // --- locomotiva (caverna) --------------------------------------------
+  // O comboio de mineração do chefão: fica PARADO nos trilhos, ao fundo da
+  // arena, e é sólido — subir nele é parte do terreno da luta. Cada vagão
+  // leva uma topeira de capacete amarelo que, quando o jogador chega ao
+  // alcance, ergue a picareta (telegraph) e desce a picaretada. Elas são
+  // ajudantes do chefão: não morrem de soco, recuam e voltam a bater.
+  var LOCO_EIXO = 26;           // altura do rodado abaixo da caixa do vagão
+  var LOCO_VAG_W = 150;         // caixa do vagão
+  var LOCO_VAG_H = 70;
+  var LOCO_GAP = 18;            // engate entre vagões
+  var LOCO_ENG_W = 230;         // locomotiva (a máquina vermelha, à direita)
+  var LOCO_ENG_H = 128;
+  var LOCO_ERGUE = 0.5;         // telegraph: picareta erguida antes do golpe
+  var LOCO_GOLPE = 0.18;        // tempo com a picareta descendo (janela de dano)
+  var LOCO_RECUA = 0.45;        // recolhida antes de poder bater outra vez
+  var LOCO_ALCANCE_X = 120;     // meia-largura da zona que acorda a topeira
+  var LOCO_ALCANCE_Y = 130;     // altura dessa zona acima do topo do vagão
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
@@ -689,6 +711,35 @@ window.FG = window.FG || {};
       seed: rand(0, 1000),  // semente fixa da plateia (crowd dots estáveis)
       food: { active: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, hit: false, t: 0, dur: 0 },
     };
+    return o;
+  }
+
+  // 15) locomotiva {x, groundY, vagoes, interval}
+  // `x` é a ponta ESQUERDA do comboio (o último vagão); os vagões seguem para
+  // a direita e a máquina fecha o comboio no fim — a mesma ordem do desenho.
+  function makeLocomotiva(d) {
+    var n = Math.max(1, d.vagoes || 4);
+    var gy = d.groundY != null ? d.groundY : 620;
+    var topo = gy - LOCO_EIXO - LOCO_VAG_H;
+    var o = {
+      type: 'locomotiva',
+      x: d.x, groundY: gy, n: n,
+      interval: d.interval || 1.8,
+      vagoes: [],      // retângulos sólidos (entram em movers)
+      topeiras: [],    // uma por vagão
+      engine: { x: d.x + n * (LOCO_VAG_W + LOCO_GAP), y: gy - LOCO_EIXO - LOCO_ENG_H, w: LOCO_ENG_W, h: LOCO_ENG_H },
+      fumo: 0,         // acumulador do fumo da chaminé
+    };
+    for (var i = 0; i < n; i++) {
+      var vx = d.x + i * (LOCO_VAG_W + LOCO_GAP);
+      o.vagoes.push({ x: vx, y: topo, w: LOCO_VAG_W, h: LOCO_VAG_H });
+      o.topeiras.push({
+        x: vx + LOCO_VAG_W * 0.5, topo: topo,
+        state: 'espera', timer: rand(0, 0.6), dir: -1, bateu: false,
+        ergue: 0,      // 0..1 picareta acima do capacete
+        golpe: 0,      // 0..1 picareta descida
+      });
+    }
     return o;
   }
 
@@ -1322,6 +1373,71 @@ window.FG = window.FG || {};
         o.state = 'espera';
         o.timer = Math.max(1.2, o.interval + rand(-o.jitter, o.jitter));
       }
+    }
+  }
+
+  // --- locomotiva ------------------------------------------------------
+  // O comboio não anda: o que vive aqui são as topeiras. Cada uma espera,
+  // acorda quando o jogador entra na zona de alcance do seu vagão, ergue a
+  // picareta (telegraph legível), desce a picaretada (única janela de dano) e
+  // recolhe. Uma de cada vez por topeira, mas várias podem bater juntas —
+  // andar pela lateral do comboio custa caro, subir em cima dele resolve.
+  function updateLocomotiva(o, dt, p, t) {
+    if (!p) return;
+    var pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+    for (var i = 0; i < o.topeiras.length; i++) {
+      var m = o.topeiras[i];
+      var dx = pcx - m.x;
+      var noAlcance = Math.abs(dx) < LOCO_ALCANCE_X &&
+                      pcy > m.topo - LOCO_ALCANCE_Y && pcy < m.topo + LOCO_VAG_H + 40;
+      if (m.state === 'espera') {
+        m.ergue += (0 - m.ergue) * Math.min(1, dt * 6);
+        m.golpe += (0 - m.golpe) * Math.min(1, dt * 8);
+        m.timer -= dt;
+        if (noAlcance && m.timer <= 0) {
+          m.state = 'ergue';
+          m.timer = LOCO_ERGUE;
+          m.dir = dx >= 0 ? 1 : -1;     // vira para o lado do jogador e fica
+        }
+      } else if (m.state === 'ergue') {
+        m.ergue = Math.min(1, m.ergue + dt / LOCO_ERGUE);
+        m.timer -= dt;
+        if (m.timer <= 0) {
+          m.state = 'golpe';
+          m.timer = LOCO_GOLPE;
+          m.bateu = false;
+          FG.audio.sfx('punch');
+        }
+      } else if (m.state === 'golpe') {
+        m.golpe = Math.min(1, m.golpe + dt / LOCO_GOLPE);
+        m.ergue = Math.max(0, m.ergue - dt / LOCO_GOLPE);
+        // janela de dano: o arco da picareta à frente da topeira, uma vez só
+        if (!m.bateu) {
+          var hb = { x: m.dir > 0 ? m.x + 14 : m.x - 104, y: m.topo - 58, w: 90, h: 96 };
+          if (FG.engine.rectsOverlap(p, hb)) {
+            p.hurt(1, m.x);
+            m.bateu = true;
+            for (var k = 0; k < 6; k++) {
+              spawnParticle(m.x + m.dir * 60, m.topo - 10, rand(-90, 90), rand(-160, -30),
+                rand(0.25, 0.45), rand(2, 3.6), 'rgba(255,210,120,0.8)', 800);
+            }
+          }
+        }
+        m.timer -= dt;
+        if (m.timer <= 0) { m.state = 'recua'; m.timer = LOCO_RECUA; }
+      } else { // recua
+        m.golpe = Math.max(0, m.golpe - dt / LOCO_RECUA);
+        m.timer -= dt;
+        if (m.timer <= 0) { m.state = 'espera'; m.timer = o.interval; }
+      }
+    }
+    // fumo da chaminé: a máquina fica a trabalhar parada
+    o.fumo += dt * 6;
+    while (o.fumo >= 1) {
+      o.fumo -= 1;
+      spawnParticle(o.engine.x + o.engine.w - 34 + rand(-5, 5), o.engine.y - 34,
+        rand(-14, 14), rand(-70, -40), rand(0.9, 1.5), rand(5, 10),
+        'rgba(90,80,76,0.5)', -24);
     }
   }
 
@@ -2520,6 +2636,188 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- locomotiva: trilhos com dormentes, vagões de minério abertos em cima
+  // (sólidos: dá para subir neles) e a máquina vermelha fechando o comboio,
+  // com a chaminé a fumegar. Em cada vagão, uma topeira de capacete com a
+  // picareta — erguida no telegraph, descida no golpe ---
+  function drawLocomotiva(ctx, o, cam, t) {
+    var largura = o.engine.x + o.engine.w - o.x;
+    if (!visible(cam, o.x - 60, o.engine.y - 80, largura + 120, o.groundY - o.engine.y + 140)) return;
+    var gy = o.groundY - cam.y;
+    var x0 = o.x - cam.x - 60, x1 = o.engine.x + o.engine.w - cam.x + 60;
+
+    ctx.save();
+
+    // dormentes e trilhos
+    ctx.fillStyle = '#2e2218';
+    for (var dx = x0; dx < x1; dx += 34) ctx.fillRect(dx, gy - 6, 22, 10);
+    ctx.fillStyle = '#8c8e96';
+    ctx.fillRect(x0, gy - 10, x1 - x0, 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(x0, gy - 10, x1 - x0, 1.2);
+
+    // vagões
+    for (var i = 0; i < o.vagoes.length; i++) {
+      var v = o.vagoes[i];
+      var vx = v.x - cam.x, vy = v.y - cam.y;
+      // rodado
+      drawRodas(ctx, vx + 26, vy + v.h + LOCO_EIXO - 14, 14);
+      drawRodas(ctx, vx + v.w - 26, vy + v.h + LOCO_EIXO - 14, 14);
+      // engate com o vagão seguinte
+      ctx.fillStyle = '#3a3a40';
+      ctx.fillRect(vx + v.w, vy + v.h * 0.55, LOCO_GAP, 7);
+      // caixa de minério: chapa cinzenta rebitada, interior escuro
+      var g = ctx.createLinearGradient(0, vy, 0, vy + v.h);
+      g.addColorStop(0, '#9aa0a8');
+      g.addColorStop(0.45, '#6a7079');
+      g.addColorStop(1, '#3a3e46');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(vx + 8, vy);
+      ctx.lineTo(vx + v.w - 8, vy);
+      ctx.lineTo(vx + v.w, vy + v.h);
+      ctx.lineTo(vx, vy + v.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(10,10,14,0.55)';
+      ctx.fillRect(vx + 10, vy + 2, v.w - 20, 8);     // boca aberta do vagão
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillRect(vx + 8, vy, v.w - 16, 2.4);        // aresta de cima (onde se pisa)
+      ctx.fillStyle = 'rgba(230,240,255,0.3)';
+      for (var rv = 0; rv < 6; rv++) {
+        ctx.beginPath();
+        ctx.arc(vx + 18 + rv * ((v.w - 36) / 5), vy + v.h * 0.62, 2, 0, TAU);
+        ctx.fill();
+      }
+      drawTopeira(ctx, o.topeiras[i], cam, t);
+    }
+
+    // a máquina: caldeira vermelha, cabine escura, chaminé e limpa-trilhos
+    var e = o.engine, ex = e.x - cam.x, ey = e.y - cam.y;
+    drawRodas(ctx, ex + 40, ey + e.h + LOCO_EIXO - 16, 16);
+    drawRodas(ctx, ex + 110, ey + e.h + LOCO_EIXO - 12, 20);
+    drawRodas(ctx, ex + e.w - 40, ey + e.h + LOCO_EIXO - 12, 20);
+    var eg = ctx.createLinearGradient(0, ey, 0, ey + e.h);
+    eg.addColorStop(0, '#d8243c');
+    eg.addColorStop(0.55, '#a8142a');
+    eg.addColorStop(1, '#5c0a16');
+    ctx.fillStyle = eg;
+    ctx.fillRect(ex, ey, e.w, e.h);
+    // cabine do maquinista, encaixada no corpo (o quadro escuro do desenho)
+    ctx.fillStyle = '#2a2a30';
+    ctx.fillRect(ex + 14, ey + 14, e.w * 0.46, e.h - 28);
+    ctx.fillStyle = '#121216';
+    ctx.fillRect(ex + 30, ey + 28, e.w * 0.3, e.h * 0.4);
+    ctx.fillStyle = 'rgba(255,220,150,0.18)';          // vidro com a luz da caldeira
+    ctx.fillRect(ex + 30, ey + 28, e.w * 0.3, e.h * 0.4);
+    // chaminé
+    ctx.fillStyle = '#1a1a1e';
+    ctx.fillRect(ex + e.w - 48, ey - 44, 26, 46);
+    ctx.fillRect(ex + e.w - 54, ey - 48, 38, 8);
+    // farol dianteiro, apontando para a caverna
+    var fx = ex + e.w - 10, fy = ey + e.h * 0.4;
+    var fg = ctx.createRadialGradient(fx, fy, 2, fx, fy, 60);
+    fg.addColorStop(0, 'rgba(255,230,150,0.75)');
+    fg.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(fx, fy, 60, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(14,8,6,0.5)';
+    ctx.fillRect(ex, ey + e.h - 10, e.w, 10);
+    ctx.restore();
+  }
+
+  function drawRodas(ctx, cx, cy, r) {
+    ctx.save();
+    ctx.fillStyle = '#23232a';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#4a4a54';
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.45, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(200,210,225,0.25)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.8, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+
+  // --- topeira: focinho rosado, pelo castanho, capacete amarelo de lanterna
+  // e a picareta que ergue acima da cabeça antes de descer ---
+  function drawTopeira(ctx, m, cam, t) {
+    var cx = m.x - cam.x, topo = m.topo - cam.y;
+    var baseY = topo + 6;                    // ela fica dentro do vagão
+    var espia = (m.state === 'espera') ? Math.sin(t * 1.6 + m.x * 0.01) * 2 : 0;
+    var cy = baseY - 30 + espia - m.ergue * 6;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(m.dir, 1);
+
+    // braços/garras agarrados na borda do vagão
+    ctx.strokeStyle = '#6b4a30';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-14, 6); ctx.lineTo(-22, 26);
+    ctx.stroke();
+
+    // picareta: gira do descanso (encostada) ao alto (telegraph) e desce no golpe
+    var ang = -0.5 - m.ergue * 1.5 + m.golpe * 2.6;
+    ctx.save();
+    ctx.translate(14, 2);
+    ctx.rotate(ang);
+    ctx.fillStyle = '#7a5433';                 // cabo de madeira
+    ctx.fillRect(-3, -4, 6, 52);
+    ctx.fillStyle = '#b9bec8';                 // cabeça de ferro, dois bicos
+    ctx.beginPath();
+    ctx.moveTo(-26, -2);
+    ctx.quadraticCurveTo(0, -14, 26, -2);
+    ctx.quadraticCurveTo(0, -4, -26, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // corpo
+    var bg = ctx.createLinearGradient(0, -16, 0, 30);
+    bg.addColorStop(0, '#8a6038');
+    bg.addColorStop(1, '#4a3220');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 18, 22, 0, 0, TAU);
+    ctx.fill();
+
+    // cabeça e focinho
+    ctx.fillStyle = '#8a6038';
+    ctx.beginPath(); ctx.arc(0, -8, 15, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#d99a92';
+    ctx.beginPath(); ctx.ellipse(-13, -4, 7, 5, -0.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#5a3a30';
+    ctx.beginPath(); ctx.arc(-16, -5, 1.6, 0, TAU); ctx.fill();
+    // olhinhos apertados (topeira mal vê)
+    ctx.strokeStyle = '#2a1a12';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(-6, -12); ctx.lineTo(-1, -12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3, -13); ctx.lineTo(8, -13); ctx.stroke();
+    // dentes da frente
+    ctx.fillStyle = '#f2e9d8';
+    ctx.fillRect(-10, -1, 3, 5);
+    ctx.fillRect(-6, -1, 3, 5);
+
+    // capacete amarelo com lanterna acesa
+    ctx.fillStyle = '#f2c021';
+    ctx.beginPath();
+    ctx.arc(0, -14, 16, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(-18, -15, 36, 5);
+    ctx.fillStyle = '#d8a000';
+    ctx.fillRect(-20, -15, 10, 5);
+    ctx.fillStyle = '#fff4c0';
+    ctx.beginPath(); ctx.arc(-8, -22, 4.5, 0, TAU); ctx.fill();
+    var lg = ctx.createRadialGradient(-8, -22, 1, -8, -22, 34);
+    lg.addColorStop(0, 'rgba(255,240,180,0.55)');
+    lg.addColorStop(1, 'rgba(255,220,120,0)');
+    ctx.fillStyle = lg;
+    ctx.beginPath(); ctx.arc(-8, -22, 34, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
   // --- comida em voo: coxa de frango / fruta podre / osso, girando no ar —
   // fica na camada da FRENTE, cruzando por cima do jogador ---
   function drawPlateiaFrente(ctx, o, cam, t) {
@@ -2622,6 +2920,7 @@ window.FG = window.FG || {};
         else if (d.type === 'rodagigante') list.push(makeRodagigante(d));
         else if (d.type === 'trovao') list.push(makeTrovao(d));
         else if (d.type === 'plateia') list.push(makePlateia(d));
+        else if (d.type === 'locomotiva') list.push(makeLocomotiva(d));
       }
     },
 
@@ -2674,6 +2973,11 @@ window.FG = window.FG || {};
           updateTrovao(o, dt, p, t);   // não é sólido: nada em movers
         } else if (o.type === 'plateia') {
           updatePlateia(o, dt, p, t);  // não é sólido: nada em movers
+        } else if (o.type === 'locomotiva') {
+          updateLocomotiva(o, dt, p, t);
+          // o comboio inteiro é terreno: vagões e máquina entram em movers
+          for (var vg = 0; vg < o.vagoes.length; vg++) movers.push(o.vagoes[vg]);
+          movers.push(o.engine);
         }
       }
 
@@ -2702,6 +3006,7 @@ window.FG = window.FG || {};
         else if (o.type === 'rodagigante') drawRodagigante(ctx, o, cam, t);
         else if (o.type === 'trovao') drawTrovaoFundo(ctx, o, cam, t);
         else if (o.type === 'plateia') drawPlateiaFundo(ctx, o, cam, t);
+        else if (o.type === 'locomotiva') drawLocomotiva(ctx, o, cam, t);
       }
     },
 

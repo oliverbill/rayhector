@@ -129,10 +129,10 @@ Sem o ícone e sem som, quem cortou foi o aparelho — volume ou silencioso.
 | `assets.js` | sprites em base64: a foto recortada do Heitor e o dragão |
 | `player.js` | física e desenho do herói |
 | `levelkit.js` | ferramentas comuns às fases: sólido, RNG, lumis, offscreen, culling |
-| `level.js` `level2.js` `level3.js` | as três fases (7200×720 cada), com parallax e pintura próprios |
-| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos e chuva de brasa** |
-| `enemies.js` | os quatro inimigos comuns e o registro de chefões |
-| `boss1.js` `boss2.js` `boss3.js` | um chefão por arquivo, cada um com a sua máquina de estados |
+| `level.js` … `level5.js` | as cinco fases, com parallax e pintura próprios (a 5ª, **A Caverna**, é escura: só se enxerga em volta das lanternas de mineração) |
+| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos, chuva de brasa, plateia e a locomotiva da caverna** |
+| `enemies.js` | os inimigos comuns (incluindo a *aranha* e o *morcego* da caverna) e o registro de chefões |
+| `boss1.js` … `boss5.js` | um chefão por arquivo, cada um com a sua máquina de estados (o 5º é **Esbeltinho Otton**, o mineiro-chefe) |
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
 | `touch.js` | controles de toque desenhados no canvas (iPhone, iPad, Android) |
 
@@ -145,7 +145,7 @@ node tests/smoke.js    # joga o jogo inteiro sem navegador (menu → chefão →
 node tests/toque.js    # finge um iPhone e joga só com o dedo (ver abaixo)
 node tests/som.js      # WebAudio de mentira: prova que a trilha e os efeitos soam
 node tests/reach.js    # simula a física do pulo e prova que dá para alcançar tudo
-node tests/reach.js 1  # a mesma prova para a fase 2 (0 = bosque, 1 = pântano, 2 = vulcão)
+node tests/reach.js 4  # a mesma prova para outra fase (0..4; 4 = A Caverna)
 node tests/parede.js   # monta um penhasco de 500px e prova que dá para escalá-lo
 node tests/mapa.js > mapa.svg   # desenha o nível inteiro num esquema
 ```

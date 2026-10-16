@@ -121,6 +121,7 @@ window.FG = window.FG || {};
       timer: 0,        // temporizador de estado (sapeca, peixe)
       phase: Math.random() * Math.PI * 2, // dessincroniza animações
       st: 'parado',    // sub-estado (peixe: parado|disparo|sumido)
+      fundo: 0,        // y do fim da descida da aranha (resolvido no 1º bote)
       speed: def.speed || 560, // velocidade do disparo do peixe
       hp: 1,           // vida em golpes (soco ou pisão); a maioria morre no 1º
       dmg: 1,          // dano de contato (fora do pisão) causado ao player
@@ -138,6 +139,8 @@ window.FG = window.FG || {};
     else if (e.type === 'fantasma') { e.w = 34; e.h = 40; } // mansão: aéreo, etéreo
     else if (e.type === 'ratazana') { e.w = 58; e.h = 32; } // mansão: rasteiro, robusto
     else if (e.type === 'gladiador') { e.w = 104; e.h = 62; e.hp = 4; e.dmg = 2; } // coliseu: biga com gladiador montado
+    else if (e.type === 'aranha') { e.w = 42; e.h = 34; }   // caverna: desce do teto pendurada no fio
+    else if (e.type === 'morcego') { e.w = 38; e.h = 22; }  // caverna: dorme no teto e acorda em voo
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
@@ -523,6 +526,62 @@ window.FG = window.FG || {};
           (e.dir > 0 && e.x > e.spawnX + e.range) ||
           (e.dir < 0 && e.x < e.spawnX - e.range)) {
         e.dir = -e.dir;
+      }
+    } else if (e.type === 'aranha') {
+      // Aranha da caverna: vive pendurada no teto por um fio de seda e desce
+      // em cima de quem passa por baixo. O fio é desenhado do spawn (a
+      // ancoragem no teto) até ela, então a posição vertical É o estado: só
+      // o y muda, o x nunca — uma emboscada vertical, não uma patrulha.
+      // Desce rápido (é o susto), sobe devagar (é a janela de contra-ataque).
+      const DESCE = 430, SOBE = 150;
+      const cxA = e.x + e.w / 2;
+      const dxA = (p.x + p.w / 2) - cxA;
+      if (e.st === 'parado') {
+        e.y = e.spawnY + Math.sin((FG.engine.time + e.phase) * 1.8) * 5;
+        // gatilho: jogador por baixo (dentro do range horizontal) e abaixo dela
+        if (Math.abs(dxA) < e.range && (p.y + p.h) > e.spawnY) {
+          e.st = 'desce';
+          e.fundo = Math.min(groundYAt(cxA, e.spawnY) - e.h - 4, e.spawnY + 300);
+        }
+      } else if (e.st === 'desce') {
+        e.y += DESCE * dt;
+        if (e.y >= e.fundo) { e.y = e.fundo; e.st = 'fundo'; e.timer = 0.65; }
+      } else if (e.st === 'fundo') {
+        e.timer -= dt;
+        e.y = e.fundo + Math.sin(FG.engine.time * 14) * 2.5;   // se debate no fio
+        if (e.timer <= 0) e.st = 'sobe';
+      } else { // sobe
+        e.y -= SOBE * dt;
+        if (e.y <= e.spawnY) { e.y = e.spawnY; e.st = 'parado'; }
+      }
+      e.dir = dxA >= 0 ? 1 : -1;
+    } else if (e.type === 'morcego') {
+      // Morcego: dorme de cabeça para baixo agarrado ao teto e só acorda
+      // quando alguém chega perto. Acordado, persegue em voo ondulado (sem
+      // gravidade nenhuma) — rápido na horizontal, mole na vertical, para dar
+      // para despachá-lo com um soco no tempo certo. Perdido o jogador de
+      // vista, volta ao poleiro e torna a dormir.
+      const t = FG.engine.time + e.phase;
+      const dxM = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyM = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        e.y = e.spawnY + Math.sin(t * 0.9) * 2;
+        if (Math.abs(dxM) < e.range && Math.abs(dyM) < 260) e.st = 'voo';
+      } else {
+        const d = Math.sqrt(dxM * dxM + dyM * dyM) || 1;
+        const SPD = 180;
+        e.x += (dxM / d) * SPD * dt;
+        e.baseY += (dyM / d) * SPD * 0.65 * dt;
+        e.y = e.baseY + Math.sin(t * 7) * 14;   // voo aos trancos, de morcego
+        e.dir = dxM >= 0 ? 1 : -1;
+        if (d > e.range * 2.2) {
+          // desistiu: volta ao poleiro e dorme de novo ao encostar nele
+          e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 1.2);
+          e.x += (e.spawnX - e.x) * Math.min(1, dt * 1.2);
+          if (Math.abs(e.x - e.spawnX) < 6 && Math.abs(e.baseY - e.spawnY) < 6) {
+            e.x = e.spawnX; e.baseY = e.spawnY; e.st = 'parado';
+          }
+        }
       }
     }
 
@@ -1209,6 +1268,158 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- aranha da caverna: fio de seda saindo do teto, abdômen bulboso com
+  // marca clara nas costas, 8 patas dobradas que se agitam na descida e um
+  // punhado de olhos vermelhos ---
+  function drawAranha(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const agita = (e.st === 'desce' || e.st === 'fundo') ? 1 : 0.25;
+    const bal = Math.sin(t * (e.st === 'parado' ? 2 : 11) + e.phase);
+
+    // fio: do ponto de ancoragem no teto (spawnY menos uma folga) até ela
+    ctx.save();
+    ctx.strokeStyle = 'rgba(225,230,240,0.45)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(cx, e.spawnY - 120);
+    ctx.lineTo(cx, cy - e.h * 0.3);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // patas: quatro de cada lado, cotovelo alto e ponta no chão do desenho
+    ctx.strokeStyle = '#120d16';
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      for (let i = 0; i < 4; i++) {
+        const sp = (i - 1.5) * 0.42;
+        const wob = Math.sin(t * 9 + i * 1.3 + (s > 0 ? 0 : 1.7)) * 3 * agita;
+        const jx = s * (e.w * 0.34 + i * 2), jy = -e.h * 0.42 - i * 1.5 + wob;
+        const px = s * (e.w * 0.62 + Math.cos(sp) * 10);
+        const py = e.h * 0.42 + Math.sin(sp) * 10 + wob;
+        ctx.beginPath();
+        ctx.moveTo(s * e.w * 0.14, -e.h * 0.05);
+        ctx.quadraticCurveTo(jx, jy, px, py);
+        ctx.stroke();
+      }
+    }
+
+    // abdômen (atrás) e cefalotórax (à frente)
+    const g = ctx.createRadialGradient(-e.w * 0.08, -e.h * 0.2, 2, 0, 0, e.w * 0.6);
+    g.addColorStop(0, '#3a2a44');
+    g.addColorStop(1, '#140e1a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(e.w * 0.1 * -e.dir, e.h * 0.02, e.w * 0.40, e.h * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // marca clara nas costas — o aviso de "não encoste"
+    ctx.fillStyle = 'rgba(220,190,120,0.65)';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.1 * -e.dir, -e.h * 0.26);
+    ctx.lineTo(e.w * 0.1 * -e.dir - 5, e.h * 0.02);
+    ctx.lineTo(e.w * 0.1 * -e.dir, e.h * 0.22);
+    ctx.lineTo(e.w * 0.1 * -e.dir + 5, e.h * 0.02);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#1b1320';
+    ctx.beginPath();
+    ctx.ellipse(e.w * 0.24 * e.dir, e.h * 0.06, e.w * 0.24, e.h * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // olhos: duas fileiras de pontos vermelhos acesos
+    ctx.fillStyle = '#ff4a3a';
+    for (let i = 0; i < 4; i++) {
+      const ox = e.w * (0.28 + (i % 2) * 0.1) * e.dir;
+      const oy = e.h * (i < 2 ? -0.06 : 0.08);
+      ctx.beginPath();
+      ctx.arc(ox, oy, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // presas
+    ctx.strokeStyle = '#c9b7a0';
+    ctx.lineWidth = 1.8;
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.38 * e.dir, e.h * 0.14 + s * 2);
+      ctx.lineTo(e.w * 0.5 * e.dir, e.h * 0.26 + s * 3 + bal * 0.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- morcego: asas membranosas com dedos, orelhas grandes e olhinhos
+  // amarelos. Dormindo fica de cabeça para baixo, enrolado nas próprias asas ---
+  function drawMorcego(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const dormindo = e.st === 'parado';
+    const bat = Math.sin(t * 16 + e.phase);          // batida de asa
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (dormindo) ctx.rotate(Math.PI);               // pendurado, de ponta-cabeça
+    else if (e.dir < 0) ctx.scale(-1, 1);
+
+    // asas: abertas e batendo em voo, dobradas em volta do corpo dormindo
+    const abertura = dormindo ? 0.22 : (0.75 + bat * 0.45);
+    ctx.fillStyle = '#3a2634';
+    for (let s = -1; s <= 1; s += 2) {
+      const tipX = s * e.w * 0.95 * abertura;
+      const tipY = -e.h * 0.5 * bat * (dormindo ? 0 : 1);
+      ctx.beginPath();
+      ctx.moveTo(s * e.w * 0.12, -e.h * 0.1);
+      ctx.quadraticCurveTo(tipX * 0.6, tipY - e.h * 0.7, tipX, tipY);
+      // borda de baixo denteada: os "dedos" da membrana
+      ctx.quadraticCurveTo(tipX * 0.72, tipY + e.h * 0.34, tipX * 0.52, tipY + e.h * 0.12);
+      ctx.quadraticCurveTo(tipX * 0.42, tipY + e.h * 0.5, tipX * 0.24, tipY + e.h * 0.2);
+      ctx.quadraticCurveTo(tipX * 0.16, tipY + e.h * 0.55, s * e.w * 0.1, e.h * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // corpo peludo
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, '#6b4a52');
+    g.addColorStop(1, '#2a1b22');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, e.w * 0.2, e.h * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // cabeça com orelhas de ponta
+    ctx.fillStyle = '#5a3d46';
+    ctx.beginPath();
+    ctx.arc(e.w * 0.12, -e.h * 0.3, e.h * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.08, -e.h * 0.46);
+      ctx.lineTo(e.w * (0.1 + s * 0.06), -e.h * 1.0);
+      ctx.lineTo(e.w * (0.2 + s * 0.04), -e.h * 0.42);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // olhos: dois pontinhos amarelos (fechados em risco quando dorme)
+    if (dormindo) {
+      ctx.strokeStyle = 'rgba(255,220,120,0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.14, -e.h * 0.34); ctx.lineTo(e.w * 0.24, -e.h * 0.34);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ffd84a';
+      ctx.beginPath(); ctx.arc(e.w * 0.18, -e.h * 0.36, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.w * 0.26, -e.h * 0.3, 1.8, 0, Math.PI * 2); ctx.fill();
+      // dentinhos
+      ctx.fillStyle = '#f0e6d8';
+      ctx.fillRect(e.w * 0.2, -e.h * 0.14, 2, 3.4);
+      ctx.fillRect(e.w * 0.26, -e.h * 0.14, 2, 3.4);
+    }
+    ctx.restore();
+  }
+
   // --- ratazana gigante: corpo robusto marrom-acinzentado, cauda comprida
   // arrastando e dentes à mostra — a versão grande dos bichos de chão ---
   function drawRatazana(ctx, e, t) {
@@ -1500,6 +1711,8 @@ window.FG = window.FG || {};
         else if (e.type === 'fantasma') drawFantasma(ctx, e, t);
         else if (e.type === 'ratazana') drawRatazana(ctx, e, t);
         else if (e.type === 'gladiador') drawGladiador(ctx, e, t);
+        else if (e.type === 'aranha') drawAranha(ctx, e, t);
+        else if (e.type === 'morcego') drawMorcego(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();
