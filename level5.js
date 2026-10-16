@@ -53,12 +53,14 @@ window.FG = window.FG || {};
   //  (5) x 7500..9600   O DESMORONAMENTO: lajes instáveis que caem com o
   //                     peso, balde de minério balançando (pêndulo) e roda de
   //                     serra do túnel.
-  //  (6) x 9400..13200  A ESTAÇÃO: o fim da linha, cortada por uma vala de
-  //                     1080px. O comboio de mineração ANDA sem parar entre
-  //                     o cais e a doca, com as topeiras ajudantes nos
-  //                     vagões, e é por cima dele — saltando de vagão em
-  //                     vagão e viajando neles — que se atravessa. Do outro
-  //                     lado espera ESBELTINHO OTTON, o chefão.
+  //  (6) x 9400..13200  A ESTAÇÃO e O COMBOIO DESGOVERNADO: o cais, e nos
+  //                     carris o comboio de mineração. Basta pôr um pé nele
+  //                     para o travão ceder: dali em diante o comboio só
+  //                     acelera, sempre em frente, num trilho que não acaba.
+  //                     A ARENA DO CHEFÃO É O PRÓPRIO COMBOIO — salta-se de
+  //                     vagão em vagão, por cima das topeiras, até ao
+  //                     tejadilho da cabine, onde viaja ESBELTINHO OTTON (o
+  //                     maquinista que abandonou os comandos).
   //
   // Nada de beco sem saída: dos poços sobe-se pela margem (degrau curto), e
   // os paredões do trecho 3 ficam logo atrás para escalar de volta.
@@ -126,23 +128,13 @@ window.FG = window.FG || {};
     S(9200, 520, 110, 24, 'r'),       // laje suspensa 2 (+40)
 
     // ---- (6) a estação do comboio (arena do chefão) ----
-    // O cais da estação e a doca do chefão são DUAS plataformas separadas por
-    // uma vala de 1080px com estalagmites no fundo. Não há ponte fixa: a
-    // ponte é o comboio, que vai e vem sem parar e nunca cobre a vala
-    // inteira (ver `min`/`max` em obstacleDefs) — é saltando para os vagões e
-    // viajando neles que se chega ao Esbeltinho Otton.
-    // Quem cai não fica preso: há piso oculto no fundo, e a face esquerda da
-    // doca (80px acima do fundo) é escalável — mas custa as estalagmites e o
-    // tempo, que é o preço de não usar o comboio.
-    S(9400, 620, 720, 100, 'g'),      // cais da estação 9400..10120 (checkpoint 7)
-    S(10120, 700, 1080, 30, 'h'),     // piso oculto do fundo da vala
-    // A doca é COMPRIDA de propósito (2000px): o Otton investe 460px para a
-    // esquerda, e quem não tiver para onde recuar leva a investida de graça
-    // ou cai na vala a fugir dela. O chefão fica no fundo (x≈12980) e sobra
-    // mais de mil pixels de recuo entre ele e a beira.
-    S(11200, 620, 2000, 100, 'g'),    // doca do chefão 11200..13200
-    S(11320, 530, 130, 24, 'r'),      // pilha de dormentes: o degrau da chegada
-    S(12300, 540, 130, 24, 'r'),      // pilha de dormentes: o degrau da luta
+    // Um cais corrido e, a partir de 10500, a via. Nada de degraus aqui: o
+    // relevo desta parte é o comboio, e ele é feito de sólidos vivos
+    // (FG.obstacles) que o engine injeta na colisão a cada frame.
+    // O comboio ocupa 10500..11586 e os vagões ficam 26px acima do chão: não
+    // se passa por baixo, só por cima — que é o ponto.
+    S(9400, 620, 3800, 100, 'g'),     // cais + via, 9400..13200
+    S(10180, 540, 120, 24, 'r'),      // caixote de carga: o degrau para embarcar
   ];
 
   // ---------------------------------------------------------------
@@ -159,7 +151,6 @@ window.FG = window.FG || {};
     Hz(8120, 596, 56, 24, 'e'),    // antes da laje instável 1
     Hz(8920, 596, 56, 24, 'e'),    // antes da laje instável 2
     Hz(9640, 596, 70, 24, 'e'),    // entrada da estação
-    Hz(10120, 674, 1080, 26, 'e'), // fundo da vala da estação
   ];
 
   // 6 lanternas-checkpoint (acendem forte quando ativadas)
@@ -170,7 +161,7 @@ window.FG = window.FG || {};
     { x: 5350, y: 220 },   // topo do paredão 2 — prêmio de escalar
     { x: 7560, y: 620 },   // saída do veio de cristal
     { x: 8650, y: 620 },   // meio do desmoronamento
-    { x: 9760, y: 620 },   // cais da estação, antes da travessia de comboio
+    { x: 9760, y: 620 },   // cais da estação, antes de embarcar no comboio
   ];
 
   // ---------------------------------------------------------------
@@ -199,12 +190,11 @@ window.FG = window.FG || {};
     Lz(7620, 540, 185), Lz(8020, 500, 160), Lz(8500, 450, 160),
     Lz(8700, 540, 185), Lz(9120, 450, 160),
     // (6) estação — a mais iluminada da fase: é onde se luta, e é onde o
-    // jogador precisa LER o comboio a tempo de saltar. A vala leva lanternas
-    // penduradas do teto por cima dela (a travessia nunca é às cegas).
-    Lz(9700, 530, 200), Lz(10000, 470, 190),
-    Lz(10350, 440, 200), Lz(10750, 440, 200), Lz(11080, 470, 200),
-    Lz(11400, 500, 200), Lz(11800, 500, 210),
-    Lz(12250, 480, 210), Lz(12700, 500, 210), Lz(13080, 500, 200),
+    // jogador precisa LER o embarque. Daí para a frente a luz vai com ele.
+    Lz(9700, 530, 200), Lz(10020, 470, 190), Lz(10330, 500, 190),
+    // (a partir daqui a luz é a do próprio comboio — faróis, lanternas de
+    // capacete das topeiras e as lâmpadas da galeria a passar a voar, todas
+    // tratadas no drawEscuridao)
   ];
 
   // ---------------------------------------------------------------
@@ -248,8 +238,6 @@ window.FG = window.FG || {};
     { type: 'morcego', x: 9800, y: 330, range: 250 },
     { type: 'aranha',  x: 10050, y: 300, range: 130 },
     { type: 'morcego', x: 10750, y: 320, range: 250 },
-    { type: 'aranha',  x: 11600, y: 300, range: 130 },
-    { type: 'morcego', x: 12100, y: 320, range: 250 },
   ];
 
   // ---------------------------------------------------------------
@@ -279,12 +267,10 @@ window.FG = window.FG || {};
     // (6) a estação: o comboio parado nos trilhos. Fica DENTRO da arena do
     // chefão (x 9700..12000), à esquerda dele — vagões e máquina são
     // sólidos, e cada vagão leva uma topeira de picareta.
-    // O comboio nasce encostado ao cais (min) e corre até encostar a
-    // máquina na doca do chefão (max). Comprimento total ~900px numa vala de
-    // 1080: em nenhum instante ele cobre a vala toda, então a travessia é
-    // sempre embarcar, viajar e saltar — nunca atravessar a pé por cima.
-    { type: 'locomotiva', x: 9500, min: 9500, max: 10460, speed: 185,
-      groundY: 620, vagoes: 4, interval: 1.8 },
+    // O comboio parado nos carris à saída da estação. Arranca no instante
+    // em que o jogador põe um pé nele e nunca mais para — ver a nota sobre
+    // o "mundo que corre" no cabeçalho da locomotiva, em obstacles.js.
+    { type: 'locomotiva', x: 10500, groundY: 620, vagoes: 4, interval: 1.8, vmax: 1100 },
   ];
 
   // ---------------------------------------------------------------
@@ -334,14 +320,33 @@ window.FG = window.FG || {};
   lumiLine(9280, 470, 2, 48);
   // (6) estação
   lumiLine(9700, 578, 3, 54);
-  lumiLine(9980, 500, 3, 60);          // a escada para o teto do vagão
-  lumiLine(10300, 480, 6, 90);         // trilha por cima da vala, à altura dos vagões
-  lumiLine(10950, 480, 3, 90);
-  lumiLine(11340, 490, 3, 44);
-  lumiArc(11650, 546, 4, 170, 42);
-  lumiLine(12040, 578, 3, 56);
-  lumiLine(12340, 500, 3, 44);
-  lumiArc(12750, 546, 4, 170, 42);
+  lumiArc(10080, 470, 4, 180, 40);     // o arco que aponta o caixote e o embarque
+  lumiLine(10560, 470, 4, 80);         // por cima dos primeiros vagões
+
+  // LÂMPADAS A PASSAR — durante a corrida do comboio, as lanternas fixas da
+  // galeria deixam de fazer sentido (o comboio sai delas no primeiro
+  // segundo). Estas são geradas a partir da distância percorrida, em ciclo:
+  // sempre as mesmas 6, reposicionadas — nada de alocar por frame. Servem
+  // ao mesmo tempo de decoração e de buraco de luz no breu.
+  var PASSO_LAMPADA = 360;
+  var voando = [];
+  for (var vl = 0; vl < 6; vl++) voando.push({ x: 0, y: 0, r: 150 });
+
+  function lampadasDaCorrida() {
+    var ob = FG.obstacles;
+    if (!ob || !ob.correndo) return null;
+    var a = FG.level.arena;
+    var base = (a ? a.x : 10440) - 300;
+    var total = voando.length * PASSO_LAMPADA;
+    var sc = ob.scroll;
+    for (var i = 0; i < voando.length; i++) {
+      var d = ((i * PASSO_LAMPADA - sc) % total + total) % total;
+      voando[i].x = base + d;
+      voando[i].y = (i % 2) ? 250 : 310;
+      voando[i].r = 150;
+    }
+    return voando;
+  }
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC).
   var sparks = kit.makeSparks(64);
@@ -732,10 +737,21 @@ window.FG = window.FG || {};
   }
 
   // desenha uma camada com wrap horizontal + parallax vertical
+  // `corrida()` é a distância já percorrida pelo comboio desgovernado da
+  // estação (0 enquanto ele está parado, e 0 em qualquer outra fase). Somada
+  // ao x da câmera, é o que faz a galeria inteira voar para trás sem que
+  // nada se mexa de verdade: o comboio fica onde está, a física fica
+  // estável, e o mundo é que corre. Ler FG.obstacles em runtime é permitido;
+  // no load, nunca.
+  function corrida() {
+    var ob = FG.obstacles;
+    return (ob && ob.correndo) ? ob.scroll : 0;
+  }
+
   function drawLayer(ctx, layer, f, cam) {
     var lw = layer.width;
     var y = VIEW_H - layer.height + (CAM_Y_MAX - cam.y) * f;
-    var off = -((cam.x * f) % lw);
+    var off = -(((cam.x + corrida()) * f) % lw);
     if (off > 0) off -= lw;
     ctx.drawImage(layer, off, y);
     if (off + lw < VIEW_W) ctx.drawImage(layer, off + lw, y);
@@ -777,7 +793,7 @@ window.FG = window.FG || {};
     ctx.strokeStyle = 'rgba(150,200,255,0.35)';
     ctx.lineWidth = 1.6;
     for (var i = 0; i < 14; i++) {
-      var px = (((i * 331 + 60) - cam.x * 0.55) % 1180 + 1180) % 1180 - 60;
+      var px = (((i * 331 + 60) - (cam.x + corrida()) * 0.55) % 1180 + 1180) % 1180 - 60;
       var ciclo = (t * (0.5 + (i % 4) * 0.12) + i * 0.37) % 1;
       var py = 40 + ciclo * 420 - cam.y * 0.5;
       ctx.globalAlpha = 0.25 + 0.5 * (1 - ciclo);
@@ -828,6 +844,16 @@ window.FG = window.FG || {};
       var lz = lanternas[l];
       if (lz.x > x1 || lz.x < x0) continue;
       drawLanterna(ctx, lz.x, lz.y, t, 1);
+    }
+
+    // com o comboio solto, a galeria passa a voar: balastro riscado por
+    // baixo e lâmpadas de teto a fugir para trás
+    var voa = lampadasDaCorrida();
+    if (voa) {
+      desenharBalastro(ctx, cam);
+      for (var vv = 0; vv < voa.length; vv++) {
+        drawLanterna(ctx, voa[vv].x, voa[vv].y, t, 1);
+      }
     }
 
     // lanternas-checkpoint (acesa = checkpoint atual)
@@ -889,6 +915,43 @@ window.FG = window.FG || {};
       cristalShape(ctx, s.x + cr.x, s.y, cr.h, cr.lean);
       ctx.restore();
     }
+  }
+
+  // --- balastro a correr: a via por baixo do comboio desgovernado. Pedra
+  // riscada passando para trás, mais o borrão de velocidade. Em coordenadas
+  // de MUNDO (o ctx já vem transladado), deslocado pela distância percorrida ---
+  function desenharBalastro(ctx, cam) {
+    var ob = FG.obstacles;
+    var sc = ob.scroll, k = Math.min(1, ob.velTrem / 1100);
+    var a = FG.level.arena;
+    var ax = a ? a.x - 120 : cam.x - 120, aw = (a ? a.w : VIEW_W) + 240;
+    var gy = 620;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ax, gy, aw, 100);
+    ctx.clip();
+    ctx.fillStyle = '#17131f';
+    ctx.fillRect(ax, gy, aw, 100);
+    // pedras do balastro, em ciclo de 26px
+    var passo = 26;
+    var off = ((-sc) % passo + passo) % passo;
+    ctx.fillStyle = 'rgba(150,150,175,0.22)';
+    for (var px = ax + off; px < ax + aw; px += passo) {
+      ctx.fillRect(px, gy + 14 + ((px | 0) % 3) * 7, 11, 4);
+      ctx.fillRect(px + 9, gy + 40 + ((px | 0) % 5) * 5, 7, 3);
+    }
+    // riscos de velocidade: quanto mais depressa, mais compridos e opacos
+    ctx.strokeStyle = 'rgba(200,215,255,' + (0.05 + 0.22 * k).toFixed(2) + ')';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (var ri = 0; ri < 10; ri++) {
+      var ry = gy + 8 + ri * 9;
+      var rx = ax + (((ri * 211 - sc * 1.4) % aw) + aw) % aw;
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + 60 + 160 * k, ry);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   // --- estalagmites: dentes de rocha subindo do fundo do poço ---
@@ -1005,8 +1068,33 @@ window.FG = window.FG || {};
   function drawFront(ctx, cam) {
     buildAll();
     drawLayer(ctx, frontL, 1.15, cam);
+    desenharVento(ctx);
     drawEscuridao(ctx, cam);
     ctx.drawImage(vig, 0, 0);
+  }
+
+  // Vento da corrida: riscos claros atravessando a tela da direita para a
+  // esquerda, em coordenadas de TELA (não de mundo) — é o ar da galeria a
+  // passar pelo comboio, e é o que faz 1100px/s parecerem 1100px/s.
+  function desenharVento(ctx) {
+    var ob = FG.obstacles;
+    if (!ob || !ob.correndo) return;
+    var k = Math.min(1, ob.velTrem / 1100);
+    if (k < 0.05) return;
+    var sc = ob.scroll;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(210,225,255,' + (0.05 + 0.13 * k).toFixed(2) + ')';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (var i = 0; i < 16; i++) {
+      var y = 40 + ((i * 73) % (VIEW_H - 80));
+      var x = ((i * 137 - sc * (1.1 + (i % 3) * 0.25)) % (VIEW_W + 300) + VIEW_W + 300) % (VIEW_W + 300) - 150;
+      var len = 70 + 190 * k + (i % 4) * 25;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + len, y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   // A caverna é escura: uma camada quase preta cobrindo a tela inteira, com
@@ -1031,6 +1119,17 @@ window.FG = window.FG || {};
       var tremor = 1 + 0.045 * Math.sin(t * 7 + lz.x * 0.013);
       furoDeLuz(g, lx, ly, lz.r * tremor);
     }
+    // as lâmpadas da galeria que passam a voar com o comboio solto
+    var voa = lampadasDaCorrida();
+    for (var vi = 0; voa && vi < voa.length; vi++) {
+      furoDeLuz(g, voa[vi].x - cam.x, voa[vi].y - 14 - cam.y, voa[vi].r);
+    }
+    // as luzes que o próprio comboio leva (farol da máquina, lanternas de
+    // capacete das topeiras) — declaradas por FG.obstacles, ver obstacles.js
+    var lo = FG.obstacles && FG.obstacles.luzes;
+    for (var li = 0; lo && li < lo.length; li++) {
+      furoDeLuz(g, lo[li].x - cam.x, lo[li].y - cam.y, lo[li].r);
+    }
     // halo do próprio herói: sem isto, andar entre duas lanternas seria
     // caminhar às cegas — e o jogo é de plataforma, não de adivinhação
     var p = FG.player;
@@ -1047,6 +1146,7 @@ window.FG = window.FG || {};
     ctx.globalCompositeOperation = 'lighter';
     for (var k = 0; k < lanternas.length; k++) {
       var l2 = lanternas[k];
+      if (!l2) continue;
       var ax = l2.x - cam.x, ay = l2.y - 14 - cam.y;
       if (ax < -l2.r || ax > VIEW_W + l2.r || ay < -l2.r || ay > VIEW_H + l2.r) continue;
       var gr = ctx.createRadialGradient(ax, ay, 2, ax, ay, l2.r * 0.6);
@@ -1092,8 +1192,8 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'otton',
-    bossTriggerX: 11320,
-    arena: { x: 9700, w: 3500 },
+    bossTriggerX: 10620,
+    arena: { x: 10440, w: 1220 },
     reset: reset,
     update: update,
     drawBack: drawBack,

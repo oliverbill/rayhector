@@ -1,5 +1,11 @@
 // Fagulho: Lendas do Bosque — boss5.js
 // Chefão da fase 5, e o ÚLTIMO do jogo: ESBELTINHO OTTON, o mineiro-chefe.
+// Ele luta EM CIMA DO COMBOIO DESGOVERNADO: abandonou os comandos, viaja no
+// tejadilho da cabine e, na investida, desce a correr pelos tetos dos vagões
+// e volta a trepar. Quem lhe diz onde fica a cabine é FG.obstacles.cabine
+// (ver obstacles.js) — ele não sabe nada sobre comboios, só segue o posto
+// que o cenário lhe dá; sem comboio nenhum, cai no chão da arena como os
+// outros quatro chefões.
 // Comprido e seco (daí o nome): pernas e braços longos de mangueira, tronco
 // estreito, capacete amarelo de mineiro com lanterna acesa na testa, camisa
 // amarela de manga comprida com suspensórios castanhos cruzando o peito,
@@ -162,11 +168,28 @@ window.FG = window.FG || {};
 
     resolveGeometry() {
       const a = FG.level.arena;
-      this.groundY = groundYAt(a.x + a.w * 0.9, 300);
-      // Fica longe da parede da direita: ajoelhado ele avança o peito para a
-      // esquerda, e o jogador precisa de chão dos dois lados da lanterna.
-      this.homeX = a.x + a.w - 220;
+      const cab = FG.obstacles && FG.obstacles.cabine;
+      if (cab) {
+        // o posto é o tejadilho da cabine do comboio
+        this.homeX = cab.x;
+        this.groundY = cab.y;
+      } else {
+        this.groundY = groundYAt(a.x + a.w * 0.9, 300);
+        // Fica longe da parede da direita: ajoelhado ele avança o peito para
+        // a esquerda, e o jogador precisa de chão dos dois lados da lanterna.
+        this.homeX = a.x + a.w - 220;
+      }
       this.x = this.homeX;
+    },
+
+    // Altura do teto do comboio debaixo de um x: o tejadilho da cabine, mais
+    // alto, ou o teto dos vagões. É isto que faz ele DESCER para correr pelos
+    // vagões e voltar a SUBIR para a cabine, sem nenhuma pose nova.
+    tetoEm(x) {
+      const c = FG.obstacles && FG.obstacles.comboio;
+      if (!c) return null;
+      if (x >= c.engine.x - 30) return c.engine.y;
+      return c.vagoes[0].y;
     },
 
     reset() {
@@ -330,6 +353,14 @@ window.FG = window.FG || {};
       const speedMul = p2 ? 0.78 : 1;
       const a = FG.level.arena;
 
+      // O posto é a cabine, e o chão dele é o teto que estiver debaixo dos
+      // seus pés: na investida ele desce para os vagões e volta a subir, e a
+      // interpolação faz isso parecer um salto, não um teleporte.
+      const cab = FG.obstacles && FG.obstacles.cabine;
+      if (cab) this.homeX = cab.x;
+      const teto = this.tetoEm(this.x);
+      if (teto != null) this.groundY += (teto - this.groundY) * Math.min(1, dt * 9);
+
       this.timer -= dt;
 
       if (this.state === 'idle') {
@@ -443,13 +474,11 @@ window.FG = window.FG || {};
               s.active = true;
               s.state = 'shadow';
               // espalha pela faixa da arena onde o jogador luta
-              // Caem sobre a doca do chefão, a faixa onde o jogador luta de
-              // verdade — espalhar pela arena inteira mandaria metade delas
-              // para dentro da vala, longe de toda a gente.
-              const faixa = Math.max(260, Math.min(a.w - 320, 620));
-              s.x = Math.max(a.x + 120, this.x - faixa) + (spawned / n) * faixa + rand(-30, 30);
+              // Caem ao longo do comboio inteiro — o teto da galeria cede e
+              // a pedra bate onde bater: tejadilho, teto de vagão ou
+              // balastro. groundYAt resolve a altura de cada uma.
+              s.x = a.x + 90 + (spawned / n) * (a.w - 220) + rand(-30, 30);
               s.groundY = groundYAt(s.x + s.w / 2, 300);
-              if (Math.abs(s.groundY - this.groundY) > 2) { s.active = false; continue; }
               s.y = s.groundY - 540;
               s.vy = 0;
               s.timer = 0.75 + spawned * stagFall;
@@ -464,9 +493,10 @@ window.FG = window.FG || {};
           if (this.timer <= 0) this.expose(2.6 * speedMul);
         }
 
-      // ================= 3. INVESTIDA =================
-      // Baixa o capacete e corre a estação de ponta a ponta com a picareta
-      // rente ao chão, levantando faísca nos trilhos.
+      // ================= 3. INVESTIDA PELOS TETOS =================
+      // Baixa o capacete, salta da cabine para o teto dos vagões e corre o
+      // comboio para trás com a picareta rente à chapa, levantando faísca —
+      // depois volta a correr para a frente e trepa outra vez à cabine.
       } else if (this.state === 'investida') {
         if (this.phase === 0) {
           this.phase = 1;
@@ -514,11 +544,10 @@ window.FG = window.FG || {};
             const j = jets[i];
             if (j.active) continue;
             const jx = this.x - 130 - spawned * step + rand(-18, 18);
-            if (jx < a.x + 50) break;              // não jorra dentro da parede
-            // A marcha das rachaduras para onde o chão dele acaba: a vala da
-            // estação fica mais funda que a doca, e um jorro lá no fundo
-            // seria perigo invisível, não ataque.
-            if (Math.abs(groundYAt(jx, 300) - this.groundY) > 2) break;
+            if (jx < a.x + 50) break;              // não jorra fora do comboio
+            // O jorro sai da chapa que estiver debaixo dele (teto de vagão,
+            // tejadilho ou balastro) — é vapor a escapar pelas válvulas que
+            // ninguém está a vigiar, já que o maquinista anda à pancada.
             j.active = true;
             j.state = 'crack';
             j.x = jx;

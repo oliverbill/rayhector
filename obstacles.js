@@ -127,17 +127,28 @@ window.FG = window.FG || {};
   var PLATEIA_STAND_H = 150;    // altura visual da arquibancada acima de topY
 
   // --- locomotiva (caverna) --------------------------------------------
-  // O comboio de mineração do chefão: ANDA o tempo todo, num vaivém entre
-  // `min` e `max`, e é sólido — os vagões são a ponte móvel sobre a vala da
-  // estação, e é saltando de um para o outro que se chega ao chefão. Quem
-  // está em cima é arrastado junto. Cada vagão leva uma topeira de capacete
-  // amarelo que, quando o jogador chega ao alcance, ergue a picareta
-  // (telegraph) e desce a picaretada. Elas são ajudantes do chefão: não
-  // morrem de soco, recuam e voltam a bater.
+  // O COMBOIO DESGOVERNADO. O maquinista (o chefão) abandonou a cabine: o
+  // comboio arranca quando o jogador embarca, acelera e NUNCA mais para, só
+  // para a frente, num trilho que não acaba.
+  //
+  // Como isso é feito sem um mundo infinito: o comboio fica PARADO em
+  // coordenadas de mundo e é o resto que corre. O obstáculo publica a
+  // distância já percorrida em `FG.obstacles.scroll` (e a velocidade em
+  // `velTrem`, e `correndo`), e quem desenha fundo, teto e chão — hoje o
+  // level5 — desloca as suas camadas por ela. O resultado na tela é um
+  // comboio a toda a velocidade; o resultado na física é uma arena estável,
+  // que é o que torna a luta jogável.
+  //
+  // Os vagões e a máquina são sólidos: é por cima deles, saltando de um para
+  // o outro, que se chega à cabine onde o chefão viaja. Cair do comboio é
+  // cair no balastro a correr — dói e tem de se voltar a subir. Cada vagão
+  // leva uma topeira de capacete amarelo que ergue a picareta (telegraph) e
+  // desce a picaretada; são ajudantes do chefão, não morrem de soco.
   var LOCO_EIXO = 26;           // altura do rodado abaixo da caixa do vagão
   var LOCO_VAG_W = 150;         // caixa do vagão
   var LOCO_VAG_H = 70;
-  var LOCO_GAP = 18;            // engate entre vagões
+  var LOCO_GAP = 64;            // vão entre vagões: tem de se SALTAR de um
+                                // para o outro, não se atravessa a andar
   var LOCO_ENG_W = 230;         // locomotiva (a máquina vermelha, à direita)
   var LOCO_ENG_H = 128;
   var LOCO_ERGUE = 0.5;         // telegraph: picareta erguida antes do golpe
@@ -145,13 +156,18 @@ window.FG = window.FG || {};
   var LOCO_RECUA = 0.45;        // recolhida antes de poder bater outra vez
   var LOCO_ALCANCE_X = 120;     // meia-largura da zona que acorda a topeira
   var LOCO_ALCANCE_Y = 130;     // altura dessa zona acima do topo do vagão
-  var LOCO_SPD = 150;           // velocidade de cruzeiro do comboio (px/s)
-  var LOCO_PONTA = 0.3;         // fração da velocidade nas pontas do vaivém
+  var LOCO_VMAX = 1100;         // velocidade de cruzeiro do desgovernado (px/s)
+  var LOCO_ACEL = 260;          // aceleração até lá (px/s²) — o arranque pesado
+  var LOCO_DANO_T = 1.0;        // intervalo do dano de quem cai no balastro
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
   // Reuso total: spawnParticle nunca cria objeto.
   // ------------------------------------------------------------------
+  // Luzes declaradas pelos obstáculos para quem pinta escuridão (a caverna).
+  // Reaproveitada: o array é o mesmo, só muda o conteúdo.
+  var luzes = [];
+
   var MAXP = 140;
   var particles = [];
   for (var pi = 0; pi < MAXP; pi++) {
@@ -720,11 +736,11 @@ window.FG = window.FG || {};
     return o;
   }
 
-  // 15) locomotiva {x, groundY, vagoes, interval, min, max, speed}
+  // 15) locomotiva {x, groundY, vagoes, interval, vmax}
   // `x` é a ponta ESQUERDA do comboio (o último vagão); os vagões seguem para
   // a direita e a máquina fecha o comboio no fim — a mesma ordem do desenho.
-  // `min`/`max` são os limites do vaivém para essa ponta esquerda (sem eles o
-  // comboio fica parado onde nasceu); `speed` é a velocidade de cruzeiro.
+  // O comboio não muda de x: arranca quando alguém embarca e, daí em diante,
+  // é o mundo que corre (ver `scroll`).
   function makeLocomotiva(d) {
     var n = Math.max(1, d.vagoes || 4);
     var gy = d.groundY != null ? d.groundY : 620;
@@ -733,13 +749,13 @@ window.FG = window.FG || {};
       type: 'locomotiva',
       x: d.x, groundY: gy, n: n,
       comp: n * (LOCO_VAG_W + LOCO_GAP) + LOCO_ENG_W,   // comprimento total
-      min: d.min != null ? d.min : d.x,
-      max: d.max != null ? d.max : d.x,
-      speed: d.speed || LOCO_SPD,
-      dir: 1,          // sentido da marcha (+1 para a direita)
-      dx: 0,           // deslocamento deste frame (arrasta quem está em cima)
-      roda: 0,         // ângulo das rodas, integrado do deslocamento
-      apito: 2.5,      // conta-gotas do apito nas pontas da linha
+      vmax: d.vmax || LOCO_VMAX,
+      solto: false,    // já arrancou? (não há volta: nunca mais para)
+      vel: 0,          // velocidade atual (px/s)
+      scroll: 0,       // distância já percorrida — é o que faz o mundo correr
+      roda: 0,         // ângulo das rodas, integrado da distância
+      fagulha: 0,      // conta-gotas das fagulhas do rodado
+      danoT: 0,        // temporizador do dano de quem viaja no balastro
       recarga: 0,      // pausa do comboio inteiro entre uma picaretada e a seguinte
       interval: d.interval || 1.8,
       vagoes: [],      // retângulos sólidos (entram em movers)
@@ -1402,44 +1418,55 @@ window.FG = window.FG || {};
   function updateLocomotiva(o, dt, p, t) {
     if (!p) return;
 
-    // ---- marcha: vaivém contínuo, mais lento nas pontas da linha ----
-    // O comboio nunca para (é o que faz dele uma ponte com horário), mas
-    // desacelera perto dos batentes e arranca de novo — assim a inversão de
-    // sentido não teleporta quem está em cima nem parece um elástico.
-    var dx = 0;
-    if (o.max > o.min) {
-      var u = (o.x - o.min) / (o.max - o.min);
-      u = Math.max(0, Math.min(1, u));
-      var fator = Math.max(LOCO_PONTA, Math.sin(Math.PI * u));
-      dx = o.dir * o.speed * fator * dt;
-      var nx = o.x + dx;
-      if (nx >= o.max) { nx = o.max; o.dir = -1; o.apito = 0; }
-      else if (nx <= o.min) { nx = o.min; o.dir = 1; o.apito = 0; }
-      dx = nx - o.x;
-      o.x = nx;
+    // ---- o arranque, e depois nunca mais ----
+    // Basta pôr um pé no comboio (ou o chefão entrar em cena) para o travão
+    // ceder. Daí para a frente só acelera: não há estado de "parar".
+    var aBordo = playerOnTop(o.engine, p);
+    for (var v = 0; !aBordo && v < o.vagoes.length; v++) {
+      if (playerOnTop(o.vagoes[v], p)) aBordo = true;
     }
-    o.dx = dx;
-    o.roda += dx / 15;
+    var boss = FG.enemies && FG.enemies.boss;
+    // Chefão caído = viagem ganha: o comboio continua a correr (nunca para),
+    // mas deixa de magoar — nem o balastro, nem as topeiras. Perder a vida
+    // no meio da cinemática da vitória seria roubo.
+    var inofensivo = !!(boss && boss.dead);
+    if (!o.solto && (aBordo || (boss && boss.started && !boss.dead))) {
+      o.solto = true;
+      FG.audio.sfx('bossRoar');     // o apito rasgado do arranque
+    }
+    if (o.solto) {
+      o.vel = Math.min(o.vmax, o.vel + LOCO_ACEL * dt);
+      o.scroll += o.vel * dt;
+      o.roda += o.vel * dt / 15;
+    }
 
-    if (dx !== 0) {
-      // Quem está apoiado no comboio viaja com ele — o teste é feito ANTES de
-      // mover os retângulos, porque os pés do jogador ainda estão sobre a
-      // posição deste frame.
-      var carrega = false;
-      for (var v = 0; v < o.vagoes.length; v++) {
-        if (playerOnTop(o.vagoes[v], p)) carrega = true;
+    // O que o resto do jogo lê para saber que o mundo tem de correr: o
+    // level5 desloca as camadas por `scroll`, e o boss5 descobre a cabine.
+    obstacles.scroll = o.scroll;
+    obstacles.velTrem = o.vel;
+    obstacles.correndo = o.solto;
+    obstacles.comboio = o;
+    // o posto do chefão fica na metade DIREITA do tejadilho: assim sobra
+    // chapa livre à esquerda para o jogador aterrar e ser visto
+    obstacles.cabine = { x: o.engine.x + o.engine.w * 0.62, y: o.engine.y };
+
+    // ---- cair do comboio: o balastro a correr por baixo ----
+    // Não é um hazard do nível (antes de o comboio arrancar aquele chão é
+    // caminho); é daqui que sai o dano, e só com o comboio em movimento.
+    if (o.solto && !inofensivo) {
+      var dentro = p.x + p.w > o.x - 40 && p.x < o.engine.x + o.engine.w + 40;
+      var abaixo = p.y + p.h > o.groundY - 12;
+      o.danoT -= dt;
+      if (dentro && abaixo) {
+        if (o.danoT <= 0) {
+          p.hurt(1, p.x + p.w / 2 + 40);   // empurra para trás, como o vento
+          o.danoT = LOCO_DANO_T;
+        }
+        for (var fz = 0; fz < 2; fz++) {
+          spawnParticle(p.x + rand(-10, 30), o.groundY - 4, rand(-520, -220), rand(-120, -20),
+            rand(0.2, 0.4), rand(1.6, 3), 'rgba(255,200,110,0.9)', 500);
+        }
       }
-      if (playerOnTop(o.engine, p)) carrega = true;
-      for (var w = 0; w < o.vagoes.length; w++) o.vagoes[w].x += dx;
-      o.engine.x += dx;
-      for (var m2 = 0; m2 < o.topeiras.length; m2++) o.topeiras[m2].x += dx;
-      if (carrega) p.x += dx;
-    }
-
-    // apito curto ao inverter a marcha: avisa que a ponte vai voltar
-    if (o.apito < 2.5) {
-      o.apito += dt;
-      if (o.apito >= 2.5) o.apito = 2.5;
     }
 
     var pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
@@ -1458,7 +1485,7 @@ window.FG = window.FG || {};
       if (dxc < alvoD) { alvoD = dxc; alvoM = c; }
     }
     if (o.recarga > 0) o.recarga -= dt;
-    var ocupado = o.recarga > 0;
+    var ocupado = o.recarga > 0 || inofensivo;
     for (var b2 = 0; b2 < o.topeiras.length && !ocupado; b2++) {
       if (o.topeiras[b2].state !== 'espera') ocupado = true;
     }
@@ -1490,7 +1517,7 @@ window.FG = window.FG || {};
         m.golpe = Math.min(1, m.golpe + dt / LOCO_GOLPE);
         m.ergue = Math.max(0, m.ergue - dt / LOCO_GOLPE);
         // janela de dano: o arco da picareta à frente da topeira, uma vez só
-        if (!m.bateu) {
+        if (!m.bateu && !inofensivo) {
           var hb = { x: m.dir > 0 ? m.x + 14 : m.x - 104, y: m.topo - 58, w: 90, h: 96 };
           if (FG.engine.rectsOverlap(p, hb)) {
             p.hurt(1, m.x);
@@ -1509,16 +1536,38 @@ window.FG = window.FG || {};
         if (m.timer <= 0) { m.state = 'espera'; m.timer = o.interval; }
       }
     }
-    // fumo da chaminé: sai mais grosso logo depois de inverter a marcha (é a
-    // máquina a forçar para arrancar de novo), e constante no resto do tempo
-    var forcando = o.apito < 0.6;
-    o.fumo += dt * (forcando ? 26 : 7);
+    // fumo da chaminé: parado é um fio; a correr é uma tromba deitada para
+    // trás (a velocidade do comboio entra na velocidade do fumo)
+    var k = o.vel / o.vmax;
+    o.fumo += dt * (7 + 34 * k);
     while (o.fumo >= 1) {
       o.fumo -= 1;
       spawnParticle(o.engine.x + o.engine.w - 34 + rand(-5, 5), o.engine.y - 34,
-        rand(-14, 14), rand(-90, -40), rand(0.9, 1.6), rand(5, 12),
-        forcando ? 'rgba(170,165,160,0.55)' : 'rgba(90,80,76,0.5)', -24);
+        -o.vel * 0.55 + rand(-30, 30), rand(-120, -40), rand(0.8, 1.5), rand(6, 14),
+        'rgba(120,112,108,0.5)', -24);
     }
+
+    // fagulhas do rodado contra o carril, quanto mais depressa mais
+    if (o.solto) {
+      o.fagulha += dt * (4 + 40 * k);
+      while (o.fagulha >= 1) {
+        o.fagulha -= 1;
+        var fx2 = o.x + rand(0, o.comp);
+        spawnParticle(fx2, o.groundY - 10, -o.vel * 0.5 + rand(-120, 0), rand(-180, -40),
+          rand(0.2, 0.45), rand(1.6, 3.2), 'rgba(255,190,90,0.9)', 700);
+      }
+    }
+
+    // Luzes que o comboio leva consigo: a camada de breu do level5 recorta
+    // um buraco em cada uma (ver FG.obstacles.luzes no drawEscuridao). São as
+    // únicas luzes estáveis da luta — as da galeria passam a voar para trás.
+    luzes.length = 0;
+    luzes.push({ x: o.engine.x + o.engine.w - 6, y: o.engine.y + o.engine.h * 0.4, r: 260 });
+    luzes.push({ x: o.engine.x + o.engine.w * 0.4, y: o.engine.y + 40, r: 170 });
+    for (var lz2 = 0; lz2 < o.topeiras.length; lz2++) {
+      luzes.push({ x: o.topeiras[lz2].x - 8, y: o.topeiras[lz2].topo - 44, r: 150 });
+    }
+    obstacles.luzes = luzes;
   }
 
   // ==================================================================
@@ -2721,41 +2770,30 @@ window.FG = window.FG || {};
   // com a chaminé a fumegar. Em cada vagão, uma topeira de capacete com a
   // picareta — erguida no telegraph, descida no golpe ---
   function drawLocomotiva(ctx, o, cam, t) {
-    // A LINHA inteira (trilhos + cavalete) vai de ponta a ponta do vaivém,
-    // não só debaixo do comboio: é ela que diz ao jogador até onde a ponte
-    // móvel vai chegar antes de ele saltar.
-    var linhaA = o.min - 140, linhaB = o.max + o.comp + 140;
-    if (!visible(cam, linhaA, o.engine.y - 90, linhaB - linhaA, o.groundY - o.engine.y + 160)) return;
     var gy = o.groundY - cam.y;
-    var x0 = linhaA - cam.x, x1 = linhaB - cam.x;
-    // não desenha a linha inteira se ela é muito maior que a tela
-    if (x0 < -200) x0 = -200;
-    if (x1 > VIEW_W + 200) x1 = VIEW_W + 200;
+    var x0 = -220, x1 = VIEW_W + 220;   // a linha não acaba: pinta-se a tela toda
 
     ctx.save();
 
-    // cavalete de madeira onde a linha cruza o vazio (a vala da estação):
-    // só se desenha perna onde NÃO há chão, senão ficaria pintado por cima
-    // da rocha (os obstáculos desenham depois do terreno).
-    ctx.fillStyle = '#3a2a1a';
-    for (var tx = x0; tx < x1; tx += 46) {
-      if (temChao(tx + cam.x, o.groundY)) continue;
-      ctx.fillRect(tx, gy - 2, 9, 120);
-      ctx.fillRect(tx - 14, gy + 40, 38, 7);
-    }
-
-    // dormentes e trilhos
+    // DORMENTES: a única coisa do comboio que se move no desenho, e é o que
+    // vende a velocidade — deslizam para trás a `scroll`, em módulo do passo,
+    // então nunca é preciso desenhar mais do que uma tela deles.
+    var passo = 34;
+    var off = ((-o.scroll) % passo + passo) % passo;
     ctx.fillStyle = '#2e2218';
-    for (var dx = x0; dx < x1; dx += 34) ctx.fillRect(dx, gy - 6, 22, 10);
+    for (var dx = x0 + off; dx < x1; dx += passo) ctx.fillRect(dx, gy - 6, 22, 10);
+    // borrão de velocidade por cima dos dormentes
+    if (o.vel > 120) {
+      ctx.globalAlpha = Math.min(0.5, o.vel / o.vmax);
+      ctx.fillStyle = '#1a1420';
+      ctx.fillRect(x0, gy - 6, x1 - x0, 10);
+      ctx.globalAlpha = 1;
+    }
+    // carris: contínuos, com o brilho frio em cima
     ctx.fillStyle = '#8c8e96';
     ctx.fillRect(x0, gy - 10, x1 - x0, 4);
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(x0, gy - 10, x1 - x0, 1.2);
-
-    // para-choques nas duas pontas: é o que explica a linha acabar ali, e dá
-    // ao jogador a leitura de até onde o comboio pode ir
-    drawParaChoque(ctx, linhaA + 20 - cam.x, gy);
-    drawParaChoque(ctx, linhaB - 20 - cam.x, gy);
 
     // vagões
     for (var i = 0; i < o.vagoes.length; i++) {
@@ -2827,32 +2865,7 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // Para-choque de fim de linha: dois montantes e a trave vermelha.
-  function drawParaChoque(ctx, x, gy) {
-    if (x < -60 || x > VIEW_W + 60) return;
-    ctx.save();
-    ctx.fillStyle = '#2a2a32';
-    ctx.fillRect(x - 10, gy - 44, 7, 44);
-    ctx.fillRect(x + 3, gy - 44, 7, 44);
-    ctx.fillStyle = '#b8202c';
-    ctx.fillRect(x - 14, gy - 50, 28, 12);
-    ctx.fillStyle = 'rgba(255,220,220,0.35)';
-    ctx.fillRect(x - 14, gy - 50, 28, 2.4);
-    ctx.restore();
-  }
 
-  // Há chão (topo de sólido) nesta coluna, à altura da linha? É o que decide
-  // se a linha precisa de cavalete ali. Varre FG.level.solids em runtime —
-  // são poucas dezenas, e só corre para as pernas visíveis na tela.
-  function temChao(x, gy) {
-    var lvl = FG.level;
-    var sol = (lvl && lvl.solids) || [];
-    for (var i = 0; i < sol.length; i++) {
-      var s = sol[i];
-      if (x >= s.x && x <= s.x + s.w && s.y >= gy - 4 && s.y <= gy + 60) return true;
-    }
-    return false;
-  }
 
   // As rodas giram de verdade: `ang` vem integrado do deslocamento do
   // comboio, então parar de andar é parar de girar.
@@ -3025,6 +3038,16 @@ window.FG = window.FG || {};
     // update do tipo (cachorroquente/montanharussa), lendo input.interactPressed.
     activePrompt: null,
 
+    // ---- estado público do comboio desgovernado (fase 5) ----
+    // Quem pinta o mundo lê isto para o fazer correr, e o chefão lê a cabine
+    // para saber onde viaja. Fora da caverna fica tudo zerado/nulo.
+    scroll: 0,        // distância já percorrida pelo comboio (px)
+    velTrem: 0,       // velocidade atual (px/s)
+    correndo: false,  // o comboio já arrancou?
+    comboio: null,    // o próprio obstáculo, para quem precisar da geometria
+    cabine: null,     // { x, y } do tejadilho da cabine — o posto do chefão
+    luzes: luzes,     // [{x,y,r}] luzes que o comboio leva consigo
+
     // Repovoa tudo a partir de FG.level.obstacleDefs. Seguro de chamar
     // várias vezes e com a lista vazia ou ausente (o level pode ainda não
     // ter o campo).
@@ -3040,6 +3063,15 @@ window.FG = window.FG || {};
       // montanha-russa: sem isso o player renasceria "montado" num carrinho
       // que não existe mais.
       if (FG.player) { FG.player.hang = null; FG.player.ride = null; }
+      // estado publicado do comboio: uma fase sem locomotiva não pode herdar
+      // o mundo a correr da caverna
+      luzes.length = 0;
+      obstacles.scroll = 0;
+      obstacles.velTrem = 0;
+      obstacles.correndo = false;
+      obstacles.comboio = null;
+      obstacles.cabine = null;
+      obstacles.luzes = luzes;
 
       var lvl = FG.level;
       var defs = (lvl && lvl.obstacleDefs) || [];

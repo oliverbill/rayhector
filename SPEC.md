@@ -178,16 +178,29 @@ Tipos em `FG.level.obstacleDefs` (`{type, x, y, ...}`):
    a bola machuca (1 de dano) e a **corrente é sólida** — dá para pousar nela.
 5. `espinhorolo` — rolo de espinhos que corre num trilho. `{x, y, w, range, speed}`:
    machuca ao encostar, obriga a pular ou a subir na parede.
-6. `locomotiva` — comboio de mineração em marcha (fase 5, só na arena do
-   chefão). `{x, groundY, vagoes, interval, min, max, speed}`: vai e vem sem
-   parar entre `min` e `max` (desacelerando nas pontas), e a máquina e os
-   vagões são **sólidos** (entram em `movers`) e **carregam o jogador** que
-   estiver apoiado neles — é a ponte móvel sobre a vala da estação. Cada vagão
-   leva uma topeira ajudante do chefão que ergue a picareta (telegraph ~0.5s) e
-   dá a picaretada — 1 de dano — em quem estiver ao alcance; só **uma bate de
-   cada vez** no comboio todo (a mais próxima), com recarga entre golpes, e o
-   arco morre à altura do telhado, então saltar o golpe funciona. As topeiras
-   não morrem: recuam e voltam a bater.
+6. `locomotiva` — o **comboio desgovernado** (fase 5, só na arena do chefão).
+   `{x, groundY, vagoes, interval, vmax}`: está parado nos carris até alguém
+   pôr um pé nele; aí o travão cede, acelera até `vmax` (~1100 px/s) e **nunca
+   mais para**, sempre em frente. A máquina e os vagões são **sólidos** (entram
+   em `movers`) e são a arena da luta: salta-se de teto em teto — os vãos entre
+   vagões têm de ser saltados — até ao tejadilho da cabine. Cada vagão leva uma
+   topeira ajudante do chefão que ergue a picareta (telegraph ~0.5s) e dá a
+   picaretada — 1 de dano; só **uma bate de cada vez** no comboio todo (a mais
+   próxima), com recarga entre golpes, e o arco morre à altura do telhado,
+   então saltar o golpe funciona. As topeiras não morrem. Cair para o balastro
+   custa 1 de dano por segundo até se voltar a subir. Com o chefão morto o
+   comboio continua a correr mas deixa de magoar.
+
+   **Como um comboio a 1100 px/s cabe num mundo finito:** ele não anda. Fica
+   parado em coordenadas de mundo e publica a distância percorrida — o
+   obstáculo escreve em `FG.obstacles.scroll` (px), `velTrem` (px/s) e
+   `correndo` (bool), e quem pinta o mundo soma isso ao x da câmera. O level5
+   corre com isso as camadas de parallax, o balastro, as lâmpadas do teto e os
+   riscos de vento. A física fica estável (é o que torna a luta jogável) e a
+   tela mostra um comboio a toda a velocidade. O obstáculo publica ainda
+   `cabine` (`{x,y}` do tejadilho — o posto do chefão), `comboio` (a própria
+   peça, para quem precisar da geometria) e `luzes` (`[{x,y,r}]`, as luzes que
+   o comboio leva consigo, que a camada de breu do level5 recorta).
 
 (os demais tipos — `cipo`, `disco`, `tronco`, `brasa`, `cachorroquente`,
 `montanharussa`, `rodagigante`, `trovao`, `plateia` — estão documentados no
@@ -310,17 +323,20 @@ iluminação e mapa. Trecho sem lanterna é trecho que o jogador atravessa só c
 o halo próprio — use isso como ritmo (a travessia do veio de cristal é escura
 de propósito), nunca como armadilha num salto cego.
 
-A travessia final é o comboio: o cais da estação e a doca do chefão são duas
-plataformas separadas por uma vala de 1080px com estalagmites, e o comboio
-(~900px) nunca cobre a vala inteira — a única rota limpa é saltar para os
-vagões, viajar neles e saltar para a doca, com as topeiras a tentar derrubar
-quem viaja. Cair não é beco sem saída (há piso oculto no fundo e a face da
-doca é escalável), só caro. Os ataques de chão do chefão param onde o chão
-dele acaba, para não chover perigo invisível dentro da vala.
+O combate final é **em cima do comboio desgovernado**. O jogador chega ao cais,
+sobe para o último vagão e o travão cede: dali em diante o comboio só acelera,
+sempre em frente, por um trilho que não acaba. A arena é o próprio comboio —
+saltar de vagão em vagão, por cima das topeiras, até ao tejadilho da cabine,
+que o maquinista abandonou para lutar. Cair para o balastro dói e obriga a
+voltar a subir.
 
 O chefão é **Esbeltinho Otton** (`boss5.js`), mineiro comprido de capacete
 amarelo: 10 de vida e os 4 ataques da forma comum — arremesso de picaretas,
-desabamento de estalactites, investida e grisu (labaredas de gás saindo das
-rachaduras do chão). O ponto fraco é a **lanterna de peito**, que desce a
-~144px do chão na janela e acende com um anel pulsante — sem esse anel ela
-sumia contra a camisa amarela.
+desabamento de estalactites sobre o comboio, investida pelos tetos (salta da
+cabine, corre os vagões e volta a trepar) e vapor a escapar das válvulas. Ele
+não sabe o que é um comboio: pede o posto a `FG.obstacles.cabine` e o "chão"
+dele é o teto que estiver debaixo dos pés (`tetoEm`), interpolado — é isso que
+faz a descida para os vagões parecer um salto. Sem comboio nenhum, cai no chão
+da arena como os outros quatro chefões. O ponto fraco é a **lanterna de
+peito**, que desce a ~144px do piso dele na janela e acende com um anel
+pulsante — sem esse anel ela sumia contra a camisa amarela.
