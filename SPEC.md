@@ -202,6 +202,23 @@ Tipos em `FG.level.obstacleDefs` (`{type, x, y, ...}`):
    peça, para quem precisar da geometria) e `luzes` (`[{x,y,r}]`, as luzes que
    o comboio leva consigo, que a camada de breu do level5 recorta).
 
+7. `herobrine` — o vulto de olhos brancos que anda pelas PAREDES da galeria
+   (fase 5, só na luta do chefão). `{x, w, margem, altoY, baixoY, interval}`:
+   caminha pelo perímetro aberto de um retângulo — parede esquerda, teto,
+   parede direita, nunca o chão, que é do comboio — sempre com os pés colados
+   à rocha, e persegue a projeção do jogador nesse caminho (com o vertical a
+   pesar menos, para preferir o teto). De tempos a tempos trava, os olhos
+   acendem (telegraph ~0.85s, e eles próprios são uma luz declarada em
+   `luzes`) e dispara um raio reto, mirado no instante do tiro e sem correção
+   depois — sair da linha é o que o torna justo. 1 de dano, não é sólido e não
+   morre. **Segura o tiro na janela de exposição do chefão**: aquele é o único
+   momento em que o jogador pode colar no ponto fraco, e o jogo inteiro ensina
+   que ali nada magoa.
+   O retângulo acompanha a CÂMERA (`segueCamera`, com as folgas em
+   coordenadas de tela): num mundo em que é o cenário que corre, uma parede
+   fixa em coordenadas de mundo ficaria para trás em dois segundos. O raio
+   continua a ser calculado em coordenadas de mundo, como tudo o resto.
+
 (os demais tipos — `cipo`, `disco`, `tronco`, `brasa`, `cachorroquente`,
 `montanharussa`, `rodagigante`, `trovao`, `plateia` — estão documentados no
 cabeçalho do `obstacles.js`, que é a fonte de verdade.)

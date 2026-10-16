@@ -16,6 +16,10 @@
 //   plateia     — arquibancada decorativa ao fundo (coliseu) que arremessa
 //                 comida periodicamente: telegraph, arco parabólico, dano
 //                 real no impacto (não sólida)
+//   herobrine   — o vulto de olhos brancos que anda pelas PAREDES da caverna
+//                 (teto e laterais, de cabeça para baixo e de lado),
+//                 acompanha o comboio e dispara raio laser dos olhos no
+//                 jogador; não é sólido e não morre
 //   locomotiva  — comboio de mineração que ANDA sem parar nos trilhos
 //                 (caverna, só na arena do chefão): locomotiva e vagões
 //                 SÓLIDOS que carregam quem está em cima — são a ponte móvel
@@ -156,6 +160,21 @@ window.FG = window.FG || {};
   var LOCO_RECUA = 0.45;        // recolhida antes de poder bater outra vez
   var LOCO_ALCANCE_X = 120;     // meia-largura da zona que acorda a topeira
   var LOCO_ALCANCE_Y = 130;     // altura dessa zona acima do topo do vagão
+  // --- herobrine (caverna, só na luta do chefão) ------------------------
+  // Anda pelo perímetro da galeria — parede esquerda, teto, parede direita —
+  // sempre com os pés colados à rocha, e persegue a posição do jogador ao
+  // longo desse caminho. De tempos a tempos trava, os olhos acendem
+  // (telegraph) e dispara um raio reto na direção em que mirou. O raio é
+  // mirado NO INSTANTE do disparo e dali não corrige: sair da linha depois
+  // do tiro é o que o torna justo.
+  var HERO_W = 42;              // largura do bonequinho (cabeça/tronco)
+  var HERO_H = 86;              // altura total, dos pés ao alto do cabelo
+  var HERO_SPD = 230;           // velocidade de caminhada pela parede
+  var HERO_MIRA = 0.85;         // telegraph: olhos carregando antes do tiro
+  var HERO_RAIO = 0.26;         // tempo com o raio aceso (janela de dano)
+  var HERO_RECUA = 0.5;         // recolhida depois do tiro
+  var HERO_GROSSURA = 15;       // meia-largura do raio para efeito de dano
+
   var LOCO_VMAX = 1100;         // velocidade de cruzeiro do desgovernado (px/s)
   var LOCO_ACEL = 260;          // aceleração até lá (px/s²) — o arranque pesado
   var LOCO_DANO_T = 1.0;        // intervalo do dano de quem cai no balastro
@@ -734,6 +753,82 @@ window.FG = window.FG || {};
       food: { active: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, hit: false, t: 0, dur: 0 },
     };
     return o;
+  }
+
+  // 16) herobrine {x, w, topY, bottomY, interval}
+  // O caminho é o perímetro aberto do retângulo (x..x+w, topY..bottomY) sem
+  // o lado de baixo — que é onde passa o comboio: parede esquerda de baixo
+  // para cima, teto da esquerda para a direita, parede direita de cima para
+  // baixo. Posição guardada como distância `u` ao longo desse caminho.
+  function makeHerobrine(d) {
+    var w = d.w || 900;
+    var topY = d.topY != null ? d.topY : 170;
+    var bottomY = d.bottomY != null ? d.bottomY : 440;
+    var lado = Math.max(40, bottomY - topY);
+    var o = {
+      type: 'herobrine',
+      // segueCamera: o retângulo é recalculado a cada frame a partir da
+      // câmera (ver updateHerobrine). `margem/altoY/baixoY` são as folgas em
+      // coordenadas de TELA; x/w/topY/bottomY ficam como ponto de partida e
+      // como valor fixo para quem não quer o modo câmera.
+      segueCamera: d.segueCamera !== false,
+      margem: d.margem != null ? d.margem : 100,
+      altoY: d.altoY != null ? d.altoY : 55,
+      baixoY: d.baixoY != null ? d.baixoY : 330,
+      x: d.x, w: w, topY: topY, bottomY: bottomY,
+      lado: lado,
+      comp: lado * 2 + w,       // comprimento total do caminho
+      u: lado + w * 0.5,        // começa no meio do teto
+      ang: Math.PI,             // de cabeça para baixo (teto)
+      interval: d.interval || 3.4,
+      state: 'anda',            // anda → mira → raio → recua → anda
+      timer: rand(1.2, 2.4),
+      olho: 0,                  // 0..1 brilho dos olhos (telegraph)
+      tiro: { x0: 0, y0: 0, x1: 0, y1: 0, t: 0 },
+      passo: 0,                 // fase da animação de caminhada
+    };
+    return o;
+  }
+
+  // Ponto do caminho a uma distância `u` do início, e para que lado ficam os
+  // pés ali. Devolve no objeto `out` para não alocar por frame.
+  function heroPonto(o, u, out) {
+    var L = o.comp;
+    u = ((u % L) + L) % L;
+    if (u < o.lado) {                       // parede esquerda, subindo
+      out.x = o.x;
+      out.y = o.bottomY - u;
+      out.ang = Math.PI / 2;                // pés para a esquerda
+    } else if (u < o.lado + o.w) {          // teto, da esquerda para a direita
+      out.x = o.x + (u - o.lado);
+      out.y = o.topY;
+      out.ang = Math.PI;                    // de cabeça para baixo
+    } else {                                // parede direita, descendo
+      out.x = o.x + o.w;
+      out.y = o.topY + (u - o.lado - o.w);
+      out.ang = -Math.PI / 2;               // pés para a direita
+    }
+    return out;
+  }
+  var heroP = { x: 0, y: 0, ang: 0 };       // rascunho reaproveitado
+
+  // Que distância do caminho fica mais perto deste ponto? É assim que ele
+  // "acompanha o comboio": persegue a projeção do jogador na parede.
+  function heroPerto(o, px, py) {
+    var melhor = 0, dist = Infinity;
+    var passos = 36;
+    for (var i = 0; i <= passos; i++) {
+      var u = (i / passos) * o.comp;
+      heroPonto(o, u, heroP);
+      var dx = heroP.x - px, dy = (heroP.y - py) * 0.45;
+      // o vertical pesa menos: assim ele PREFERE o teto, logo por cima do
+      // jogador (que é onde se lê que ele anda pelas paredes e de onde o
+      // raio desce bonito), e só desce pelas laterais quando o jogador se
+      // encosta mesmo a uma das pontas
+      var d = dx * dx + dy * dy;
+      if (d < dist) { dist = d; melhor = u; }
+    }
+    return melhor;
   }
 
   // 15) locomotiva {x, groundY, vagoes, interval, vmax}
@@ -1409,6 +1504,143 @@ window.FG = window.FG || {};
     }
   }
 
+  // --- herobrine -------------------------------------------------------
+  // Só entra em cena com o chefão: antes disso a galeria é só galeria, e
+  // depois de ele cair a luta acabou (nada pode magoar na cinemática da
+  // vitória — a mesma regra do comboio).
+  function herobrineAtivo() {
+    var b = FG.enemies && FG.enemies.boss;
+    return !!(b && b.started && !b.dead);
+  }
+
+  // A janela de exposição do chefão é sagrada: é o único momento em que o
+  // jogador pode colar no ponto fraco, e o jogo inteiro ensina que ali nada
+  // magoa. O vulto continua a andar pela parede, mas segura o tiro.
+  function herobrineSegura() {
+    var b = FG.enemies && FG.enemies.boss;
+    return !!(b && b.state === 'exposto');
+  }
+
+  function updateHerobrine(o, dt, p, t) {
+    if (!p || !herobrineAtivo()) { o.olho = 0; o.state = 'anda'; o.timer = o.interval; return; }
+    var pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+
+    // O caminho acompanha a CÂMERA, não o mundo. Na luta do comboio o mundo
+    // é que corre: uma parede fixa em coordenadas de mundo deixaria o vulto
+    // para trás (ou fora da tela, atirando de lugar nenhum). Amarrado à
+    // vista, ele persegue o comboio como o jogador o vê — e o raio continua
+    // a ser calculado em coordenadas de mundo, como tudo o resto.
+    if (o.segueCamera) {
+      var cam = FG.engine.cam;
+      o.x = cam.x + o.margem;
+      o.w = VIEW_W - o.margem * 2;
+      o.topY = cam.y + o.altoY;
+      o.bottomY = cam.y + o.baixoY;
+      o.lado = Math.max(40, o.bottomY - o.topY);
+      o.comp = o.lado * 2 + o.w;
+    }
+
+    // caminhada: persegue pela parede a projeção do jogador, pelo lado mais
+    // curto do caminho (é um circuito, então ir "para trás" às vezes é mais
+    // perto — sem isto ele dá a volta inteira para chegar ao lado de lá)
+    if (o.state === 'anda' || o.state === 'recua') {
+      var alvo = heroPerto(o, pcx, pcy);
+      var dif = alvo - o.u;
+      while (dif > o.comp / 2) dif -= o.comp;
+      while (dif < -o.comp / 2) dif += o.comp;
+      var passo = Math.min(Math.abs(dif), HERO_SPD * dt) * (dif >= 0 ? 1 : -1);
+      o.u += passo;
+      o.passo += Math.abs(passo) * 0.06;
+    }
+
+    heroPonto(o, o.u, heroP);
+    // o corpo gira para a parede em que está, interpolado (nos cantos ele
+    // "rola" em vez de saltar de orientação)
+    var d = heroP.ang - o.ang;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    o.ang += d * Math.min(1, dt * 8);
+
+    // Os olhos sao a unica coisa dele que o breu nao pode engolir: sem este
+    // buraco de luz, o vulto na parede do fundo some na escuridao e o raio
+    // parece vir do nada.
+    var olhosLuz = heroOlhos(o);
+    luzes.push({ x: olhosLuz.x, y: olhosLuz.y, r: 70 + 60 * o.olho });
+
+    if (o.state === 'anda') {
+      o.olho += (0.25 - o.olho) * Math.min(1, dt * 4);
+      o.timer -= dt;
+      if (o.timer <= 0 && !herobrineSegura()) { o.state = 'mira'; o.timer = HERO_MIRA; }
+    } else if (o.state === 'mira') {
+      o.olho = Math.min(1, o.olho + dt / HERO_MIRA);
+      o.timer -= dt;
+      if (o.timer <= 0) {
+        // dispara: mira travada AGORA, e o raio segue reto até sair da zona
+        var olhos = heroOlhos(o);
+        var dx = pcx - olhos.x, dy = pcy - olhos.y;
+        var len = Math.sqrt(dx * dx + dy * dy) || 1;
+        var tiro = o.tiro;
+        tiro.x0 = olhos.x; tiro.y0 = olhos.y;
+        tiro.x1 = olhos.x + (dx / len) * 1600;
+        tiro.y1 = olhos.y + (dy / len) * 1600;
+        tiro.t = 0;
+        o.state = 'raio';
+        o.timer = HERO_RAIO;
+        FG.audio.sfx('bossSpit');
+      }
+    } else if (o.state === 'raio') {
+      o.tiro.t += dt;
+      o.timer -= dt;
+      // janela aberta no meio do tiro: o raio APAGA. Segurar o próximo não
+      // bastava — um tiro disparado meio segundo antes ainda apanhava quem
+      // corria para o ponto fraco.
+      if (herobrineSegura()) { o.state = 'recua'; o.timer = HERO_RECUA; o.olho = 0.4; return; }
+      // dano enquanto o raio está aceso: distância do centro do jogador à
+      // reta do tiro (o raio é um traço, não um retângulo alinhado aos eixos)
+      if (distPontoSegmento(pcx, pcy, o.tiro) < HERO_GROSSURA + p.w * 0.3) {
+        p.hurt(1, o.tiro.x0);
+      }
+      if (Math.random() < 0.6) {
+        var k = Math.random();
+        spawnParticle(o.tiro.x0 + (o.tiro.x1 - o.tiro.x0) * k * 0.4,
+          o.tiro.y0 + (o.tiro.y1 - o.tiro.y0) * k * 0.4,
+          rand(-60, 60), rand(-60, 60), rand(0.2, 0.4), rand(1.6, 3),
+          'rgba(230,255,255,0.9)', 0);
+      }
+      if (o.timer <= 0) { o.state = 'recua'; o.timer = HERO_RECUA; o.olho = 0.5; }
+    } else { // recua
+      o.olho += (0.25 - o.olho) * Math.min(1, dt * 4);
+      o.timer -= dt;
+      if (o.timer <= 0) { o.state = 'anda'; o.timer = Math.max(1.2, o.interval + rand(-0.8, 0.8)); }
+    }
+  }
+
+  // Posição dos olhos em coordenadas de mundo (a cabeça fica a HERO_H do
+  // apoio, na direção contrária aos pés).
+  var heroOlho = { x: 0, y: 0 };
+  function heroOlhos(o) {
+    heroPonto(o, o.u, heroP);
+    var h = HERO_H * 0.72;
+    // "para cima" local, girado pelo ângulo atual: (0,-1) rodado de o.ang
+    var ux = Math.sin(o.ang), uy = -Math.cos(o.ang);
+    heroOlho.x = heroP.x + ux * h;
+    heroOlho.y = heroP.y + uy * h;
+    return heroOlho;
+  }
+
+  // Distância de um ponto ao segmento do tiro (clássico, sem alocar).
+  function distPontoSegmento(px, py, seg) {
+    var vx = seg.x1 - seg.x0, vy = seg.y1 - seg.y0;
+    var wx = px - seg.x0, wy = py - seg.y0;
+    var c1 = vx * wx + vy * wy;
+    if (c1 <= 0) return Math.sqrt(wx * wx + wy * wy);
+    var c2 = vx * vx + vy * vy;
+    if (c2 <= c1) { var ex = px - seg.x1, ey = py - seg.y1; return Math.sqrt(ex * ex + ey * ey); }
+    var b = c1 / c2;
+    var bx = px - (seg.x0 + b * vx), by = py - (seg.y0 + b * vy);
+    return Math.sqrt(bx * bx + by * by);
+  }
+
   // --- locomotiva ------------------------------------------------------
   // O comboio não anda: o que vive aqui são as topeiras. Cada uma espera,
   // acorda quando o jogador entra na zona de alcance do seu vagão, ergue a
@@ -1427,9 +1659,15 @@ window.FG = window.FG || {};
     }
     var boss = FG.enemies && FG.enemies.boss;
     // Chefão caído = viagem ganha: o comboio continua a correr (nunca para),
-    // mas deixa de magoar — nem o balastro, nem as topeiras. Perder a vida
-    // no meio da cinemática da vitória seria roubo.
+    // mas deixa de magoar. Perder a vida no meio da cinemática da vitória
+    // seria roubo.
+    // Chefão de joelhos (janela de exposição) = as topeiras também seguram a
+    // picareta: a janela é a única hipótese de chegar ao ponto fraco, e ele
+    // fica em cima da cabine, ao lado da última topeira — deixá-la bater ali
+    // seria cobrar dano por jogar certo. O balastro continua a doer: aquilo
+    // é terreno, não ataque.
     var inofensivo = !!(boss && boss.dead);
+    var naJanela = !!(boss && boss.state === 'exposto');
     if (!o.solto && (aBordo || (boss && boss.started && !boss.dead))) {
       o.solto = true;
       FG.audio.sfx('bossRoar');     // o apito rasgado do arranque
@@ -1485,7 +1723,7 @@ window.FG = window.FG || {};
       if (dxc < alvoD) { alvoD = dxc; alvoM = c; }
     }
     if (o.recarga > 0) o.recarga -= dt;
-    var ocupado = o.recarga > 0 || inofensivo;
+    var ocupado = o.recarga > 0 || inofensivo || naJanela;
     for (var b2 = 0; b2 < o.topeiras.length && !ocupado; b2++) {
       if (o.topeiras[b2].state !== 'espera') ocupado = true;
     }
@@ -1517,7 +1755,7 @@ window.FG = window.FG || {};
         m.golpe = Math.min(1, m.golpe + dt / LOCO_GOLPE);
         m.ergue = Math.max(0, m.ergue - dt / LOCO_GOLPE);
         // janela de dano: o arco da picareta à frente da topeira, uma vez só
-        if (!m.bateu && !inofensivo) {
+        if (!m.bateu && !inofensivo && !naJanela) {
           var hb = { x: m.dir > 0 ? m.x + 14 : m.x - 104, y: m.topo - 58, w: 90, h: 96 };
           if (FG.engine.rectsOverlap(p, hb)) {
             p.hurt(1, m.x);
@@ -1561,7 +1799,6 @@ window.FG = window.FG || {};
     // Luzes que o comboio leva consigo: a camada de breu do level5 recorta
     // um buraco em cada uma (ver FG.obstacles.luzes no drawEscuridao). São as
     // únicas luzes estáveis da luta — as da galeria passam a voar para trás.
-    luzes.length = 0;
     luzes.push({ x: o.engine.x + o.engine.w - 6, y: o.engine.y + o.engine.h * 0.4, r: 260 });
     luzes.push({ x: o.engine.x + o.engine.w * 0.4, y: o.engine.y + 40, r: 170 });
     for (var lz2 = 0; lz2 < o.topeiras.length; lz2++) {
@@ -2765,6 +3002,130 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- herobrine: bonequinho de blocos (cabelo escuro, pele clara, camisa
+  // azul-turquesa, calças azuis, botas cinzentas) com dois olhos BRANCOS
+  // acesos, sem pupila. Desenhado em torno dos pés, girado para a parede em
+  // que anda — de cabeça para baixo no teto, deitado nas laterais ---
+  function drawHerobrine(ctx, o, cam, t) {
+    if (!herobrineAtivo()) return;
+    heroPonto(o, o.u, heroP);
+    if (!visible(cam, heroP.x - 90, heroP.y - 90, 180, 180)) return;
+
+    var sx = heroP.x - cam.x, sy = heroP.y - cam.y;
+    var W = HERO_W, H = HERO_H;
+    var bal = Math.sin(o.passo) * (o.state === 'anda' ? 1 : 0.15);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    // O desenho nasce com os pés na origem e o corpo em +y; o scale(1,-1)
+    // transforma isso em "para cima", e o rotate(ang) aponta esse "para
+    // cima" para FORA da parede: no teto o corpo pende para baixo, nas
+    // laterais deita-se para dentro da galeria.
+    ctx.rotate(o.ang);
+    ctx.scale(1, -1);
+
+    // sombra projetada na rocha, atrás dele
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(-W * 0.55, 0, W * 1.1, 6);
+
+    // pernas (azul-escuro) com passada
+    ctx.fillStyle = '#2b2f8f';
+    ctx.fillRect(-W * 0.32, H * 0.02, W * 0.28, H * 0.34 + bal * 3);
+    ctx.fillRect(W * 0.04, H * 0.02, W * 0.28, H * 0.34 - bal * 3);
+    ctx.fillStyle = '#3a3f4a';     // botas
+    ctx.fillRect(-W * 0.32, H * 0.02, W * 0.28, 7);
+    ctx.fillRect(W * 0.04, H * 0.02, W * 0.28, 7);
+
+    // braços (pele), um à frente outro atrás
+    ctx.fillStyle = '#c98f63';
+    ctx.fillRect(-W * 0.62, H * 0.34, W * 0.2, H * 0.3);
+    ctx.fillRect(W * 0.42, H * 0.34, W * 0.2, H * 0.3);
+    // mangas curtas da camisa
+    ctx.fillStyle = '#2fb9b0';
+    ctx.fillRect(-W * 0.62, H * 0.56, W * 0.2, H * 0.08);
+    ctx.fillRect(W * 0.42, H * 0.56, W * 0.2, H * 0.08);
+
+    // tronco (camisa turquesa)
+    ctx.fillStyle = '#35c6bd';
+    ctx.fillRect(-W * 0.42, H * 0.34, W * 0.84, H * 0.3);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(-W * 0.42, H * 0.34, W * 0.84, H * 0.06);
+
+    // cabeça: pele + franja/cabelo escuro em volta
+    ctx.fillStyle = '#c98f63';
+    ctx.fillRect(-W * 0.44, H * 0.64, W * 0.88, H * 0.34);
+    ctx.fillStyle = '#2a1b12';
+    ctx.fillRect(-W * 0.5, H * 0.9, W, H * 0.12);          // topo do cabelo
+    ctx.fillRect(-W * 0.5, H * 0.64, W * 0.1, H * 0.38);   // costeletas
+    ctx.fillRect(W * 0.4, H * 0.64, W * 0.1, H * 0.38);
+    ctx.fillStyle = '#4a2f1e';
+    ctx.fillRect(-W * 0.2, H * 0.68, W * 0.4, H * 0.07);   // barba/sombra do queixo
+
+    // OS OLHOS: dois blocos brancos acesos, sem pupila. O brilho cresce no
+    // telegraph — é o aviso de que o raio vem a seguir.
+    var gl = 0.45 + 0.55 * o.olho;
+    ctx.save();
+    ctx.shadowColor = 'rgba(220,255,255,' + gl.toFixed(2) + ')';
+    ctx.shadowBlur = 8 + 18 * o.olho;   // aceso, não um borrão branco
+    ctx.fillStyle = 'rgb(255,255,255)';
+    ctx.fillRect(-W * 0.34, H * 0.78, W * 0.24, H * 0.1);
+    ctx.fillRect(W * 0.1, H * 0.78, W * 0.24, H * 0.1);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // O raio, desenhado na camada da FRENTE para passar por cima do jogador.
+  function drawHerobrineRaio(ctx, o, cam, t) {
+    if (!herobrineAtivo()) return;
+    var mirando = o.state === 'mira';
+    if (!mirando && o.state !== 'raio') return;
+
+    ctx.save();
+    if (mirando) {
+      // linha de mira fininha e tremida: diz de onde vem, não para onde vai
+      var ol = heroOlhos(o);
+      var p = FG.player;
+      ctx.globalAlpha = 0.25 + 0.35 * Math.abs(Math.sin(t * 20));
+      ctx.strokeStyle = '#bfffff';
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([6, 10]);
+      ctx.beginPath();
+      ctx.moveTo(ol.x - cam.x, ol.y - cam.y);
+      ctx.lineTo(p.x + p.w / 2 - cam.x, p.y + p.h / 2 - cam.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      return;
+    }
+
+    var s = o.tiro;
+    var k = Math.max(0, 1 - s.t / HERO_RAIO);          // o raio afina ao morrer
+    var x0 = s.x0 - cam.x, y0 = s.y0 - cam.y;
+    var x1 = s.x1 - cam.x, y1 = s.y1 - cam.y;
+    ctx.globalCompositeOperation = 'lighter';
+    // halo largo
+    ctx.strokeStyle = 'rgba(120,230,255,0.33)';
+    ctx.lineWidth = (HERO_GROSSURA * 2.2) * k;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    // corpo do raio
+    ctx.strokeStyle = 'rgba(190,250,255,0.85)';
+    ctx.lineWidth = HERO_GROSSURA * k;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    // núcleo branco
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1, HERO_GROSSURA * 0.35 * k);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    // clarão na origem
+    var g = ctx.createRadialGradient(x0, y0, 2, x0, y0, 42 * k);
+    g.addColorStop(0, 'rgba(255,255,255,0.8)');
+    g.addColorStop(1, 'rgba(160,240,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x0, y0, 42 * k, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
   // --- locomotiva: trilhos com dormentes, vagões de minério abertos em cima
   // (sólidos: dá para subir neles) e a máquina vermelha fechando o comboio,
   // com a chaminé a fumegar. Em cada vagão, uma topeira de capacete com a
@@ -3093,6 +3454,7 @@ window.FG = window.FG || {};
         else if (d.type === 'trovao') list.push(makeTrovao(d));
         else if (d.type === 'plateia') list.push(makePlateia(d));
         else if (d.type === 'locomotiva') list.push(makeLocomotiva(d));
+        else if (d.type === 'herobrine') list.push(makeHerobrine(d));
       }
     },
 
@@ -3105,6 +3467,10 @@ window.FG = window.FG || {};
       // (length=0 + push de objetos já existentes: zero alocação).
       movers.length = 0;
       obstacles.activePrompt = null;
+      // Luzes declaradas pelos obstaculos deste frame (a camada de breu da
+      // caverna recorta um buraco em cada uma). Limpa aqui, uma vez so,
+      // porque mais de um tipo escreve nela.
+      luzes.length = 0;
 
       for (var i = 0; i < list.length; i++) {
         var o = list[i];
@@ -3145,6 +3511,8 @@ window.FG = window.FG || {};
           updateTrovao(o, dt, p, t);   // não é sólido: nada em movers
         } else if (o.type === 'plateia') {
           updatePlateia(o, dt, p, t);  // não é sólido: nada em movers
+        } else if (o.type === 'herobrine') {
+          updateHerobrine(o, dt, p, t);   // anda na parede: nada em movers
         } else if (o.type === 'locomotiva') {
           updateLocomotiva(o, dt, p, t);
           // o comboio inteiro é terreno: vagões e máquina entram em movers
@@ -3179,6 +3547,7 @@ window.FG = window.FG || {};
         else if (o.type === 'trovao') drawTrovaoFundo(ctx, o, cam, t);
         else if (o.type === 'plateia') drawPlateiaFundo(ctx, o, cam, t);
         else if (o.type === 'locomotiva') drawLocomotiva(ctx, o, cam, t);
+        else if (o.type === 'herobrine') drawHerobrine(ctx, o, cam, t);
       }
     },
 
@@ -3197,6 +3566,7 @@ window.FG = window.FG || {};
         else if (o.type === 'montanharussa') drawMontanhaRussaFrente(ctx, o, cam, p);
         else if (o.type === 'trovao') drawTrovaoFrente(ctx, o, cam, t);
         else if (o.type === 'plateia') drawPlateiaFrente(ctx, o, cam, t);
+        else if (o.type === 'herobrine') drawHerobrineRaio(ctx, o, cam, t);
       }
       drawParticles(ctx, cam);
     },

@@ -270,6 +270,16 @@ window.FG = window.FG || {};
     // O comboio parado nos carris à saída da estação. Arranca no instante
     // em que o jogador põe um pé nele e nunca mais para — ver a nota sobre
     // o "mundo que corre" no cabeçalho da locomotiva, em obstacles.js.
+    // HEROBRINE: o vulto de olhos brancos que anda pelas paredes da galeria
+    // acompanhando o comboio e atira raio laser nos olhos do jogador. Só
+    // entra em cena com o chefão (ver herobrineAtivo em obstacles.js) e
+    // segura o tiro na janela de exposição. O caminho dele é o perímetro da
+    // VISTA (teto e laterais, nunca o chão, que é do comboio): num mundo em
+    // que é o cenário que corre, uma parede fixa em coordenadas de mundo
+    // ficaria para trás em dois segundos. Vem ANTES da locomotiva de
+    // propósito: desenhado primeiro, o comboio passa à frente dele, que é o
+    // que o põe na parede do fundo e não em cima dos vagões.
+    { type: 'herobrine', x: 10540, w: 760, margem: 96, altoY: 50, baixoY: 250, interval: 3.4 },
     { type: 'locomotiva', x: 10500, groundY: 620, vagoes: 4, interval: 1.8, vmax: 1100 },
   ];
 

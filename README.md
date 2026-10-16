@@ -130,7 +130,7 @@ Sem o ícone e sem som, quem cortou foi o aparelho — volume ou silencioso.
 | `player.js` | física e desenho do herói |
 | `levelkit.js` | ferramentas comuns às fases: sólido, RNG, lumis, offscreen, culling |
 | `level.js` … `level5.js` | as cinco fases, com parallax e pintura próprios (a 5ª, **A Caverna**, é escura: só se enxerga em volta das lanternas de mineração) |
-| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos, chuva de brasa, plateia e a locomotiva da caverna** |
+| `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos, chuva de brasa, plateia, o comboio desgovernado da caverna e o vulto que anda pelas paredes** |
 | `enemies.js` | os inimigos comuns (incluindo a *aranha* e o *morcego* da caverna) e o registro de chefões |
 | `boss1.js` … `boss5.js` | um chefão por arquivo, cada um com a sua máquina de estados (o 5º é **Esbeltinho Otton**, o mineiro-chefe) |
 | `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
