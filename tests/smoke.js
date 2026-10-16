@@ -29,8 +29,21 @@ function makeCtx() {
     set(t, k, v) { t[k] = v; return true; },
   });
 }
+// O <input> escondido do popup "Pular Fase" (index.html). Sem ele o engine
+// trata o popup como inexistente e o cheat nunca é exercitado.
+var senhaInput = {
+  id: 'pularSenhaInput', value: '', maxLength: 11, inputMode: 'text',
+  style: {}, focus() {}, blur() {}, addEventListener() {},
+};
+
 function makeCanvas(w, h) {
-  const c = { width: w || 300, height: h || 150, style: {} };
+  // getBoundingClientRect: o engine usa-o para alinhar o <input> escondido do
+  // popup "Pular Fase" por cima da caixinha desenhada no canvas.
+  const c = {
+    width: w || 300, height: h || 150, style: {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: w || 960, height: h || 540 }),
+    addEventListener() {},
+  };
   const ctx = makeCtx();
   ctx.canvas = c;
   c.getContext = () => ctx;
@@ -45,7 +58,8 @@ global.window = {
   removeEventListener() {},
 };
 global.document = {
-  getElementById: (id) => (id === 'game' ? gameCanvas : null),
+  getElementById: (id) => (id === 'game' ? gameCanvas
+    : id === 'pularSenhaInput' ? senhaInput : null),
   createElement: (tag) => (tag === 'canvas' ? makeCanvas() : {}),
 };
 const gameCanvas = makeCanvas(960, 540);
@@ -130,6 +144,51 @@ console.log('pós-passeio: x=%s hp=%s lumis=%s estado=%s',
   Math.round(FG.player.x), FG.player.hp, FG.engine.lumis, FG.engine.state);
 
 // (a escalada de parede tem teste próprio, com cenário controlado: tests/parede.js)
+
+// ---------- cenário 2b: "Pular Fase" leva para a fase DIGITADA ----------
+// Duas etapas no mesmo popup: senha (o portão) e número da fase (1..N). O
+// que se valida aqui é o portão, o alcance do número e a viagem em si — nos
+// dois sentidos, porque agora também dá para VOLTAR.
+// Espelha SENHA_PULAR do engine.js (é privada lá, e deve seguir assim).
+const SENHA_TESTE = '%Baleia302%';
+const ultima = FG.levels.length;
+function abrirPularFase() {
+  key('Escape', true); key('Escape', false); frames(2);      // pausa
+  if (FG.engine.state !== 'paused') throw new Error('Escape não pausou: ' + FG.engine.state);
+  key('Digit2', true); key('Digit2', false); frames(2);      // Pular Fase
+  if (FG.engine.state !== 'pularSenha') throw new Error('Digit2 não abriu o popup: ' + FG.engine.state);
+  if (senhaInput.value !== '') {
+    throw new Error('o "2" que abre o popup vazou para dentro do campo: "' + senhaInput.value + '"');
+  }
+}
+function confirmar(texto) {
+  senhaInput.value = texto;
+  key('Enter', true); key('Enter', false); frames(2);
+}
+
+abrirPularFase();
+confirmar('senha errada');
+if (FG.engine.state !== 'pularSenha') throw new Error('senha errada não devia passar do popup');
+confirmar(SENHA_TESTE);
+if (FG.engine.state !== 'pularSenha') throw new Error('a senha certa devia manter o popup, pedindo a fase');
+confirmar(String(ultima + 1));
+if (FG.engine.state !== 'pularSenha') throw new Error('fase ' + (ultima + 1) + ' não existe e devia ser recusada');
+confirmar('0');
+if (FG.engine.state !== 'pularSenha') throw new Error('fase 0 não existe e devia ser recusada');
+confirmar('abc');
+if (FG.engine.state !== 'pularSenha') throw new Error('texto que não é número devia ser recusado');
+confirmar(String(ultima));
+if (FG.engine.state !== 'playing') throw new Error('não saiu do popup para a fase pedida: ' + FG.engine.state);
+if (FG.engine.levelIndex !== ultima - 1) {
+  throw new Error('pediu a fase ' + ultima + ' e foi para a ' + (FG.engine.levelIndex + 1));
+}
+// e de volta para a primeira: o salto vale nos dois sentidos
+abrirPularFase();
+confirmar(SENHA_TESTE);
+confirmar('1');
+if (FG.engine.levelIndex !== 0) throw new Error('pediu a fase 1 e foi para a ' + (FG.engine.levelIndex + 1));
+if (FG.engine.state !== 'playing') throw new Error('voltar para a fase 1 não retomou o jogo: ' + FG.engine.state);
+console.log('pular fase: senha + número validados, ida à fase %d e volta à 1', ultima);
 
 // ---------- cenário 3: percorre TODAS as fases, lutando e matando cada chefão ----------
 // Cada volta: teleporta para a arena, deixa o chefão acordar, briga um pouco

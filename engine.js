@@ -33,6 +33,10 @@ window.FG = window.FG || {};
   // lê senhaInput.value direto na hora do Enter/toque em "Confirmar".
   const SENHA_PULAR = '%Baleia302%';
   let senhaErro = false;
+  // Em que etapa do popup estamos: 'senha' (o portão) ou 'fase' (o número do
+  // destino). Mesmo painel, mesmo campo — só muda o que se pede e o que se
+  // valida (ver confirmarSenhaPular).
+  let pularEtapa = 'senha';
 
   // Um único caminho de entrada para teclado e toque: quem manda ação é sempre
   // daqui para baixo, então o touch.js não precisa saber nada de pressBuffer
@@ -79,9 +83,13 @@ window.FG = window.FG || {};
       if (engine.state === 'playing') engine.togglePause();
       else if (engine.state === 'paused') engine.resumeGame();
     } else if (engine.state === 'paused') {
-      if (e.code === 'Digit1') engine.resumeGame();
-      else if (e.code === 'Digit2') engine.requestSkipFase();
-      else if (e.code === 'Digit3') engine.quitToMenu();
+      // preventDefault nos atalhos do menu de pausa: sem ele, o "2" que abre
+      // o popup de senha é entregue ao #pularSenhaInput que o próprio
+      // requestSkipFase acabou de focar, e a senha nasce com um "2" na
+      // frente — erro de digitação que ninguém vê (o campo é de pontinhos).
+      if (e.code === 'Digit1') { e.preventDefault(); engine.resumeGame(); }
+      else if (e.code === 'Digit2') { e.preventDefault(); engine.requestSkipFase(); }
+      else if (e.code === 'Digit3') { e.preventDefault(); engine.quitToMenu(); }
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -185,6 +193,10 @@ window.FG = window.FG || {};
         if (s === 'pularSenha') {
           senhaErro = false;
           senhaInput.value = '';
+          // volta sempre ao modo senha: maxLength e teclado do iOS incluídos
+          pularEtapa = 'senha';
+          senhaInput.maxLength = SENHA_PULAR.length;
+          senhaInput.inputMode = 'text';
           posicionarSenhaInput();
           senhaInput.focus();
         } else {
@@ -320,18 +332,67 @@ window.FG = window.FG || {};
   // "Pular Fase" é a única opção do menu de pausa que pede senha (cheat de
   // debug) — Continuar/Sair continuam instantâneos. requestSkipFase só abre
   // o popup; confirmarSenhaPular lê o valor do #pularSenhaInput na hora do
-  // Enter/toque em "Confirmar" — só ele chama skipFase() de verdade.
-  function requestSkipFase() { engine.setState('pularSenha'); }
+  // Enter/toque em "Confirmar".
+  //
+  // O popup tem DUAS etapas, no mesmo painel e no mesmo campo:
+  //   'senha' — o portão de sempre (sem isto qualquer um salta o jogo todo);
+  //   'fase'  — o número da fase de destino, validado de 1 até FG.levels.length.
+  // Não é mais "pular para a próxima": escolhe-se para onde ir, para a
+  // frente ou para trás.
+  function requestSkipFase() {
+    pularEtapa = 'senha';
+    engine.setState('pularSenha');
+  }
   function cancelPularSenha() { engine.setState('paused'); }
+
+  // Passa da senha para o número da fase sem fechar o popup: limpa o campo,
+  // troca o teclado do iOS para numérico e devolve o foco (no iPhone/iPad o
+  // teclado só fica aberto se o <input> continuar focado).
+  function pedirNumeroDaFase() {
+    pularEtapa = 'fase';
+    senhaErro = false;
+    if (!senhaInput) return;
+    senhaInput.value = '';
+    senhaInput.maxLength = 2;
+    senhaInput.inputMode = 'numeric';
+    senhaInput.focus();
+  }
+
   function confirmarSenhaPular() {
     if (!senhaInput) return;
-    if (senhaInput.value === SENHA_PULAR) { senhaInput.value = ''; skipFase(); }
-    else { senhaInput.value = ''; senhaErro = true; senhaInput.focus(); }
+    if (pularEtapa === 'senha') {
+      if (senhaInput.value === SENHA_PULAR) pedirNumeroDaFase();
+      else { senhaInput.value = ''; senhaErro = true; senhaInput.focus(); }
+      return;
+    }
+    // etapa 'fase': só número inteiro dentro do alcance; qualquer outra coisa
+    // (vazio, letra, 0, maior que a última) é erro e o campo volta a zero.
+    const n = parseInt(senhaInput.value, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= FG.levels.length) {
+      senhaInput.value = '';
+      irParaFase(n - 1);
+    } else {
+      senhaInput.value = '';
+      senhaErro = true;
+      senhaInput.focus();
+    }
+  }
+
+  // Salta para a fase escolhida (índice 0-based). Diferente do antigo
+  // skipFase: vai para QUALQUER fase, não só a seguinte, e por isso tem de
+  // aguentar ir para trás também — loadLevel já recoloca tudo (sólidos,
+  // obstáculos, inimigos, câmera), então não há estado da fase anterior a
+  // limpar aqui. As lumis continuam acumulando: só zeram em jogo novo.
+  function irParaFase(i) {
+    const n = Math.max(0, Math.min(FG.levels.length - 1, i));
+    loadLevel(n);
+    FG.audio.sfx('select');
   }
   engine.togglePause = togglePause;
   engine.resumeGame = resumeGame;
   engine.skipFase = skipFase;
   engine.quitToMenu = quitToMenu;
+  engine.irParaFase = irParaFase;
   engine.requestSkipFase = requestSkipFase;
   engine.cancelPularSenha = cancelPularSenha;
   engine.confirmarSenhaPular = confirmarSenhaPular;
@@ -680,9 +741,9 @@ window.FG = window.FG || {};
   //   SENHA_INPUT_BOX    — só a caixinha de pontinhos; é onde o <input> de
   //                        verdade fica posicionado (posicionarSenhaInput).
   //   SENHA_CONFIRM_BTN  — botão "Confirmar"; tocar nele chama confirmarSenhaPular.
-  const SENHA_CARD = { x: VIEW_W / 2 - 220, y: 170, w: 440, h: 220 };
+  const SENHA_CARD = { x: VIEW_W / 2 - 220, y: 158, w: 440, h: 252 };
   const SENHA_INPUT_BOX = { x: VIEW_W / 2 - 130, y: SENHA_CARD.y + 90, w: 260, h: 40 };
-  const SENHA_CONFIRM_BTN = { x: VIEW_W / 2 - 110, y: SENHA_CARD.y + 140, w: 220, h: 42 };
+  const SENHA_CONFIRM_BTN = { x: VIEW_W / 2 - 110, y: SENHA_CARD.y + 168, w: 220, h: 42 };
   function drawPularSenhaOverlay() {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -703,26 +764,58 @@ window.FG = window.FG || {};
     ctx.fillText('PULAR FASE', VIEW_W / 2, c.y + 44);
     ctx.shadowBlur = 0;
 
+    const total = (FG.levels && FG.levels.length) || 1;
+    const etapaFase = pularEtapa === 'fase';
+    const digitado = senhaInput ? senhaInput.value : '';
+
     ctx.fillStyle = senhaErro ? '#ff8a80' : 'rgba(255,255,255,0.75)';
     ctx.font = '16px "Trebuchet MS", sans-serif';
-    ctx.fillText(senhaErro ? 'senha errada — tente de novo'
-                            : botao('digite a senha', 'toque aqui e digite a senha'),
-                 VIEW_W / 2, c.y + 74);
+    let legenda;
+    if (etapaFase) {
+      legenda = senhaErro
+        ? 'fase inválida — digite de 1 a ' + total
+        : botao('digite a fase (1 a ' + total + ')',
+                'toque aqui e digite a fase (1 a ' + total + ')');
+    } else {
+      legenda = senhaErro
+        ? 'senha errada — tente de novo'
+        : botao('digite a senha', 'toque aqui e digite a senha');
+    }
+    ctx.fillText(legenda, VIEW_W / 2, c.y + 74);
 
     const b = SENHA_INPUT_BOX;
-    const dots = senhaInput ? Math.min(senhaInput.value.length, SENHA_PULAR.length) : 0;
     painel(b.x, b.y, b.w, b.h, 'rgba(0,0,0,0.3)', 'rgba(255,190,90,0.4)');
     ctx.fillStyle = '#ffe8b0';
     ctx.font = 'bold 22px "Trebuchet MS", sans-serif';
-    let pontos = '';
-    for (let i = 0; i < dots; i++) pontos += '•';
-    ctx.fillText(pontos || ' ', VIEW_W / 2, b.y + b.h / 2 + 7);
+    let mostrado;
+    if (etapaFase) {
+      // o número aparece à vista: aqui não há nada a esconder, e ver o que
+      // se digitou é o que evita saltar para a fase errada
+      mostrado = digitado;
+    } else {
+      mostrado = '';
+      const dots = Math.min(digitado.length, SENHA_PULAR.length);
+      for (let i = 0; i < dots; i++) mostrado += '•';
+    }
+    ctx.fillText(mostrado || ' ', VIEW_W / 2, b.y + b.h / 2 + 7);
+
+    // na etapa da fase, o nome do destino aparece por baixo do número — é a
+    // confirmação de que o 3 que se digitou é mesmo a fase que se quer
+    if (etapaFase) {
+      const n = parseInt(digitado, 10);
+      const alvo = (Number.isFinite(n) && n >= 1 && n <= total) ? FG.levels[n - 1] : null;
+      ctx.font = '15px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = alvo ? '#ffd870' : 'rgba(255,255,255,0.35)';
+      ctx.fillText(alvo ? alvo.nome : '—', VIEW_W / 2, b.y + b.h + 20);
+    }
 
     const cb = SENHA_CONFIRM_BTN;
     painel(cb.x, cb.y, cb.w, cb.h, 'rgba(143,232,154,0.16)', 'rgba(143,232,154,0.6)');
     ctx.fillStyle = '#c8f7c5';
     ctx.font = 'bold 18px "Trebuchet MS", sans-serif';
-    ctx.fillText(botao('Confirmar (Enter)', 'Confirmar'), VIEW_W / 2, cb.y + cb.h / 2 + 7);
+    ctx.fillText(etapaFase ? botao('Ir para a fase (Enter)', 'Ir para a fase')
+                           : botao('Confirmar (Enter)', 'Confirmar'),
+                 VIEW_W / 2, cb.y + cb.h / 2 + 7);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '14px "Trebuchet MS", sans-serif';

@@ -93,8 +93,8 @@ window.FG = window.FG || {};
   // SENHA_INPUT_BOX não precisa de cópia aqui: quem cobre aquela área é o
   // próprio <input> real, então o toque já cai nele antes de chegar a
   // tratarPausa (ver ehPularSenhaInput).
-  var SENHA_CARD = { x: 480 - 220, y: 170, w: 440, h: 220 };
-  var SENHA_CONFIRM_BTN = { x: 480 - 110, y: 170 + 140, w: 220, h: 42 };
+  var SENHA_CARD = { x: 480 - 220, y: 158, w: 440, h: 252 };
+  var SENHA_CONFIRM_BTN = { x: 480 - 110, y: 158 + 168, w: 220, h: 42 };
 
   function dentroRetangulo(p, r) {
     return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
