@@ -26,7 +26,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 12000, H = 720;
+  var W = 13200, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -53,10 +53,12 @@ window.FG = window.FG || {};
   //  (5) x 7500..9600   O DESMORONAMENTO: lajes instáveis que caem com o
   //                     peso, balde de minério balançando (pêndulo) e roda de
   //                     serra do túnel.
-  //  (6) x 9600..12000  A ESTAÇÃO: o fim da linha. O comboio de mineração
-  //                     está parado nos trilhos com as topeiras ajudantes nos
-  //                     vagões, e no fundo da estação espera ESBELTINHO
-  //                     OTTON, o chefão.
+  //  (6) x 9400..13200  A ESTAÇÃO: o fim da linha, cortada por uma vala de
+  //                     1080px. O comboio de mineração ANDA sem parar entre
+  //                     o cais e a doca, com as topeiras ajudantes nos
+  //                     vagões, e é por cima dele — saltando de vagão em
+  //                     vagão e viajando neles — que se atravessa. Do outro
+  //                     lado espera ESBELTINHO OTTON, o chefão.
   //
   // Nada de beco sem saída: dos poços sobe-se pela margem (degrau curto), e
   // os paredões do trecho 3 ficam logo atrás para escalar de volta.
@@ -124,8 +126,23 @@ window.FG = window.FG || {};
     S(9200, 520, 110, 24, 'r'),       // laje suspensa 2 (+40)
 
     // ---- (6) a estação do comboio (arena do chefão) ----
-    S(9400, 620, 2600, 100, 'g'),     // plataforma da estação até o fim do mundo
-    S(11200, 530, 130, 24, 'r'),      // pilha de dormentes: o degrau da luta
+    // O cais da estação e a doca do chefão são DUAS plataformas separadas por
+    // uma vala de 1080px com estalagmites no fundo. Não há ponte fixa: a
+    // ponte é o comboio, que vai e vem sem parar e nunca cobre a vala
+    // inteira (ver `min`/`max` em obstacleDefs) — é saltando para os vagões e
+    // viajando neles que se chega ao Esbeltinho Otton.
+    // Quem cai não fica preso: há piso oculto no fundo, e a face esquerda da
+    // doca (80px acima do fundo) é escalável — mas custa as estalagmites e o
+    // tempo, que é o preço de não usar o comboio.
+    S(9400, 620, 720, 100, 'g'),      // cais da estação 9400..10120 (checkpoint 7)
+    S(10120, 700, 1080, 30, 'h'),     // piso oculto do fundo da vala
+    // A doca é COMPRIDA de propósito (2000px): o Otton investe 460px para a
+    // esquerda, e quem não tiver para onde recuar leva a investida de graça
+    // ou cai na vala a fugir dela. O chefão fica no fundo (x≈12980) e sobra
+    // mais de mil pixels de recuo entre ele e a beira.
+    S(11200, 620, 2000, 100, 'g'),    // doca do chefão 11200..13200
+    S(11320, 530, 130, 24, 'r'),      // pilha de dormentes: o degrau da chegada
+    S(12300, 540, 130, 24, 'r'),      // pilha de dormentes: o degrau da luta
   ];
 
   // ---------------------------------------------------------------
@@ -142,6 +159,7 @@ window.FG = window.FG || {};
     Hz(8120, 596, 56, 24, 'e'),    // antes da laje instável 1
     Hz(8920, 596, 56, 24, 'e'),    // antes da laje instável 2
     Hz(9640, 596, 70, 24, 'e'),    // entrada da estação
+    Hz(10120, 674, 1080, 26, 'e'), // fundo da vala da estação
   ];
 
   // 6 lanternas-checkpoint (acendem forte quando ativadas)
@@ -152,6 +170,7 @@ window.FG = window.FG || {};
     { x: 5350, y: 220 },   // topo do paredão 2 — prêmio de escalar
     { x: 7560, y: 620 },   // saída do veio de cristal
     { x: 8650, y: 620 },   // meio do desmoronamento
+    { x: 9760, y: 620 },   // cais da estação, antes da travessia de comboio
   ];
 
   // ---------------------------------------------------------------
@@ -179,9 +198,13 @@ window.FG = window.FG || {};
     // (5) desmoronamento
     Lz(7620, 540, 185), Lz(8020, 500, 160), Lz(8500, 450, 160),
     Lz(8700, 540, 185), Lz(9120, 450, 160),
-    // (6) estação — a mais iluminada da fase: é onde se luta
-    Lz(9700, 530, 200), Lz(10100, 470, 190), Lz(10600, 470, 190),
-    Lz(11050, 500, 200), Lz(11500, 470, 200), Lz(11850, 510, 200),
+    // (6) estação — a mais iluminada da fase: é onde se luta, e é onde o
+    // jogador precisa LER o comboio a tempo de saltar. A vala leva lanternas
+    // penduradas do teto por cima dela (a travessia nunca é às cegas).
+    Lz(9700, 530, 200), Lz(10000, 470, 190),
+    Lz(10350, 440, 200), Lz(10750, 440, 200), Lz(11080, 470, 200),
+    Lz(11400, 500, 200), Lz(11800, 500, 210),
+    Lz(12250, 480, 210), Lz(12700, 500, 210), Lz(13080, 500, 200),
   ];
 
   // ---------------------------------------------------------------
@@ -225,6 +248,8 @@ window.FG = window.FG || {};
     { type: 'morcego', x: 9800, y: 330, range: 250 },
     { type: 'aranha',  x: 10050, y: 300, range: 130 },
     { type: 'morcego', x: 10750, y: 320, range: 250 },
+    { type: 'aranha',  x: 11600, y: 300, range: 130 },
+    { type: 'morcego', x: 12100, y: 320, range: 250 },
   ];
 
   // ---------------------------------------------------------------
@@ -254,7 +279,12 @@ window.FG = window.FG || {};
     // (6) a estação: o comboio parado nos trilhos. Fica DENTRO da arena do
     // chefão (x 9700..12000), à esquerda dele — vagões e máquina são
     // sólidos, e cada vagão leva uma topeira de picareta.
-    { type: 'locomotiva', x: 9980, groundY: 620, vagoes: 4, interval: 1.8 },
+    // O comboio nasce encostado ao cais (min) e corre até encostar a
+    // máquina na doca do chefão (max). Comprimento total ~900px numa vala de
+    // 1080: em nenhum instante ele cobre a vala toda, então a travessia é
+    // sempre embarcar, viajar e saltar — nunca atravessar a pé por cima.
+    { type: 'locomotiva', x: 9500, min: 9500, max: 10460, speed: 185,
+      groundY: 620, vagoes: 4, interval: 1.8 },
   ];
 
   // ---------------------------------------------------------------
@@ -304,9 +334,14 @@ window.FG = window.FG || {};
   lumiLine(9280, 470, 2, 48);
   // (6) estação
   lumiLine(9700, 578, 3, 54);
-  lumiArc(10900, 546, 4, 170, 42);
-  lumiLine(11240, 490, 3, 44);
-  lumiArc(11600, 546, 4, 170, 42);
+  lumiLine(9980, 500, 3, 60);          // a escada para o teto do vagão
+  lumiLine(10300, 480, 6, 90);         // trilha por cima da vala, à altura dos vagões
+  lumiLine(10950, 480, 3, 90);
+  lumiLine(11340, 490, 3, 44);
+  lumiArc(11650, 546, 4, 170, 42);
+  lumiLine(12040, 578, 3, 56);
+  lumiLine(12340, 500, 3, 44);
+  lumiArc(12750, 546, 4, 170, 42);
 
   // FAÍSCAS — brilho de despedida da lumi coletada (pool fixo do kit, sem GC).
   var sparks = kit.makeSparks(64);
@@ -1057,8 +1092,8 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'otton',
-    bossTriggerX: 11000,
-    arena: { x: 9700, w: 2300 },
+    bossTriggerX: 11320,
+    arena: { x: 9700, w: 3500 },
     reset: reset,
     update: update,
     drawBack: drawBack,

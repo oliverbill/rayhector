@@ -443,8 +443,13 @@ window.FG = window.FG || {};
               s.active = true;
               s.state = 'shadow';
               // espalha pela faixa da arena onde o jogador luta
-              s.x = a.x + 120 + (spawned / n) * (a.w - 320) + rand(-30, 30);
+              // Caem sobre a doca do chefão, a faixa onde o jogador luta de
+              // verdade — espalhar pela arena inteira mandaria metade delas
+              // para dentro da vala, longe de toda a gente.
+              const faixa = Math.max(260, Math.min(a.w - 320, 620));
+              s.x = Math.max(a.x + 120, this.x - faixa) + (spawned / n) * faixa + rand(-30, 30);
               s.groundY = groundYAt(s.x + s.w / 2, 300);
+              if (Math.abs(s.groundY - this.groundY) > 2) { s.active = false; continue; }
               s.y = s.groundY - 540;
               s.vy = 0;
               s.timer = 0.75 + spawned * stagFall;
@@ -510,6 +515,10 @@ window.FG = window.FG || {};
             if (j.active) continue;
             const jx = this.x - 130 - spawned * step + rand(-18, 18);
             if (jx < a.x + 50) break;              // não jorra dentro da parede
+            // A marcha das rachaduras para onde o chão dele acaba: a vala da
+            // estação fica mais funda que a doca, e um jorro lá no fundo
+            // seria perigo invisível, não ataque.
+            if (Math.abs(groundYAt(jx, 300) - this.groundY) > 2) break;
             j.active = true;
             j.state = 'crack';
             j.x = jx;

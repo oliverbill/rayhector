@@ -178,12 +178,16 @@ Tipos em `FG.level.obstacleDefs` (`{type, x, y, ...}`):
    a bola machuca (1 de dano) e a **corrente é sólida** — dá para pousar nela.
 5. `espinhorolo` — rolo de espinhos que corre num trilho. `{x, y, w, range, speed}`:
    machuca ao encostar, obriga a pular ou a subir na parede.
-6. `locomotiva` — comboio de mineração parado nos trilhos (fase 5, só na arena
-   do chefão). `{x, groundY, vagoes, interval}`: a máquina e os vagões são
-   **sólidos** (entram em `movers`, dá para subir neles) e cada vagão leva uma
-   topeira ajudante do chefão que ergue a picareta (telegraph ~0.5s) e dá a
-   picaretada — 1 de dano — em quem estiver ao alcance. As topeiras não morrem:
-   recuam e voltam a bater.
+6. `locomotiva` — comboio de mineração em marcha (fase 5, só na arena do
+   chefão). `{x, groundY, vagoes, interval, min, max, speed}`: vai e vem sem
+   parar entre `min` e `max` (desacelerando nas pontas), e a máquina e os
+   vagões são **sólidos** (entram em `movers`) e **carregam o jogador** que
+   estiver apoiado neles — é a ponte móvel sobre a vala da estação. Cada vagão
+   leva uma topeira ajudante do chefão que ergue a picareta (telegraph ~0.5s) e
+   dá a picaretada — 1 de dano — em quem estiver ao alcance; só **uma bate de
+   cada vez** no comboio todo (a mais próxima), com recarga entre golpes, e o
+   arco morre à altura do telhado, então saltar o golpe funciona. As topeiras
+   não morrem: recuam e voltam a bater.
 
 (os demais tipos — `cipo`, `disco`, `tronco`, `brasa`, `cachorroquente`,
 `montanharussa`, `rodagigante`, `trovao`, `plateia` — estão documentados no
@@ -305,6 +309,14 @@ Consequência de desenho a respeitar: as lanternas são, ao mesmo tempo,
 iluminação e mapa. Trecho sem lanterna é trecho que o jogador atravessa só com
 o halo próprio — use isso como ritmo (a travessia do veio de cristal é escura
 de propósito), nunca como armadilha num salto cego.
+
+A travessia final é o comboio: o cais da estação e a doca do chefão são duas
+plataformas separadas por uma vala de 1080px com estalagmites, e o comboio
+(~900px) nunca cobre a vala inteira — a única rota limpa é saltar para os
+vagões, viajar neles e saltar para a doca, com as topeiras a tentar derrubar
+quem viaja. Cair não é beco sem saída (há piso oculto no fundo e a face da
+doca é escalável), só caro. Os ataques de chão do chefão param onde o chão
+dele acaba, para não chover perigo invisível dentro da vala.
 
 O chefão é **Esbeltinho Otton** (`boss5.js`), mineiro comprido de capacete
 amarelo: 10 de vida e os 4 ataques da forma comum — arremesso de picaretas,
