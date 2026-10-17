@@ -31,7 +31,7 @@ escalado por CSS para caber na janela.
 | `level2.js` `level3.js` | fases 2 e 3; empurram em `FG.levels` como o `level.js` |
 | `enemies.js` | `FG.enemies` — bichos comuns, registro de chefões e `fx` |
 | `boss1/2/3.js` | um chefão por arquivo; registram-se via `FG.enemies.registerBoss` |
-| `audio.js`   | `FG.audio` (WebAudio procedural, zero assets) |
+| `audio.js`   | `FG.audio` (WebAudio procedural; o único asset é `musica-caverna.mp3`, a trilha da fase 5) |
 | `touch.js`   | `FG.touch` — controles de toque; carrega **depois** do engine |
 
 Namespace global único: `window.FG = window.FG || {}`. Cada arquivo só adiciona
@@ -305,13 +305,20 @@ quadro, no topo do arquivo. Barra de HP é o engine que desenha, lendo
 
 ### FG.audio (audio.js)
 
-- Tudo WebAudio procedural (osciladores/ruído), zero arquivos.
+- Tudo WebAudio procedural (osciladores/ruído), com um único arquivo de áudio:
+  `musica-caverna.mp3`, a trilha da fase 5 (ver `ARQUIVOS` no `audio.js`).
 - `init()` — cria/resume o AudioContext (engine chama no primeiro gesto).
 - `sfx(name)` — `'jump','doublejump','glide','punch','hitEnemy','hurt','lumi',
   'checkpoint','death','bossRoar','bossHit','bossSpit','victory','select'`.
   Nomes desconhecidos: silêncio, sem throw.
 - `music(name)` — `'overworld' | 'boss' | 'pantano' | 'mansao' | 'coliseu' |
-  'caverna' | null` (para). Cada fase pede a sua em `FG.level.musica`. Loops agendados por
+  'caverna' | null` (para). Cada fase pede a sua em `FG.level.musica`.
+  `'caverna'` é a única de ARQUIVO: toca `musica-caverna.mp3` num `<audio>`
+  (em http(s) o som passa por um `MediaElementSource`, porque no iOS o
+  `.volume` do elemento é só leitura; em `file://` vai pelo `.volume`, que é
+  o único caminho que não sai mudo). Arquivo que não carrega cai na versão
+  procedural da caverna — a fase nunca fica muda. As demais são loops
+  agendados por
   scheduler (lookahead ~0.1s): overworld = tema saltitante em maior (melodia +
   baixo + percussão de ruído); boss = tema tenso em menor, mais rápido.
   Trocar de música faz fade curto. Chamar com o mesmo nome não reinicia.

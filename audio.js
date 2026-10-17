@@ -1,5 +1,8 @@
-// Fagulho: Lendas do Bosque — FG.audio: todo o áudio do jogo, 100% WebAudio
-// procedural (osciladores, ruído gerado, filtros). Zero arquivos de áudio.
+// Fagulho: Lendas do Bosque — FG.audio: todo o áudio do jogo em WebAudio
+// procedural (osciladores, ruído gerado, filtros). A ÚNICA exceção é a
+// trilha da caverna, que é um mp3 de verdade tocado por um <audio> (ver
+// ARQUIVOS, mais abaixo) — se o arquivo não carregar, a versão procedural da
+// caverna assume o lugar e a fase nunca fica muda.
 //
 // Contrato (ver SPEC.md):
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
@@ -66,6 +69,10 @@ window.FG = window.FG || {};
       // para sempre depois de uma interrupção. Resume de tudo que não é
       // 'running' — em contexto já rodando, resume() é no-op.
       if (actx.state !== 'running') actx.resume();
+      // o iOS também recusa o play() de um <audio> fora de um gesto; init()
+      // roda em TODO gesto, então é daqui que a trilha de arquivo é retomada
+      // quando o primeiro play foi barrado
+      retomarArquivo();
     } catch (e) { /* áudio quebrado não derruba o jogo */ }
   }
 
@@ -87,8 +94,13 @@ window.FG = window.FG || {};
   function dormir() {
     try {
       if (!actx) return;
-      if (dormindo === null) dormindo = mus.name || '';
+      if (dormindo === null) dormindo = atual || '';
+      // o <audio> da caverna não é suspenso pelo contexto (ele tem vida
+      // própria): tem de ser pausado à mão, guardando onde parou para a
+      // música voltar de onde estava, e não do começo
+      pararArquivo(true);
       pararMusica();
+      atual = null;
       if (actx.state === 'running' && actx.suspend) actx.suspend();
     } catch (e) { /* calar nunca pode derrubar o jogo */ }
   }
@@ -875,13 +887,134 @@ window.FG = window.FG || {};
     } catch (e) { /* um tick ruim não mata a trilha nem o jogo */ }
   }
 
+  // ------------------------------------------------ trilha de ARQUIVO --
+  // A caverna é a única fase com música gravada: um mp3 que mora ao lado do
+  // index.html. Quem toca é um <audio>, não o decodeAudioData — 2,4 MB
+  // descomprimidos na memória do iPad é caro, e o fetch de um arquivo local
+  // é barrado quando o jogo abre por file:// (que é como se testa na
+  // máquina). Tudo o mais do jogo continua procedural.
+  var ARQUIVOS = {
+    caverna: { src: 'musica-caverna.mp3', vol: 0.9 },
+  };
+
+  var arqRuim = {};  // trilha cujo arquivo falhou: cai no procedural, sem insistir
+  var arq = {
+    name: null,  // trilha de arquivo tocando agora
+    el: null,    // o <audio>
+    bus: null,   // GainNode (só quando o som passa pelo grafo do WebAudio)
+    pos: 0,      // segundo em que parou, para retomar ao voltar de cena
+  };
+
+  // Em http(s) — GitHub Pages, por onde o iPad joga — o som do elemento entra
+  // no grafo do WebAudio, porque no iOS o `.volume` de um elemento é SÓ
+  // LEITURA e o fade só é possível num GainNode. Em file:// a origem é opaca
+  // e o MediaElementSource sairia mudo; lá vai pelo `.volume`, que no
+  // desktop funciona.
+  function viaGrafo() {
+    try { return !(window.location && window.location.protocol === 'file:'); }
+    catch (e) { return true; }
+  }
+
+  function tocarArquivo(name, pos) {
+    var def = ARQUIVOS[name];
+    if (!def || arqRuim[name]) return false;
+    var el = null;
+    try { el = document.createElement('audio'); } catch (e) { return false; }
+    // ambiente sem <audio> de verdade (teste headless): deixa o procedural
+    if (!el || typeof el.play !== 'function') return false;
+
+    arq.name = name;
+    arq.el = el;
+    arq.bus = null;
+    el.loop = true;
+    el.preload = 'auto';
+    el.src = def.src;
+    if (pos) { try { el.currentTime = pos; } catch (e) { /* idem */ } }
+
+    // arquivo que não carrega não pode deixar a fase muda
+    try {
+      el.addEventListener('error', function () {
+        arqRuim[name] = true;
+        if (atual !== name) return;
+        pararArquivo(false);
+        iniciarProcedural(name);
+      });
+    } catch (e) { /* sem listener: no pior caso, silêncio nessa fase */ }
+
+    if (viaGrafo() && actx.createMediaElementSource) {
+      try {
+        var fonte = actx.createMediaElementSource(el);
+        var bus = actx.createGain();
+        bus.gain.setValueAtTime(FLOOR, actx.currentTime);
+        bus.gain.exponentialRampToValueAtTime(def.vol, actx.currentTime + 0.6);
+        fonte.connect(bus);
+        bus.connect(master);
+        arq.bus = bus;
+      } catch (e) { arq.bus = null; }
+    }
+    if (!arq.bus) { try { el.volume = def.vol; } catch (e) {} }
+
+    try {
+      var p = el.play();
+      if (p && p.catch) p.catch(function () { /* o gesto seguinte retoma */ });
+    } catch (e) { /* idem */ }
+    return true;
+  }
+
+  // guardar=true preserva o ponto da música (saída de cena); false recomeça
+  // do zero na próxima vez (trocar de fase, morrer, voltar ao menu).
+  function pararArquivo(guardar) {
+    var el = arq.el, bus = arq.bus;
+    arq.name = null; arq.el = null; arq.bus = null;
+    // sem elemento não há posição a mexer — zerar aqui apagaria justamente o
+    // ponto que o dormir() acabou de guardar, e a música voltaria do começo
+    if (!el) return;
+    arq.pos = 0;
+    if (guardar) { try { arq.pos = el.currentTime || 0; } catch (e) {} }
+    try {
+      if (bus) {
+        var t = actx.currentTime;
+        bus.gain.cancelScheduledValues(t);
+        bus.gain.setValueAtTime(Math.max(FLOOR, bus.gain.value), t);
+        bus.gain.exponentialRampToValueAtTime(FLOOR, t + FADE); // fade out ~0.4s
+      }
+      setTimeout(function () {
+        try { el.pause(); } catch (e) {}
+        try { el.removeAttribute('src'); if (el.load) el.load(); } catch (e) {} // larga os bytes
+        try { if (bus) bus.disconnect(); } catch (e) {}
+      }, (FADE + 0.15) * 1000);
+    } catch (e) {
+      try { el.pause(); } catch (e2) {}
+    }
+  }
+
+  function retomarArquivo() {
+    try {
+      if (!arq.el || !arq.el.paused) return;
+      var p = arq.el.play();
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) { /* silêncio */ }
+  }
+
+  // -------------------------------------------------------- despachante --
+  var atual = null;  // trilha pedida pelo jogo (de arquivo ou procedural)
+
   function music(name) {
     try {
       if (!actx) return;                    // init ainda não rodou: no-op
-      if (name === mus.name) return;        // mesma música: não reinicia
-      pararMusica();                        // fade out do que tocava (se algo)
-      if (!name || !SONGS[name]) return;    // music(null) ou nome desconhecido: só para
+      if (name === atual) return;           // mesma música: não reinicia
+      pararArquivo(false);                  // fade out do que tocava (se algo)
+      pararMusica();
+      atual = (name && (ARQUIVOS[name] || SONGS[name])) ? name : null;
+      if (!atual) return;                   // music(null) ou nome desconhecido: só para
+      if (ARQUIVOS[atual] && tocarArquivo(atual, arq.pos)) return;
+      iniciarProcedural(atual);
+    } catch (e) { /* silêncio */ }
+  }
 
+  function iniciarProcedural(name) {
+    try {
+      if (!actx || !SONGS[name]) return;
       mus.name = name;
       mus.step = 0;
       mus.started = false;

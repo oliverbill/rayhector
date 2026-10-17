@@ -114,7 +114,9 @@ Sem o ícone e sem som, quem cortou foi o aparelho — volume ou silencioso.
   contato enquanto a janela está aberta, nem os restos do ataque anterior. A
   partir de 3 de vida todos esquentam e aceleram um pouco.
 - **Música procedural** (WebAudio): tema saltitante no bosque, tema tenso no
-  chefão — nenhum arquivo de áudio no projeto.
+  chefão — tudo sintetizado. A exceção é a **fase 5**, que tem música gravada
+  (`musica-caverna.mp3`); se o arquivo faltar, a caverna volta à sua trilha
+  procedural.
 - **Boneco articulado**: pernas com passada larga na corrida, braços em
   guarda de boxe parado, bombeando ao correr, esticados para o alto no pulo e
   abertos como asas ao planar; no soco, o braço da frente **estica de
@@ -133,7 +135,7 @@ Sem o ícone e sem som, quem cortou foi o aparelho — volume ou silencioso.
 | `obstacles.js` | plataformas móveis, desmoronamentos, sopros, pêndulos, rolos, **cipós, discos, troncos, chuva de brasa, plateia, o comboio desgovernado da caverna e o vulto que anda pelas paredes** |
 | `enemies.js` | os inimigos comuns (incluindo a *aranha* e o *morcego* da caverna) e o registro de chefões |
 | `boss1.js` … `boss5.js` | um chefão por arquivo, cada um com a sua máquina de estados (o 5º é **Esbeltinho Otton**, o mineiro-chefe) |
-| `audio.js` | efeitos e trilhas, tudo sintetizado em WebAudio |
+| `audio.js` | efeitos e trilhas em WebAudio; a trilha da caverna vem de `musica-caverna.mp3` |
 | `touch.js` | controles de toque desenhados no canvas (iPhone, iPad, Android) |
 
 Contratos entre os módulos em `SPEC.md`.
