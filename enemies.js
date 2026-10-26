@@ -1357,7 +1357,8 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // --- aranha da caverna: fio de seda saindo do teto, abdômen bulboso com
+  // --- aranha da caverna: fio de seda saindo do teto, abdômen bulboso AZUL
+  // (a paleta é a mesma família da tarântula, fiel ao desenho de referência),
   // marca clara nas costas, 8 patas dobradas que se agitam na descida e um
   // punhado de olhos vermelhos ---
   function drawAranha(ctx, e, t) {
@@ -1379,7 +1380,7 @@ window.FG = window.FG || {};
     ctx.translate(cx, cy);
 
     // patas: quatro de cada lado, cotovelo alto e ponta no chão do desenho
-    ctx.strokeStyle = '#120d16';
+    ctx.strokeStyle = '#17204e';
     ctx.lineWidth = 3.2;
     ctx.lineCap = 'round';
     for (let s = -1; s <= 1; s += 2) {
@@ -1398,14 +1399,14 @@ window.FG = window.FG || {};
 
     // abdômen (atrás) e cefalotórax (à frente)
     const g = ctx.createRadialGradient(-e.w * 0.08, -e.h * 0.2, 2, 0, 0, e.w * 0.6);
-    g.addColorStop(0, '#3a2a44');
-    g.addColorStop(1, '#140e1a');
+    g.addColorStop(0, '#4a66d8');
+    g.addColorStop(1, '#141c50');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.ellipse(e.w * 0.1 * -e.dir, e.h * 0.02, e.w * 0.40, e.h * 0.44, 0, 0, Math.PI * 2);
     ctx.fill();
     // marca clara nas costas — o aviso de "não encoste"
-    ctx.fillStyle = 'rgba(220,190,120,0.65)';
+    ctx.fillStyle = 'rgba(150,215,255,0.7)';
     ctx.beginPath();
     ctx.moveTo(e.w * 0.1 * -e.dir, -e.h * 0.26);
     ctx.lineTo(e.w * 0.1 * -e.dir - 5, e.h * 0.02);
@@ -1414,7 +1415,7 @@ window.FG = window.FG || {};
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = '#1b1320';
+    ctx.fillStyle = '#1e2a6e';
     ctx.beginPath();
     ctx.ellipse(e.w * 0.24 * e.dir, e.h * 0.06, e.w * 0.24, e.h * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -1429,7 +1430,7 @@ window.FG = window.FG || {};
       ctx.fill();
     }
     // presas
-    ctx.strokeStyle = '#c9b7a0';
+    ctx.strokeStyle = '#c6d2f2';
     ctx.lineWidth = 1.8;
     for (let s = -1; s <= 1; s += 2) {
       ctx.beginPath();
