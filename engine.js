@@ -276,6 +276,13 @@ window.FG = window.FG || {};
       FG.player.vy = 0;
       engine.checkpoint = { x: FG.player.x, y: FG.player.y };
       engine.cam.x = Math.max(0, Math.min(FG.player.x + FG.player.w / 2 - VIEW_W / 2, FG.level.W - VIEW_W));
+      // o atalho pinga o jogador DEPOIS do resgate da fase (se ela tiver um,
+      // declarado em resgateX): o MurphOliver conta como resgatado, senão
+      // testar o chefão seria testar sem ele e sem o botão de cócegas
+      if (FG.companion && !FG.companion.active && FG.level.resgateX != null &&
+          FG.player.x > FG.level.resgateX && FG.companion.rescue) {
+        FG.companion.rescue(FG.player.x - 60, FG.player.y);
+      }
     }
     // câmera direto no lugar: um lerp desde a fase anterior atravessaria o
     // mundo inteiro em cima do jogador

@@ -767,6 +767,13 @@ window.FG = window.FG || {};
     if (jaula.cool > 0) jaula.cool -= dt;
     if (jaula.tremor > 0) jaula.tremor -= dt;
 
+    // companheiro já solto (resgate normal OU o automático do ?chefe=1, que
+    // acontece DEPOIS do reset desta fase) nunca convive com jaula armada —
+    // senão o MurphOliver aparecia voando atrás do jogador E preso na jaula.
+    if (!jaula.quebrada && FG.companion && FG.companion.active) {
+      jaula.quebrada = true;
+    }
+
     if (!jaula.quebrada) {
       var p = FG.player, eng = FG.engine;
       if (p && p.attackBox && p.attackBox.active && jaula.cool <= 0 &&
@@ -1226,6 +1233,10 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'dalilesma',
+    // x da jaula: quem nasce DEPOIS dele (atalho ?chefe=1) ganha o resgate
+    // de graça — o engine lê este campo para não deixar o MurphOliver
+    // trancado numa jaula que o jogador nunca vai ver
+    resgateX: jaula.x,
     bossTriggerX: 20550,
     arena: { x: 20380, w: 1150 },
     reset: reset,
