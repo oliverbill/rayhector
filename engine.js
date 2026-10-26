@@ -257,6 +257,9 @@ window.FG = window.FG || {};
     if (FG.obstacles) FG.obstacles.reset();
     syncSolids();
     FG.enemies.reset();
+    // companheiro resgatado acompanha entre fases: só reposiciona perto do
+    // início (o reset(true) do jogo novo acontece em startGame)
+    if (FG.companion) FG.companion.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -302,6 +305,8 @@ window.FG = window.FG || {};
   function startGame() {
     playStart = engine.time;
     engine.lumis = 0;       // as lumis só zeram em jogo novo; entre fases acumulam
+    // o resgate do companheiro também é por partida: jogo novo, sapo na jaula
+    if (FG.companion) FG.companion.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -426,6 +431,7 @@ window.FG = window.FG || {};
       syncSolids();
       p.update(dt);
       FG.enemies.update(dt);
+      if (FG.companion && FG.companion.active) FG.companion.update(dt);
 
       // hazards
       for (const hz of FG.level.hazards) {
@@ -544,6 +550,7 @@ window.FG = window.FG || {};
     if (FG.obstacles) FG.obstacles.drawBehind(ctx, cam);
     FG.enemies.draw(ctx, cam);
     FG.player.draw(ctx, cam);
+    if (FG.companion && FG.companion.active) FG.companion.draw(ctx, cam);
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -1047,7 +1054,9 @@ window.FG = window.FG || {};
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = '26px "Trebuchet MS", sans-serif';
-    ctx.fillText('parque, pântano, mansão, coliseu e caverna — os cinco vencidos', VIEW_W / 2, 270);
+    // o rol de fases sai de FG.levels: acrescentar fase nova no index.html já
+    // atualiza esta linha sozinho, sem lista hardcodada para esquecer
+    ctx.fillText('todas as ' + FG.levels.length + ' fases vencidas', VIEW_W / 2, 270);
     ctx.fillStyle = '#ffd870';
     ctx.fillText('lumis coletadas: ' + engine.lumis, VIEW_W / 2, 320);
     ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';

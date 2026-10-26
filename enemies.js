@@ -1,8 +1,8 @@
 // Fagulho: Lendas do Bosque — enemies.js
 // FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe, e os da
-// gruta submersa do pântano: piranha, carango, jacaré, candiru; e os da
-// mansão: lobo, fantasma, ratazana), as pools de partícula e o registro de
-// chefões. Cada chefão mora no seu arquivo
+// gruta submersa do pântano: piranha, carango, jacaré, candiru; os da
+// mansão: lobo, fantasma, ratazana; e os da floresta: tarantula, cobra),
+// as pools de partícula e o registro de chefões. Cada chefão mora no seu arquivo
 // (boss1.js, boss2.js, boss3.js) e regista-se aqui no load; enemies.js só
 // escolhe qual deles entra em cena, pelo bossId da fase. Nenhuma referência a
 // outros módulos no load — só dentro de funções chamadas em runtime.
@@ -141,6 +141,8 @@ window.FG = window.FG || {};
     else if (e.type === 'gladiador') { e.w = 104; e.h = 62; e.hp = 4; e.dmg = 2; } // coliseu: biga com gladiador montado
     else if (e.type === 'aranha') { e.w = 42; e.h = 34; }   // caverna: desce do teto pendurada no fio
     else if (e.type === 'morcego') { e.w = 38; e.h = 22; }  // caverna: dorme no teto e acorda em voo
+    else if (e.type === 'tarantula') { e.w = 46; e.h = 30; } // floresta: azul, patrulha e bote curto
+    else if (e.type === 'cobra') { e.w = 56; e.h = 22; }     // floresta: serpenteia e dá o bote esticada
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
@@ -581,6 +583,93 @@ window.FG = window.FG || {};
           if (Math.abs(e.x - e.spawnX) < 6 && Math.abs(e.baseY - e.spawnY) < 6) {
             e.x = e.spawnX; e.baseY = e.spawnY; e.st = 'parado';
           }
+        }
+      }
+    } else if (e.type === 'tarantula') {
+      // Tarântula azul da floresta: patrulha no chão como o espinhoco, mas
+      // quando o jogador chega perto (~180px, na mesma faixa de altura) ela
+      // trava, ergue as patas dianteiras (telegraph de 0.4s — o aviso) e dá
+      // um bote curto e rápido na direção dele. Depois do bote volta à
+      // patrulha. Gravidade e colisão normais; morre por soco/pisão.
+      e.vy += GRAV * dt;
+      const dxT = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyT = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 52;
+        e.vx = e.dir * SPD;
+        const wantVx = e.vx;
+        FG.engine.moveAndCollide(e, dt);
+        if ((wantVx !== 0 && e.vx === 0) ||
+            (e.dir > 0 && e.x > e.spawnX + e.range) ||
+            (e.dir < 0 && e.x < e.spawnX - e.range)) {
+          e.dir = -e.dir;
+        }
+        e.timer -= dt;
+        if (e.onGround && e.timer <= 0 && Math.abs(dxT) < 180 && Math.abs(dyT) < 80) {
+          e.dir = dxT >= 0 ? 1 : -1;
+          e.st = 'tele';           // ergue as patas dianteiras
+          e.timer = 0.4;
+        }
+      } else if (e.st === 'tele') {
+        e.vx = 0;
+        FG.engine.moveAndCollide(e, dt);
+        e.timer -= dt;
+        if (e.timer <= 0) {
+          e.dir = dxT >= 0 ? 1 : -1;
+          e.vx = e.dir * 320;      // bote curto e rápido
+          e.st = 'bote';
+          e.timer = 0.38;
+        }
+      } else { // bote
+        e.timer -= dt;
+        FG.engine.moveAndCollide(e, dt);
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.vx = 0;
+          e.timer = rand(1.0, 1.6); // pausa antes de poder botar de novo
+        }
+      }
+    } else if (e.type === 'cobra') {
+      // Cobra da floresta: serpenteia no chão dentro do range, mais rápida
+      // que o espinhoco (a ondulação do corpo é do desenho; a hitbox desliza
+      // reta). Perto do jogador ela se enrosca (telegraph) e dá o bote
+      // esticando o corpo — uma arrancada horizontal curta.
+      e.vy += GRAV * dt;
+      const dxC = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyC = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 78;
+        e.vx = e.dir * SPD;
+        const wantVx = e.vx;
+        FG.engine.moveAndCollide(e, dt);
+        if ((wantVx !== 0 && e.vx === 0) ||
+            (e.dir > 0 && e.x > e.spawnX + e.range) ||
+            (e.dir < 0 && e.x < e.spawnX - e.range)) {
+          e.dir = -e.dir;
+        }
+        e.timer -= dt;
+        if (e.onGround && e.timer <= 0 && Math.abs(dxC) < 200 && Math.abs(dyC) < 70) {
+          e.dir = dxC >= 0 ? 1 : -1;
+          e.st = 'enrosca';        // espiral fechada, cabeça erguida
+          e.timer = 0.45;
+        }
+      } else if (e.st === 'enrosca') {
+        e.vx = 0;
+        FG.engine.moveAndCollide(e, dt);
+        e.timer -= dt;
+        if (e.timer <= 0) {
+          e.dir = dxC >= 0 ? 1 : -1;
+          e.vx = e.dir * 360;      // o corpo desenrola de uma vez
+          e.st = 'bote';
+          e.timer = 0.32;
+        }
+      } else { // bote
+        e.timer -= dt;
+        FG.engine.moveAndCollide(e, dt);
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.vx = 0;
+          e.timer = rand(1.2, 1.8);
         }
       }
     }
@@ -1495,6 +1584,194 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- tarântula azul da floresta: corpo peludo azul, 8 patas articuladas
+  // que se agitam na patrulha e as duas dianteiras erguidas no telegraph,
+  // olhos brilhantes — a prima terrestre da aranha da caverna ---
+  function drawTarantula(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const tele = e.st === 'tele';
+    const bote = e.st === 'bote';
+    const andando = e.st === 'parado' && Math.abs(e.vx) > 2;
+    const passo = Math.sin(t * (bote ? 22 : 10) + e.phase);
+    ctx.save();
+    ctx.translate(cx + (tele ? Math.sin(t * 46) * 1.4 : 0), cy);
+    ctx.scale(e.dir, 1);
+    if (bote) ctx.scale(1.14, 0.9);
+
+    // patas: 4 de cada lado, cotovelo alto; andando elas pedalam defasadas,
+    // no telegraph as duas dianteiras sobem bem alto (o aviso do bote)
+    ctx.strokeStyle = '#1a2a6a';
+    ctx.lineWidth = 3.4;
+    ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      for (let i = 0; i < 4; i++) {
+        const frente = s > 0 && i >= 2;        // as duas da frente (lado do dir)
+        const ergue = (tele || bote) && frente ? 1 : 0;
+        const wob = andando ? Math.sin(t * 10 + i * 1.5 + (s > 0 ? 0 : 1.8)) * 4 : passo * 1.2;
+        const jx = s * (e.w * 0.3 + i * 3);
+        const jy = -e.h * (0.5 + ergue * 0.7) - i * 1.2 + wob * 0.5;
+        const px = s * (e.w * (0.56 + i * 0.05)) + (ergue ? s * 6 : 0);
+        const py = ergue ? -e.h * 0.75 + wob : e.h * 0.46 + wob;
+        ctx.beginPath();
+        ctx.moveTo(s * e.w * 0.12, -e.h * 0.05);
+        ctx.quadraticCurveTo(jx, jy, px, py);
+        ctx.stroke();
+      }
+    }
+
+    // abdômen peludo azul (atrás) — pelos como riscos curtos na borda
+    const g = ctx.createRadialGradient(-e.w * 0.14, -e.h * 0.18, 2, -e.w * 0.1, 0, e.w * 0.5);
+    g.addColorStop(0, '#5a7ae8');
+    g.addColorStop(0.6, '#2c44b0');
+    g.addColorStop(1, '#16246a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(-e.w * 0.14, 0, e.w * 0.36, e.h * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(120,150,255,0.6)';
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI * 0.8 + i * 0.26;
+      const bx = -e.w * 0.14 + Math.cos(a) * e.w * 0.34;
+      const by = Math.sin(a) * e.h * 0.44;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + Math.cos(a) * 5, by + Math.sin(a) * 5);
+      ctx.stroke();
+    }
+
+    // cefalotórax (à frente), um tom mais claro
+    ctx.fillStyle = '#3c58d0';
+    ctx.beginPath();
+    ctx.ellipse(e.w * 0.22, e.h * 0.04, e.w * 0.22, e.h * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // olhos brilhantes: fileira dupla com glow ciano
+    ctx.save();
+    ctx.shadowColor = '#7af0ff'; ctx.shadowBlur = 6;
+    ctx.fillStyle = '#aef8ff';
+    for (let i = 0; i < 4; i++) {
+      const ox = e.w * (0.26 + (i % 2) * 0.1);
+      const oy = e.h * (i < 2 ? -0.08 : 0.08);
+      ctx.beginPath();
+      ctx.arc(ox, oy, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    // presas
+    ctx.strokeStyle = '#d8e0f8';
+    ctx.lineWidth = 1.8;
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.36, e.h * 0.12 + s * 2);
+      ctx.lineTo(e.w * 0.46, e.h * 0.24 + s * 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- cobra da floresta: corpo verde-musgo com barriga ocre, serpenteando
+  // em S atrás da cabeça; enroscada vira uma espiral com a cabeça erguida e
+  // no bote estica reta — a língua bifurcada entra e sai o tempo todo ---
+  function drawCobra(ctx, e, t) {
+    const gy = e.y + e.h;
+    const enroscada = e.st === 'enrosca';
+    const bote = e.st === 'bote';
+    const headX = e.dir > 0 ? e.x + e.w - 8 : e.x + 8; // cabeça na frente
+    ctx.save();
+
+    if (enroscada) {
+      // espiral: três voltas concêntricas no centro, cabeça erguida tremendo
+      const cx = e.x + e.w / 2;
+      ctx.strokeStyle = '#4a7a2c';
+      ctx.lineCap = 'round';
+      for (let i = 2; i >= 0; i--) {
+        ctx.lineWidth = 7 - i * 1.4;
+        ctx.beginPath();
+        ctx.arc(cx, gy - 7, 4 + i * 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const hx = cx + e.dir * 6 + Math.sin(t * 40) * 1.2;
+      const hy = gy - e.h - 6;
+      ctx.strokeStyle = '#4a7a2c'; ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(cx, gy - 16);
+      ctx.quadraticCurveTo(cx + e.dir * 2, hy + 8, hx, hy);
+      ctx.stroke();
+      drawCabecaCobra(ctx, hx, hy, e.dir, t, true);
+    } else {
+      // corpo em S: segmentos da cauda à cabeça, ondulação senoidal que
+      // corre ao longo do corpo (parada no bote: o corpo esticou reto)
+      const segs = 9;
+      const amp = bote ? 1.5 : 5;
+      ctx.strokeStyle = '#4a7a2c';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;                       // 0 = cauda, 1 = cabeça
+        const sx = e.dir > 0 ? e.x + f * (e.w - 8) : e.x + e.w - f * (e.w - 8);
+        const sy = gy - 6 - Math.sin(t * (bote ? 26 : 9) + f * 5 + e.phase) * amp * (1 - f * 0.5);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      // barriga ocre: o mesmo traçado, mais fino e mais claro, deslocado
+      ctx.strokeStyle = '#b8a05c';
+      ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        const sx = e.dir > 0 ? e.x + f * (e.w - 8) : e.x + e.w - f * (e.w - 8);
+        const sy = gy - 4 - Math.sin(t * (bote ? 26 : 9) + f * 5 + e.phase) * amp * (1 - f * 0.5);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+      // manchas marrons no dorso
+      ctx.fillStyle = 'rgba(90,58,30,0.55)';
+      for (let i = 1; i < segs; i += 2) {
+        const f = i / segs;
+        const sx = e.dir > 0 ? e.x + f * (e.w - 8) : e.x + e.w - f * (e.w - 8);
+        const sy = gy - 8 - Math.sin(t * (bote ? 26 : 9) + f * 5 + e.phase) * amp * (1 - f * 0.5);
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, 3.4, 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      drawCabecaCobra(ctx, headX, gy - 9, e.dir, t, bote);
+    }
+    ctx.restore();
+  }
+
+  // cabeça da cobra: losango achatado, olho amarelo de fenda e língua
+  // bifurcada que entra e sai (sempre fora quando está armada/no bote)
+  function drawCabecaCobra(ctx, hx, hy, dir, t, lingua) {
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.scale(dir, 1);
+    ctx.fillStyle = '#54883a';
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.quadraticCurveTo(0, -7, 9, -1.5);
+    ctx.quadraticCurveTo(11, 0, 9, 1.5);
+    ctx.quadraticCurveTo(0, 6, -6, 0);
+    ctx.closePath();
+    ctx.fill();
+    // olho de fenda
+    ctx.fillStyle = '#ffd23a';
+    ctx.beginPath(); ctx.arc(2.5, -2, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a0d08';
+    ctx.fillRect(2.1, -3.6, 0.9, 3.2);
+    // língua bifurcada
+    if (lingua || Math.sin(t * 3) > 0.55) {
+      ctx.strokeStyle = '#e04050'; ctx.lineWidth = 1.3; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(10, 0); ctx.lineTo(16, -0.5);
+      ctx.moveTo(16, -0.5); ctx.lineTo(19, -2.5);
+      ctx.moveTo(16, -0.5); ctx.lineTo(19, 1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // --- gladiador de biga: carro de guerra de madeira com duas rodas raiadas,
   // puxado por nada (a "tração" é a própria fúria da corrida), com o
   // gladiador em pé atrás do peitoril — capacete emplumado, escudo redondo
@@ -1713,6 +1990,8 @@ window.FG = window.FG || {};
         else if (e.type === 'gladiador') drawGladiador(ctx, e, t);
         else if (e.type === 'aranha') drawAranha(ctx, e, t);
         else if (e.type === 'morcego') drawMorcego(ctx, e, t);
+        else if (e.type === 'tarantula') drawTarantula(ctx, e, t);
+        else if (e.type === 'cobra') drawCobra(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();

@@ -137,9 +137,9 @@ global.clearInterval = () => { tickMusica = null; };
 win.FG = {};
 const order = [
   'assets.js', 'audio.js',
-  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js',
-  'obstacles.js', 'player.js',
-  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js',
+  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js',
+  'obstacles.js', 'player.js', 'companion.js',
+  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {

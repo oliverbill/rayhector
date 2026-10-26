@@ -8,7 +8,7 @@
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
 //   FG.audio.music(name) — 'overworld'|'boss'|'pantano'|'mansao'|'coliseu'|
-//                          'caverna'|null;
+//                          'caverna'|'floresta'|null;
 //                          troca com fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
@@ -539,6 +539,28 @@ window.FG = window.FG || {};
     69, 0, 67, 0, 64, 0, 57, 0,   // Am:  afunda até o lá grave — fecho
   ];
 
+  // ---- composição: FLORESTA — alegre e aventureira, sol maior pentatônico,
+  // 116 BPM ----
+  // A trilha de "mata viva de dia": tudo o que a caverna não é. Melodia
+  // pentatônica (sol lá si ré mi — sem semitom, nada tropeça) numa flauta
+  // triangle com um brilho de oitava por cima; baixo em bomba como a
+  // overworld, mas o BPM mais alto e a percussão de MADEIRA (bloquinho, não
+  // chimbal/bumbo de praça) é que fazem a floresta soar a trilho de mato, não
+  // a feira. Pássaros piam fora da grade do compasso, como os pingos da
+  // caverna: é o que impede o loop de soar metronômico.
+  var FL_RAIZ = [43, 48, 43, 50, 52, 48, 50, 43]; // G C G D Em C D G
+
+  var FL_MEL = [
+    67, 0, 71, 0, 74, 0, 71, 0,   // G:  sol si ré' si — o chamado
+    72, 0, 76, 0, 79, 0, 76, 0,   // C:  dó' mi' sol' mi' — sobe à copa
+    74, 0, 71, 0, 67, 0, 69, 0,   // G:  desce saltitando
+    69, 0, 71, 0, 74, 0, 0, 0,    // D:  lá si ré' — respira
+    76, 0, 74, 0, 71, 0, 74, 0,   // Em: mi' ré' si ré' — a sombra da mata
+    72, 0, 69, 0, 67, 0, 69, 0,   // C:  volta descendo
+    74, 0, 76, 0, 79, 0, 74, 0,   // D:  corrida ao pico
+    71, 0, 69, 0, 67, 0, 0, 0,    // G:  pousa no sol — fecho
+  ];
+
   var SONGS = {
     overworld: {
       bpm: 104,
@@ -575,6 +597,12 @@ window.FG = window.FG || {};
       stepDur: 60 / 88 / 2, // colcheia
       steps: 64,
       agenda: agendaCaverna,
+    },
+    floresta: {
+      bpm: 116,
+      stepDur: 60 / 116 / 2, // colcheia
+      steps: 64,
+      agenda: agendaFloresta,
     },
   };
 
@@ -832,6 +860,57 @@ window.FG = window.FG || {};
     // tempo — é o que impede a caverna de soar como um metrônomo
     if (s === 11 || s === 45) pingo(t, dest);
     if (volta % 3 === 1 && s === 29) pingo(t, dest);
+  }
+
+  // bloquinho de madeira: estalo curto e oco — a percussão da floresta é de
+  // pau batendo em pau, não o chimbal/bumbo metálico da praça.
+  function bloquinho(t, vol, dest) {
+    tone({ t: t, dur: 0.045, vol: vol, type: 'square', freq: 880, freqEnd: 640,
+           attack: 0.002, filtro: { type: 'bandpass', f0: 1200, q: 2.5 }, dest: dest });
+  }
+
+  // pio de pássaro: dois chilros de seno subindo, o segundo mais agudo e mais
+  // fraco — vive FORA da grade do compasso, como o pingo da caverna.
+  function pio(t, dest) {
+    tone({ t: t, dur: 0.08, vol: 0.05, type: 'sine', freq: 2200, freqEnd: 3000,
+           attack: 0.005, dest: dest });
+    tone({ t: t + 0.13, dur: 0.07, vol: 0.035, type: 'sine', freq: 2600, freqEnd: 3400,
+           attack: 0.005, dest: dest });
+  }
+
+  function agendaFloresta(step, t, dest) {
+    var s = step % 64;
+    var volta = Math.floor(step / 64);
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.floresta.stepDur;
+
+    // flauta da mata: triangle com um brilho de oitava por cima, bem fraco —
+    // o "ar" da flauta sem precisar de ruído de sopro
+    if (FL_MEL[s]) {
+      tone({ t: t, dur: dur * 1.8, vol: 0.14, type: 'triangle', freq: nf(FL_MEL[s]),
+             attack: 0.012, dest: dest });
+      tone({ t: t, dur: dur * 2.4, vol: 0.03, type: 'sine', freq: nf(FL_MEL[s]) * 2,
+             attack: 0.06, dest: dest });
+    }
+
+    // baixo quente em bomba: fundamental nos tempos 1/3, quinta nos 2/4 —
+    // o esqueleto da overworld, que é o que faz "tema de andar pra frente"
+    if (dentro % 2 === 0) {
+      var raiz = FL_RAIZ[compasso];
+      var midi = (dentro === 0 || dentro === 4) ? raiz : raiz + 7;
+      bassNote(t, midi, dur * 1.5, dest);
+    }
+
+    // percussão de madeira: bloquinho grave nos tempos fortes, agudo nos
+    // contratempos — trote de trilha, sem bumbo nem chimbal
+    if (dentro === 0 || dentro === 4) bloquinho(t, 0.12, dest);
+    if (dentro === 2 || dentro === 6) bloquinho(t, 0.07, dest);
+
+    // pássaros piando fora da grade, em passos primos; um terceiro pio só de
+    // 3 em 3 voltas, pra nunca virar padrão
+    if (s === 13 || s === 43) pio(t, dest);
+    if (volta % 3 === 2 && s === 27) pio(t, dest);
   }
 
   // -- máquina do scheduler --

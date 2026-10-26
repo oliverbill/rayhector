@@ -60,8 +60,12 @@
 <script src="level3.js"></script>
 <script src="level4.js"></script>
 <script src="level5.js"></script>
+<script src="level6.js"></script>
 <script src="obstacles.js"></script>
 <script src="player.js"></script>
+<!-- companion depois do player: o MurphOliver segue o FG.player em runtime,
+     e o engine só o desenha se FG.companion existir -->
+<script src="companion.js"></script>
 <!-- enemies antes dos chefões: é ele que expõe o registerBoss -->
 <script src="enemies.js"></script>
 <script src="boss1.js"></script>
@@ -69,6 +73,7 @@
 <script src="boss3.js"></script>
 <script src="boss4.js"></script>
 <script src="boss5.js"></script>
+<script src="boss6.js"></script>
 <script src="engine.js"></script>
 <!-- touch depois do engine: usa FG.engine.setAction/gesture, e o engine só o
      procura em runtime (FG.touch pode não existir) -->
