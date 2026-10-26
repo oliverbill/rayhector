@@ -6,7 +6,7 @@
 // aponta e dá ordens lá de cima.
 // É a chefã mais dura do jogo — o DOBRO do Esbeltinho Otton (fase 5):
 // 14 de vida (vs 10), telegraphs de 0.6–0.7s (vs 0.85), janela de dano de
-// 1.9s (vs 2.6, e 1.6 na fase 2) e ataques que deixam RESTOS no chão
+// 1.4s (vs 2.6, e 1.1 na fase 2) e ataques que deixam RESTOS no chão
 // (o rastro de gosma da investida fica ~3s). A forma comum dos chefões se
 // mantém intacta: todo ataque termina em janela, e durante a janela NADA
 // machuca — nem o corpo, nem rastro, nem bola ainda no ar.
@@ -203,8 +203,9 @@ window.FG = window.FG || {};
     expose() {
       this.state = 'exposto';
       // Janela mais curta que o padrão 2.6s dos outros chefões — é aqui que
-      // mora metade do "2x mais difícil": 1.9s, e 1.6s na fase 2.
-      this.timer = this.isPhase2() ? 1.6 : 1.9;
+      // mora metade do "2x mais difícil": 1.4s, e 1.1s na fase 2 (apertada a
+      // pedido: quem quiser folga ganha os 2.2s das cócegas do MurphOliver).
+      this.timer = this.isPhase2() ? 1.1 : 1.4;
       this.phase = 0;
       this.stunHit = false;
       this.rear = 0;
@@ -215,16 +216,16 @@ window.FG = window.FG || {};
     // Janela FORÇADA pelas cócegas do MurphOliver. Interrompe o ataque
     // corrente com os mesmos desarmes da janela normal (o estado `exposto` já
     // neutraliza bolas, rastros, chuvas e ondas pela flag `janela`), mas com
-    // a duração GENEROSA dos outros chefões (2.6s) — é a recompensa de gastar
-    // a cóceja, que custa 60s de descanso do sapinho. Durante ela, a Dalilesma
+    // uma duração generosa (2.2s) — é a recompensa de gastar
+    // a cóceja, que custa 30s de descanso do sapinho. Durante ela, a Dalilesma
     // e a lesma se contorcem de rir. Retorna false se não havia o que expor.
     forceExpose() {
       if (!this.started || this.dead) return false;
       if (this.state === 'exposto' || this.state === 'dying' ||
           this.state === 'intro' || this.state === 'dormant') return false;
       this.expose();
-      this.timer = 2.6;
-      this.tickle = 2.6;
+      this.timer = 2.2;
+      this.tickle = 2.2;
       this.shake = 0.6;
       FG.audio.sfx('bossHit');
       return true;

@@ -52,8 +52,9 @@ window.FG = window.FG || {};
     { id: 'interact', action: 'interact', x: 748, y: 350, r: 40, hit: 58, tipo: 'texto', label: 'AÇÃO' },
     // comando do MurphOliver (cócegas no chefão): só existe — para o dedo e
     // para o desenho — depois do resgate (FG.companion.active). Acima do PULO,
-    // com folga do quadro de comandos; descansando, apaga e mostra o arco de
-    // recarga, mas o toque continua indo pro funil — quem ignora é o companion.
+    // com folga do quadro de comandos; fora da luta de chefão fica apagado
+    // (podeComandar), e descansando ganha o arco de recarga — o toque continua
+    // indo pro funil em todos os casos: quem ignora é o companion.
     { id: 'companion', action: 'companion', x: 872, y: 284, r: 40, hit: 56, tipo: 'murph' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
@@ -301,13 +302,18 @@ window.FG = window.FG || {};
     ctx.fill();
   }
 
-  // Botão do MurphOliver: rostinho de sapo verde sorridente. Descansando
-  // (restTimer > 0), tudo esmaece e um arco mostra quanto falta da recarga —
-  // visual apenas: o toque segue indo pro setAction, e o companion o ignora.
+  // Botão do MurphOliver: rostinho de sapo verde sorridente. O comando só
+  // existe na luta de chefão (FG.companion.podeComandar), então fora dela o
+  // botão fica apagado — visível para o jogador aprender que existe, mas sem
+  // reação. Descansando (restTimer > 0), além de apagado ganha o arco de
+  // recarga e o zZz. Visual apenas: o toque segue indo pro setAction, e o
+  // companion o ignora sozinho.
   function murphBtn(ctx, b, on) {
     var c = FG.companion;
-    var resto = (c && c.restTimer > 0) ? c.restTimer / (c.REST_MAX || 60) : 0;
-    var apagado = resto > 0;
+    var resto = (c && c.restTimer > 0) ? c.restTimer / (c.REST_MAX || 30) : 0;
+    var descansando = resto > 0;
+    var apagado = descansando ||
+      !(c && typeof c.podeComandar === 'function' && c.podeComandar());
     ctx.save();
     if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
     ctx.beginPath();
@@ -334,8 +340,9 @@ window.FG = window.FG || {};
     ctx.beginPath();
     ctx.ellipse(b.x, b.y + r * 0.18, r * 0.42, r * 0.2, 0, 0, Math.PI);
     ctx.fill();
-    if (apagado) {
-      // zZz de descanso e o arco de recarga (sentido horário, esvaziando)
+    if (descansando) {
+      // zZz de descanso e o arco de recarga (sentido horário, esvaziando) —
+      // só no descanso: desabilitado por estar fora da luta fica apenas apagado
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = '#cfe8b8';
       ctx.lineWidth = 4;

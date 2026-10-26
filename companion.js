@@ -3,10 +3,17 @@
 // na fase da floresta. Depois do resgate ele acompanha o Heitor pelo resto da
 // partida (persiste entre fases; só zera em jogo novo), voando com asinhas de
 // libélula sempre um pouco atrás e acima. Não colide, não machuca, não morre —
-// mas reage (comemora o soco, se entristece quando a fagulha apaga) e tem UMA
-// habilidade: sob comando (botão próprio, fiação no engine/touch), voa até o
-// chefão e faz CÓCEGAS nele, forçando a janela de vulnerabilidade
-// (boss.forceExpose). Custa caro: depois ele descansa 60s dormindo no posto.
+// mas reage (comemora o soco, se entristece quando a fagulha apaga) e ajuda de
+// DUAS maneiras:
+//  1. Na fase, por conta própria: conta os inimigos que chegam perto do
+//     jogador e, a cada 10, voa até o mais próximo e o elimina (uma bordoada,
+//     morte pelo caminho normal do enemies.js). Só 1 em cada 10 — quem limpa
+//     a fase continua sendo o jogador.
+//  2. Na luta de chefão, sob comando (botão próprio, fiação no engine/touch):
+//     voa até o chefão e faz CÓCEGAS nele, forçando a janela de
+//     vulnerabilidade (boss.forceExpose). Custa caro: depois ele descansa 30s
+//     dormindo no posto. Fora da luta o botão fica desabilitado
+//     (podeComandar() é o critério — o touch.js o lê para apagar o botão).
 //
 // A cabeça é a foto real INTEIRA (FG.assets.murphHead, embutida em assets.js
 // com cabelo e laço prateado), desenhada grande sobre o corpinho de sapo verde
@@ -37,12 +44,20 @@ window.FG = window.FG || {};
 
     // --- a habilidade de cócegas ---
     // mode: 'segue' (posto normal) | 'cocegas' (voo + cócegas no chefão) |
-    // 'descansa' (dormindo 60s atrás do jogador — o cooldown É o descanso).
+    // 'descansa' (dormindo 30s atrás do jogador — o cooldown É o descanso) |
+    // 'ataca' (a ajuda automática: voo + bordoada num inimigo comum).
     mode: 'segue',
     cocegasFase: 0,            // 0 = voando até o chefão, 1 = fazendo cócegas
     cocegasT: 0,
     restTimer: 0,              // segundos de descanso restantes (0 = pronto)
-    REST_MAX: 60,
+    REST_MAX: 30,
+
+    // --- a ajuda automática (1 inimigo a cada 10) ---
+    vistos: 0,                 // inimigos que já entraram no raio do jogador
+    AJUDA_CADA: 10,
+    alvo: null,                // o inimigo da bordoada corrente
+    ataqueFase: 0,             // 0 = voando até o alvo, 1 = bordoada
+    ataqueT: 0,
 
     // Resgate: a fase chama quando a jaula quebra. Nasce no lugar da jaula e
     // a mola o leva até o posto atrás do jogador.
@@ -53,6 +68,8 @@ window.FG = window.FG || {};
       this.cheer = 1.2;        // sai da jaula comemorando
       this.mode = 'segue';
       this.restTimer = 0;
+      this.vistos = 0;
+      this.alvo = null;
     },
 
     // Chamado pelo engine: novoJogo === true desativa (jogo novo zera o
@@ -61,6 +78,10 @@ window.FG = window.FG || {};
     // cócegas: a cóceja foi gasta, o descanso vale mesmo assim.
     reset: function (novoJogo) {
       apagarGiggles();
+      // a contagem da ajuda zera junto com a lista de inimigos (as marcas
+      // _murphVisto morrem com os objetos repovoados pelo enemies.reset)
+      this.vistos = 0;
+      this.alvo = null;
       if (novoJogo === true) {
         this.active = false;
         this.mode = 'segue';
@@ -72,6 +93,7 @@ window.FG = window.FG || {};
       if (st) { this.x = st.x - 50; this.y = st.y - 40; }
       this.vx = 0; this.vy = 0;
       this.cheer = 0;
+      if (this.mode === 'ataca') this.mode = 'segue';
       if (this.mode === 'cocegas') {
         this.mode = 'descansa';
         this.restTimer = this.REST_MAX;
@@ -81,20 +103,24 @@ window.FG = window.FG || {};
       }
     },
 
-    // Borda de subida do botão de comando (o engine chama). Só dispara com
-    // chefão em luta que saiba ser exposto; descansando, é ignorado; sem
-    // chefão, um pulinho de "não tem nada aqui".
-    command: function () {
-      if (!this.active || this.mode !== 'segue') return;
+    // O comando só existe na luta de chefão: fora dela o botão fica
+    // desabilitado (o touch.js desenha apagado lendo este critério) e a
+    // tecla não faz nada. Descansando, idem — mas aí o visual é o de recarga.
+    podeComandar: function () {
+      if (!this.active || this.mode !== 'segue' || this.restTimer > 0) return false;
       var b = FG.enemies && FG.enemies.boss;
-      if (b && b.started && !b.dead && typeof b.forceExpose === 'function') {
-        this.mode = 'cocegas';
-        this.cocegasFase = 0;
-        this.cocegasT = 0;
-        this.vx = 0; this.vy = 0;
-      } else {
-        this.cheer = 0.6;      // pulinho: nada para cocegar por aqui
-      }
+      return !!(b && b.started && !b.dead && typeof b.forceExpose === 'function');
+    },
+
+    // Borda de subida do botão de comando (o engine chama). No-op total fora
+    // das condições de podeComandar() — nada de pulinho: botão desabilitado
+    // não responde.
+    command: function () {
+      if (!this.podeComandar()) return;
+      this.mode = 'cocegas';
+      this.cocegasFase = 0;
+      this.cocegasT = 0;
+      this.vx = 0; this.vy = 0;
     },
 
     update: function (dt) {
@@ -119,6 +145,11 @@ window.FG = window.FG || {};
       }
 
       if (this.mode === 'cocegas') { this.updateCocegas(dt); return; }
+      if (this.mode === 'ataca') { this.updateAtaque(dt); return; }
+
+      // a ajuda automática só arma seguindo, acordado e fora de luta de
+      // chefão (na luta o elenco comum nem existe — clearRegulares)
+      if (this.mode === 'segue') this.contarInimigos(p);
 
       this.facing = p.facing || 1;
 
@@ -202,13 +233,89 @@ window.FG = window.FG || {};
       }
     },
 
+    // ---- a ajuda automática: 1 inimigo a cada 10 ----
+    // Conta cada inimigo vivo que ENTRA no raio de 300px do jogador (a marca
+    // _murphVisto vive no próprio objeto do inimigo e morre com ele no
+    // repovoamento do enemies.reset). No décimo, parte para a bordoada no
+    // inimigo contado mais próximo — e SÓ nesse: o contador zera no ato,
+    // então ele nunca limpa a fase sozinho.
+    contarInimigos: function (p) {
+      var en = FG.enemies;
+      if (!en || !en.list || typeof en.kill !== 'function') return;
+      var b = en.boss;
+      if (b && b.started && !b.dead) return;   // luta de chefão: ajuda de fase não age
+      var cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+      var list = en.list;
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        if (e.dead || e._murphVisto) continue;
+        var dx = e.x + e.w / 2 - cx, dy = e.y + e.h / 2 - cy;
+        if (dx * dx + dy * dy < 300 * 300) {
+          e._murphVisto = true;
+          this.vistos++;
+        }
+      }
+      if (this.vistos < this.AJUDA_CADA) return;
+
+      // escolhe o contado vivo mais próximo do jogador
+      var alvo = null, melhor = Infinity;
+      for (var j = 0; j < list.length; j++) {
+        var c = list[j];
+        if (c.dead || !c._murphVisto) continue;
+        var ddx = c.x + c.w / 2 - cx, ddy = c.y + c.h / 2 - cy;
+        var d2 = ddx * ddx + ddy * ddy;
+        if (d2 < melhor) { melhor = d2; alvo = c; }
+      }
+      this.vistos = 0;                         // gasto, com ou sem alvo
+      if (!alvo) return;
+      this.alvo = alvo;
+      this.mode = 'ataca';
+      this.ataqueFase = 0;
+      this.ataqueT = 0;
+    },
+
+    // O voo e a bordoada. Alvo que morrer antes de ele chegar aborta a ida —
+    // a ajuda foi gasta de qualquer jeito (o contador já zerou no disparo).
+    updateAtaque: function (dt) {
+      var a = this.alvo;
+      if (!a || a.dead) { this.alvo = null; this.mode = 'segue'; return; }
+      var tx = a.x + a.w / 2, ty = a.y - 14;
+      this.facing = tx >= this.x ? 1 : -1;
+
+      if (this.ataqueFase === 0) {
+        this.ataqueT += dt;
+        var dx = tx - this.x, dy = ty - this.y;
+        var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        var vel = 900;
+        if (dist < vel * dt || this.ataqueT > 0.9) {
+          this.x = tx; this.y = ty;
+          this.ataqueFase = 1;
+          this.ataqueT = 0.4;                  // duração da bordoada
+        } else {
+          this.x += (dx / dist) * vel * dt;
+          this.y += (dy / dist) * vel * dt;
+        }
+      } else {
+        this.ataqueT -= dt;
+        this.x += (tx - this.x) * Math.min(1, dt * 10);
+        this.y += (ty - this.y) * Math.min(1, dt * 10);
+        if (this.ataqueT <= 0) {
+          if (!a.dead) FG.enemies.kill(a);     // pufe + sfx, o caminho normal
+          this.alvo = null;
+          this.cheer = 0.6;
+          this.mode = 'segue';
+        }
+      }
+    },
+
     draw: function (ctx, cam) {
       var sx = this.x - cam.x, sy = this.y - cam.y;
       if (sx < -120 || sx > 960 + 120 || sy < -140 || sy > 540 + 140) return;
       var t = FG.engine.time;
       var triste = FG.engine.state === 'dead';
       var dormindo = this.mode === 'descansa';
-      var cocegando = this.mode === 'cocegas' && this.cocegasFase === 1;
+      var cocegando = (this.mode === 'cocegas' && this.cocegasFase === 1) ||
+                      (this.mode === 'ataca' && this.ataqueFase === 1);
       var pulo = this.cheer > 0 ? Math.sin(this.cheer * Math.PI * 4) * 6 : 0;
       var bob = Math.sin(t * (dormindo ? 1.4 : 2.6)) * 0.04;
       ctx.save();

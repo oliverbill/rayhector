@@ -1928,6 +1928,11 @@ window.FG = window.FG || {};
     // partícula continuam aqui — um só lugar a limpar quando a fase troca.
     fx: { spawnParticle, goldBurst, groundYAt, rand, VIEW_W },
 
+    // Morte de inimigo comum pelo caminho oficial (pufe + lumis de bônus +
+    // sfx). Exposto para o MurphOliver (companion.js) dar a bordoada dele sem
+    // duplicar a cerimônia; a remoção da lista continua no update().
+    kill(e) { if (e && !e.dead) killEnemy(e); },
+
     reset() {
       // Repovoa os inimigos comuns a partir do level e re-arma o boss.
       this.list.length = 0;
