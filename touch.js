@@ -50,6 +50,11 @@ window.FG = window.FG || {};
     // uso, o botão em si é sempre desenhado, mas só faz algo perto de uma
     // atração (ver FG.obstacles.activePrompt).
     { id: 'interact', action: 'interact', x: 748, y: 350, r: 40, hit: 58, tipo: 'texto', label: 'AÇÃO' },
+    // comando do MurphOliver (cócegas no chefão): só existe — para o dedo e
+    // para o desenho — depois do resgate (FG.companion.active). Acima do PULO,
+    // com folga do quadro de comandos; descansando, apaga e mostra o arco de
+    // recarga, mas o toque continua indo pro funil — quem ignora é o companion.
+    { id: 'companion', action: 'companion', x: 872, y: 284, r: 40, hit: 56, tipo: 'murph' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -61,11 +66,19 @@ window.FG = window.FG || {};
     return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
   }
 
+  // O botão do MurphOliver só existe com ele resgatado — antes disso não pega
+  // dedo nem aparece (os demais botões existem sempre).
+  function btnExiste(b) {
+    if (b.id !== 'companion') return true;
+    return !!(FG.companion && FG.companion.active);
+  }
+
   function pick(clientX, clientY, rect) {
     var p = paraCanvas(clientX, clientY, rect);
     var melhor = null, melhorD = Infinity;
     for (var i = 0; i < BTNS.length; i++) {
       var b = BTNS[i];
+      if (!btnExiste(b)) continue;
       var dx = p.x - b.x, dy = p.y - b.y;
       var d = dx * dx + dy * dy;
       if (d <= b.hit * b.hit && d < melhorD) { melhor = b; melhorD = d; }
@@ -288,6 +301,54 @@ window.FG = window.FG || {};
     ctx.fill();
   }
 
+  // Botão do MurphOliver: rostinho de sapo verde sorridente. Descansando
+  // (restTimer > 0), tudo esmaece e um arco mostra quanto falta da recarga —
+  // visual apenas: o toque segue indo pro setAction, e o companion o ignora.
+  function murphBtn(ctx, b, on) {
+    var c = FG.companion;
+    var resto = (c && c.restTimer > 0) ? c.restTimer / (c.REST_MAX || 60) : 0;
+    var apagado = resto > 0;
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(110,200,70,0.5)' : 'rgba(24,36,12,0.42)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(140,170,120,0.45)' : 'rgba(150,230,90,0.8)';
+    ctx.stroke();
+    // a cara do sapo: cabeça verde, dois olhões em cima, sorrisão branco
+    var r = b.r;
+    ctx.fillStyle = apagado ? '#6a8a52' : '#7ec850';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.08, r * 0.62, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#f4f8ee';
+    ctx.beginPath(); ctx.arc(b.x - r * 0.22, b.y - r * 0.3, r * 0.17, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x + r * 0.22, b.y - r * 0.3, r * 0.17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#20301a';
+    ctx.beginPath(); ctx.arc(b.x - r * 0.2, b.y - r * 0.29, r * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x + r * 0.24, b.y - r * 0.29, r * 0.07, 0, Math.PI * 2); ctx.fill();
+    // sorriso: faixa branca larga com contorno
+    ctx.fillStyle = '#fffdf2';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.18, r * 0.42, r * 0.2, 0, 0, Math.PI);
+    ctx.fill();
+    if (apagado) {
+      // zZz de descanso e o arco de recarga (sentido horário, esvaziando)
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#cfe8b8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+      ctx.font = 'bold ' + Math.round(r * 0.34) + 'px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#e8f4da';
+      ctx.fillText('zZz', b.x + r * 0.45, b.y - r * 0.55);
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -295,7 +356,9 @@ window.FG = window.FG || {};
     ctx.textBaseline = 'middle';
     for (var i = 0; i < BTNS.length; i++) {
       var b = BTNS[i], on = !!pressed[b.id];
+      if (!btnExiste(b)) continue;
       if (on) { ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 18; } else ctx.shadowBlur = 0;
+      if (b.tipo === 'murph') { murphBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

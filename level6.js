@@ -24,7 +24,7 @@ window.FG = window.FG || {};
   var S = kit.S, makeRand = kit.makeRand, makeCanvas = kit.makeCanvas;
 
   var VIEW_W = kit.VIEW_W, VIEW_H = kit.VIEW_H;
-  var W = 7200, H = 720;
+  var W = 21600, H = 720;
   var CAM_Y_MAX = H - VIEW_H; // 180 — usado no parallax vertical
 
   // ---------------------------------------------------------------
@@ -34,19 +34,25 @@ window.FG = window.FG || {};
   //    'w' = madeira (piso de casa na árvore, tábua de ponte),
   //    'h' = piso oculto (leito do riacho, não desenhado).
   //
-  // RITMO EM 5 TRECHOS
-  //  (1) x 0..1700      A ORLA DA MATA: clareira entre cogumelos, degraus de
-  //                     tronco caído. Bicho manso — é o tutorial da fase.
-  //  (2) x 1700..3050   AS CASAS NA ÁRVORE: dois troncos escaláveis
-  //                     atravessam o caminho (como a frente de escavação da
-  //                     mina) e lá em cima ficam os pisos das casas dos
-  //                     caçadores — o caminho alto, com lumis de prêmio.
-  //  (3) x 3050..3950   O RIACHO: a ponte de tábuas com vãos (uma tábua
-  //                     desmorona) e, por baixo, água de nadar com pedras.
-  //  (4) x 3950..5900   O TERRITÓRIO DOS CAÇADORES: arbustos de espinho,
-  //                     tarântulas e cobras, a armadilha de tronco pendurado
-  //                     e, na clareira, A JAULA com o MurphOliver preso.
-  //  (5) x 5900..7200   A CLAREIRA DO CHEFÃO: a Dalilesma Slime espera no
+  // RITMO EM 5 TRECHOS — fase TRIPLICADA (W = 21600): cada trecho cresceu
+  // com conteúdo próprio, não esticando o que havia.
+  //  (1) x 0..4000      A ORLA DA MATA: clareira entre cogumelos, degraus de
+  //                     tronco caído e lajes. Bicho manso — o tutorial da fase.
+  //  (2) x 4000..9000   AS CASAS NA ÁRVORE: DOIS povoados de caçadores, cada
+  //                     um com dois troncos escaláveis atravessando o caminho
+  //                     (como a frente de escavação da mina) e os pisos das
+  //                     casas lá em cima — rota alta com lumis de prêmio,
+  //                     rota baixa com espinheiros, e um respiro de chão
+  //                     corrido entre um povoado e o outro.
+  //  (3) x 9000..11600  O RIACHO: dois braços de água de nadar separados por
+  //                     uma ilha, cada braço com a sua ponte de tábuas (uma
+  //                     tábua desmorona em cada) e um cipó por cima.
+  //  (4) x 11600..19800 O TERRITÓRIO DOS CAÇADORES: o trecho mais longo —
+  //                     espinheiros, tarântulas e cobras, DUAS armadilhas de
+  //                     tronco pendurado, TRÊS rolos de espinho e, na
+  //                     clareira a 2/3 do caminho (x~14300), A JAULA com o
+  //                     MurphOliver preso.
+  //  (5) x 19800..21600 A CLAREIRA DO CHEFÃO: a Dalilesma Slime espera no
   //                     fim, montada na lesma. A arena é chão corrido.
   //
   // Nada de beco sem saída: do riacho sobe-se nadando até a margem, e os
@@ -57,37 +63,72 @@ window.FG = window.FG || {};
   // ---------------------------------------------------------------
   var solids = [
     // ---- (1) a orla da mata ----
-    S(0, 620, 1700, 100, 'g'),        // chão até a face do tronco 1
+    S(0, 620, 4000, 100, 'g'),        // chão até a face do tronco 1
     S(340, 572, 110, 48, 'r'),        // tronco caído (+48)
     S(530, 524, 120, 24, 'r'),        // pedra alta (+48, bônus)
     S(900, 572, 110, 48, 'r'),        // segundo tronco caído
     S(1240, 536, 130, 24, 'r'),       // laje de pedra (+84, arco de lumis)
+    S(1650, 560, 140, 26, 'r'),       // laje baixa de respiro
+    S(1960, 512, 120, 24, 'r'),       // pedra alta (+108, pulo cheio)
+    S(2350, 572, 110, 48, 'r'),       // terceiro tronco caído
+    S(2600, 524, 120, 24, 'r'),       // pedra alta
+    S(2980, 536, 130, 24, 'r'),       // laje de pedra
+    S(3400, 572, 110, 48, 'r'),       // quarto tronco caído
+    S(3680, 524, 120, 24, 'r'),       // pedra alta da despedida da orla
 
-    // ---- (2) as casas na árvore (troncos escaláveis) ----
+    // ---- (2) as casas na árvore: POVOADO 1 (troncos escaláveis) ----
     // O chão termina RENTE a cada face de tronco, de propósito: é onde o
     // jogador (e o tests/reach.js) encosta para começar a subir.
-    S(1700, 300, 80, 320, 'c'),       // tronco 1 — sobe-se agarrando
-    S(1780, 300, 220, 24, 'w'),       // piso da casa 1 (topo do tronco 1)
-    S(1780, 620, 820, 100, 'g'),      // chão entre os troncos
-    S(2060, 420, 140, 20, 'w'),       // sacada intermediária (rota alta)
-    S(2290, 330, 150, 20, 'w'),       // passarela (rota alta)
-    S(2420, 240, 180, 24, 'w'),       // piso da casa 2 (encosta no tronco 2)
-    S(2600, 240, 80, 380, 'c'),       // tronco 2
-    S(2680, 620, 370, 100, 'g'),      // chão até a margem do riacho
+    S(4000, 300, 80, 320, 'c'),       // tronco 1 — sobe-se agarrando
+    S(4080, 300, 220, 24, 'w'),       // piso da casa 1 (topo do tronco 1)
+    S(4080, 620, 820, 100, 'g'),      // chão entre os troncos
+    S(4360, 420, 140, 20, 'w'),       // sacada intermediária (rota alta)
+    S(4590, 330, 150, 20, 'w'),       // passarela (rota alta)
+    S(4720, 240, 180, 24, 'w'),       // piso da casa 2 (encosta no tronco 2)
+    S(4900, 240, 80, 380, 'c'),       // tronco 2
+    S(4980, 620, 920, 100, 'g'),      // chão do respiro entre os povoados
 
-    // ---- (3) o riacho e a ponte ----
-    S(3050, 556, 240, 16, 'w'),       // tábuas 1 (saem da margem)
-    S(3400, 536, 200, 16, 'w'),       // tábuas 2 (vão antes: desmorona)
-    S(3680, 556, 240, 16, 'w'),       // tábuas 3 (chegam perto da margem)
-    S(3300, 612, 80, 36, 'r'),        // pedra do riacho 1
-    S(3600, 606, 90, 42, 'r'),        // pedra do riacho 2
-    S(3050, 700, 900, 20, 'h'),       // leito do riacho (oculto)
+    // ---- (2b) as casas na árvore: POVOADO 2 ----
+    S(5900, 320, 80, 300, 'c'),       // tronco 3
+    S(5980, 320, 200, 24, 'w'),       // piso da casa 3 (topo do tronco 3)
+    S(5980, 620, 900, 100, 'g'),      // chão entre os troncos do povoado 2
+    S(6260, 440, 140, 20, 'w'),       // sacada intermediária
+    S(6500, 350, 150, 20, 'w'),       // passarela
+    S(6700, 260, 180, 24, 'w'),       // piso da casa 4 (encosta no tronco 4)
+    S(6880, 260, 80, 360, 'c'),       // tronco 4
+    S(6960, 620, 2040, 100, 'g'),     // chão corrido até a margem do riacho
+    S(7400, 560, 130, 26, 'r'),       // degraus do caminho até o riacho
+    S(8000, 524, 120, 24, 'r'),
+    S(8550, 560, 130, 26, 'r'),
 
-    // ---- (4) o território dos caçadores ----
-    S(3950, 620, 3250, 100, 'g'),     // chão corrido até o fim do mundo
-    S(4380, 560, 130, 26, 'r'),       // pedra sob a armadilha (passa por cima)
-    S(4980, 524, 120, 24, 'r'),       // pedra ao lado da jaula (mirante)
-    S(5560, 560, 130, 26, 'r'),       // degrau antes do rolo de espinhos
+    // ---- (3) o riacho: braço 1, a ilha e o braço 2 ----
+    S(9000, 556, 260, 16, 'w'),       // ponte 1, tábuas 1 (saem da margem)
+    S(9360, 536, 200, 16, 'w'),       // ponte 1, tábuas 2 (vão antes: desmorona)
+    S(9660, 556, 300, 16, 'w'),       // ponte 1, tábuas 3 (chegam na ilha)
+    S(9280, 612, 80, 36, 'r'),        // pedra do braço 1
+    S(9590, 606, 90, 42, 'r'),        // pedra do braço 1
+    S(9000, 700, 1100, 20, 'h'),      // leito do braço 1 (oculto)
+    S(10100, 620, 400, 100, 'g'),     // a ILHA entre os dois braços
+    S(10500, 556, 260, 16, 'w'),      // ponte 2, tábuas 1 (saem da ilha)
+    S(10860, 536, 200, 16, 'w'),      // ponte 2, tábuas 2 (vão antes: desmorona)
+    S(11160, 556, 300, 16, 'w'),      // ponte 2, tábuas 3 (chegam na margem)
+    S(10780, 612, 80, 36, 'r'),       // pedra do braço 2
+    S(11100, 606, 90, 42, 'r'),       // pedra do braço 2
+    S(10500, 700, 1100, 20, 'h'),     // leito do braço 2 (oculto)
+
+    // ---- (4) o território dos caçadores (o chão segue até o fim do mundo:
+    // a clareira do chefão é a ponta dele, sem emenda) ----
+    S(11600, 620, 10000, 100, 'g'),   // chão corrido do território + clareira
+    S(12100, 560, 130, 26, 'r'),      // degraus e mirantes espalhados
+    S(12700, 524, 120, 24, 'r'),
+    S(13300, 560, 130, 26, 'r'),      // antes do primeiro rolo de espinhos
+    S(14460, 524, 120, 24, 'r'),      // pedra ao lado da jaula (mirante)
+    S(15200, 560, 130, 26, 'r'),
+    S(15900, 524, 120, 24, 'r'),
+    S(16700, 560, 130, 26, 'r'),      // antes da segunda armadilha
+    S(17500, 524, 120, 24, 'r'),
+    S(18300, 560, 130, 26, 'r'),      // antes do último rolo
+    S(19000, 560, 130, 26, 'r'),
 
     // ---- (5) a clareira do chefão: chão corrido, a arena é o relevo ----
   ];
@@ -97,7 +138,8 @@ window.FG = window.FG || {};
   // retângulo a física vira nado. Cair da ponte é molhar-se, não morrer.
   // ---------------------------------------------------------------
   var waters = [
-    { x: 3050, y: 648, w: 900, h: 72 },
+    { x: 9000, y: 648, w: 1100, h: 72 },    // braço 1
+    { x: 10500, y: 648, w: 1100, h: 72 },   // braço 2
   ];
 
   // ---------------------------------------------------------------
@@ -106,19 +148,39 @@ window.FG = window.FG || {};
   function Hz(x, y, w, h, t) { return { x: x, y: y, w: w, h: h, t: t }; }
 
   var hazards = [
-    Hz(1150, 596, 60, 24, 'e'),    // antes da laje de pedra — pede o pulo
-    Hz(2180, 596, 70, 24, 'e'),    // entre os troncos — convida à rota alta
-    Hz(4210, 596, 70, 24, 'e'),    // entrada do território dos caçadores
-    Hz(4760, 596, 60, 24, 'e'),    // antes da jaula
-    Hz(5360, 596, 70, 24, 'e'),    // caminho do rolo de espinhos
-    Hz(5890, 596, 60, 24, 'e'),    // porta da clareira do chefão
+    // (1) a orla — espinheiros pedindo o pulo
+    Hz(1150, 596, 60, 24, 'e'),    // antes da laje de pedra
+    Hz(2500, 596, 70, 24, 'e'),    // depois do terceiro tronco caído
+    Hz(3550, 596, 60, 24, 'e'),    // despedida da orla
+    // (2) os povoados — convidam à rota alta
+    Hz(4480, 596, 70, 24, 'e'),    // entre os troncos do povoado 1
+    Hz(5440, 596, 60, 24, 'e'),    // no respiro entre os povoados
+    Hz(6380, 596, 70, 24, 'e'),    // entre os troncos do povoado 2
+    Hz(7700, 596, 60, 24, 'e'),    // caminho até o riacho
+    // (4) o território dos caçadores
+    Hz(11850, 596, 70, 24, 'e'),   // entrada do território
+    Hz(12240, 596, 60, 24, 'e'),
+    Hz(13150, 596, 70, 24, 'e'),
+    Hz(14240, 596, 60, 24, 'e'),   // antes da jaula
+    Hz(15050, 596, 70, 24, 'e'),
+    Hz(15660, 596, 60, 24, 'e'),
+    Hz(16550, 596, 70, 24, 'e'),   // antes da segunda armadilha
+    Hz(17150, 596, 60, 24, 'e'),
+    Hz(18150, 596, 70, 24, 'e'),   // caminho do último rolo
+    Hz(19250, 596, 60, 24, 'e'),
+    Hz(19890, 596, 60, 24, 'e'),   // porta da clareira do chefão
   ];
 
-  // 3 checkpoints — totens de madeira dos caçadores, reaproveitados
+  // 7 checkpoints — totens de madeira dos caçadores, reaproveitados. A fase
+  // triplicou; morrer não pode custar meia floresta.
   var checkpoints = [
-    { x: 1480, y: 620 },   // fim da orla, antes dos troncos
-    { x: 4050, y: 620 },   // margem de chegada do riacho
-    { x: 5780, y: 620 },   // porta da clareira do chefão
+    { x: 1480, y: 620 },   // meio da orla
+    { x: 3880, y: 620 },   // fim da orla, antes do tronco 1
+    { x: 5500, y: 620 },   // o respiro entre os dois povoados
+    { x: 8800, y: 620 },   // antes do riacho
+    { x: 11700, y: 620 },  // margem de chegada do riacho
+    { x: 14600, y: 620 },  // logo depois da jaula
+    { x: 20180, y: 620 },  // porta da clareira do chefão
   ];
 
   // ---------------------------------------------------------------
@@ -127,25 +189,54 @@ window.FG = window.FG || {};
   // nas copas. NENHUM antes de x=600 (a orla é mansa).
   // ---------------------------------------------------------------
   var enemyDefs = [
-    // (1) a orla — apresentação, um de cada
+    // (1) a orla — apresentação gradual: um bicho de cada vez
     { type: 'espinhoco', x: 700, y: 590, range: 120 },
     { type: 'cobra',     x: 1100, y: 590, range: 140 },
-    // (2) as casas na árvore — o perigo vem de cima
-    { type: 'aranha',    x: 1900, y: 120, range: 130 },  // sobre o piso da casa 1
-    { type: 'voadeira',  x: 2230, y: 380, range: 140 },
-    { type: 'aranha',    x: 2480, y: 90,  range: 130 },  // sobre a passarela
-    { type: 'espinhoco', x: 2850, y: 590, range: 110 },
-    // (3) o riacho — uma voadeira patrulhando a ponte
-    { type: 'voadeira',  x: 3480, y: 460, range: 150 },
-    // (4) o território dos caçadores — tarântulas e cobras
-    { type: 'tarantula', x: 4280, y: 590, range: 130 },
-    { type: 'cobra',     x: 4560, y: 590, range: 140 },
-    { type: 'voadeira',  x: 4750, y: 430, range: 140 },
-    { type: 'tarantula', x: 4940, y: 590, range: 130 },  // ronda a jaula
-    { type: 'cobra',     x: 5220, y: 590, range: 140 },
-    { type: 'tarantula', x: 5620, y: 590, range: 130 },
+    { type: 'espinhoco', x: 1860, y: 590, range: 80 },
+    { type: 'cobra',     x: 2250, y: 590, range: 140 },
+    { type: 'tarantula', x: 2820, y: 590, range: 90 },   // a primeira tarântula
+    { type: 'espinhoco', x: 3200, y: 590, range: 90 },
+    { type: 'cobra',     x: 3590, y: 590, range: 80 },
+    // (2) povoado 1 — o perigo vem de cima
+    { type: 'aranha',    x: 4200, y: 120, range: 130 },  // sobre o piso da casa 1
+    { type: 'voadeira',  x: 4530, y: 380, range: 140 },
+    { type: 'aranha',    x: 4780, y: 90,  range: 130 },  // sobre a passarela
+    { type: 'espinhoco', x: 5150, y: 590, range: 110 },
+    { type: 'cobra',     x: 5300, y: 590, range: 100 },
+    { type: 'espinhoco', x: 5750, y: 590, range: 100 },
+    // (2b) povoado 2
+    { type: 'aranha',    x: 6100, y: 140, range: 130 },  // sobre o piso da casa 3
+    { type: 'voadeira',  x: 6430, y: 400, range: 140 },
+    { type: 'aranha',    x: 6700, y: 110, range: 130 },  // sobre a passarela
+    { type: 'tarantula', x: 7100, y: 590, range: 130 },
+    { type: 'cobra',     x: 7850, y: 590, range: 110 },
+    { type: 'espinhoco', x: 8250, y: 590, range: 100 },
+    { type: 'tarantula', x: 8420, y: 590, range: 80 },
+    // (3) o riacho — voadeiras patrulhando as pontes, uma cobra na ilha
+    { type: 'voadeira',  x: 9430, y: 460, range: 150 },
+    { type: 'cobra',     x: 10250, y: 590, range: 120 },  // dona da ilha
+    { type: 'voadeira',  x: 10930, y: 460, range: 150 },
+    // (4) o território dos caçadores — tarântulas e cobras mandam aqui
+    { type: 'tarantula', x: 11900, y: 590, range: 130 },
+    { type: 'cobra',     x: 12320, y: 590, range: 80 },
+    { type: 'voadeira',  x: 12600, y: 430, range: 140 },
+    { type: 'tarantula', x: 13000, y: 590, range: 130 },
+    { type: 'cobra',     x: 13450, y: 590, range: 140 },
+    { type: 'tarantula', x: 13900, y: 590, range: 130 },
+    { type: 'tarantula', x: 14420, y: 590, range: 130 },  // ronda a jaula
+    { type: 'cobra',     x: 14800, y: 590, range: 140 },
+    { type: 'voadeira',  x: 15100, y: 430, range: 140 },
+    { type: 'tarantula', x: 15500, y: 590, range: 130 },
+    { type: 'cobra',     x: 16000, y: 590, range: 140 },
+    { type: 'tarantula', x: 16500, y: 590, range: 130 },
+    { type: 'cobra',     x: 16900, y: 590, range: 140 },
+    { type: 'voadeira',  x: 17200, y: 430, range: 140 },
+    { type: 'tarantula', x: 17700, y: 590, range: 130 },
+    { type: 'cobra',     x: 18200, y: 590, range: 140 },
+    { type: 'tarantula', x: 18700, y: 590, range: 130 },
+    { type: 'espinhoco', x: 19200, y: 590, range: 110 },
     // (5) a porta da clareira
-    { type: 'espinhoco', x: 5860, y: 590, range: 110 },
+    { type: 'espinhoco', x: 19750, y: 590, range: 110 },
   ];
 
   // ---------------------------------------------------------------
@@ -157,11 +248,20 @@ window.FG = window.FG || {};
   //   espinhorolo — o rolo de espinhos que os caçadores soltaram no caminho
   // ---------------------------------------------------------------
   var obstacleDefs = [
-    { type: 'plataforma',  x: 2060, y: 560, w: 110, dx: 0, dy: -150, period: 5.2, phase: 0 },
-    { type: 'desmorona',   x: 3310, y: 556, w: 80 },
-    { type: 'cipo',        x1: 3310, y1: 420, x2: 3660, y2: 420, sag: 72 },
-    { type: 'pendulo',     x: 4445, y: 300, len: 190, arc: 0.8, period: 2.9 },
-    { type: 'espinhorolo', x: 5420, y: 576, w: 44, range: 120, speed: 125 },
+    // os elevadores de carga dos povoados (rota alternativa à escalada)
+    { type: 'plataforma',  x: 4360, y: 560, w: 110, dx: 0, dy: -150, period: 5.2, phase: 0 },
+    { type: 'plataforma',  x: 6260, y: 580, w: 110, dx: 0, dy: -150, period: 5.6, phase: 1.6 },
+    // as pontes do riacho: uma tábua podre e um cipó por braço
+    { type: 'desmorona',   x: 9270, y: 556, w: 80 },
+    { type: 'cipo',        x1: 9260, y1: 420, x2: 9620, y2: 420, sag: 72 },
+    { type: 'desmorona',   x: 10770, y: 556, w: 80 },
+    { type: 'cipo',        x1: 10760, y1: 420, x2: 11120, y2: 420, sag: 72 },
+    // as armadilhas do território dos caçadores
+    { type: 'pendulo',     x: 12450, y: 300, len: 190, arc: 0.8, period: 2.9 },
+    { type: 'espinhorolo', x: 13600, y: 576, w: 44, range: 120, speed: 125 },
+    { type: 'pendulo',     x: 16250, y: 300, len: 190, arc: 0.85, period: 2.6 },
+    { type: 'espinhorolo', x: 17300, y: 576, w: 44, range: 130, speed: 135 },
+    { type: 'espinhorolo', x: 18700, y: 576, w: 44, range: 120, speed: 150 },
   ];
 
   // ---------------------------------------------------------------
@@ -171,7 +271,7 @@ window.FG = window.FG || {};
   // enquanto o resgate não aconteceu: companheiro solto não volta pra jaula.
   // ---------------------------------------------------------------
   var jaula = {
-    x: 4820, y: 496, w: 116, h: 124,   // pousada no chão (y+h = 620)
+    x: 14300, y: 496, w: 116, h: 124,  // pousada no chão (y+h = 620), a ~2/3 da fase
     hits: 0, max: 3, quebrada: false,
     cool: 0,          // carência entre socos contados (o soco dura ~0.22s)
     tremor: 0,        // tempo de tremida depois de um soco
@@ -189,24 +289,57 @@ window.FG = window.FG || {};
   lumiArc(400, 500, 4, 170, 36);
   lumiLine(545, 480, 3, 40);
   lumiArc(1190, 480, 5, 200, 40);   // por cima do arbusto de espinhos
-  // (2) as casas na árvore — a coluna ensina a escalar o tronco
-  lumiCol(1690, 560, 7, -48);
-  lumiLine(1810, 258, 4, 54);       // sobre o piso da casa 1
-  lumiArc(2120, 390, 3, 120, 30);
-  lumiArc(2350, 300, 3, 130, 32);
-  lumiLine(2450, 200, 3, 52);       // sobre o piso da casa 2
-  lumiCol(2590, 560, 7, -48);       // a face do tronco 2 pelo chão
-  // (3) o riacho — um arco por vão da ponte, e um colar dentro da água
-  lumiArc(3345, 500, 4, 150, 36);
-  lumiArc(3640, 490, 4, 150, 36);
-  lumiLine(3250, 690, 5, 110);      // mergulhar também paga
+  lumiLine(1680, 520, 3, 46);
+  lumiArc(2010, 470, 4, 160, 36);   // sobre a pedra alta
+  lumiArc(2420, 500, 4, 170, 36);
+  lumiLine(2630, 480, 3, 40);
+  lumiArc(3040, 490, 4, 160, 36);
+  lumiArc(3580, 480, 5, 200, 40);   // por cima do espinheiro da despedida
+  // (2) povoado 1 — a coluna ensina a escalar o tronco
+  lumiCol(3990, 560, 7, -48);
+  lumiLine(4110, 258, 4, 54);       // sobre o piso da casa 1
+  lumiArc(4420, 390, 3, 120, 30);
+  lumiArc(4650, 300, 3, 130, 32);
+  lumiLine(4750, 200, 3, 52);       // sobre o piso da casa 2
+  lumiCol(4890, 560, 7, -48);       // a face do tronco 2 pelo chão
+  lumiLine(5250, 578, 4, 60);       // o respiro entre os povoados
+  lumiArc(5470, 490, 4, 170, 38);   // por cima do espinheiro do respiro
+  // (2b) povoado 2
+  lumiCol(5890, 560, 6, -48);
+  lumiLine(6010, 278, 4, 50);       // sobre o piso da casa 3
+  lumiArc(6320, 410, 3, 120, 30);
+  lumiArc(6560, 320, 3, 130, 32);
+  lumiLine(6730, 220, 3, 52);       // sobre o piso da casa 4
+  lumiCol(6870, 560, 7, -48);       // a face do tronco 4 pelo chão
+  lumiLine(7430, 520, 3, 44);
+  lumiArc(8040, 480, 4, 170, 38);
+  lumiLine(8580, 520, 3, 44);
+  // (3) o riacho — um arco por vão de cada ponte, e um colar em cada braço
+  lumiArc(9295, 500, 4, 150, 36);
+  lumiArc(9590, 490, 4, 150, 36);
+  lumiLine(9200, 690, 5, 110);      // mergulhar também paga
+  lumiLine(10200, 578, 3, 60);      // a ilha
+  lumiArc(10795, 500, 4, 150, 36);
+  lumiArc(11090, 490, 4, 150, 36);
+  lumiLine(10700, 690, 5, 110);     // o colar do braço 2
   // (4) o território dos caçadores
-  lumiLine(4080, 578, 3, 54);
-  lumiArc(4445, 440, 5, 220, 44);   // por cima da armadilha de tronco
-  lumiLine(5010, 486, 3, 44);       // no mirante da jaula
-  lumiArc(5420, 480, 4, 170, 38);   // por cima do rolo de espinhos
+  lumiLine(11780, 578, 3, 54);
+  lumiArc(12450, 440, 5, 220, 44);  // por cima da primeira armadilha de tronco
+  lumiLine(12740, 486, 3, 44);
+  lumiArc(13600, 480, 4, 170, 38);  // por cima do primeiro rolo de espinhos
+  lumiLine(14490, 486, 3, 44);      // no mirante da jaula
+  lumiArc(14900, 500, 4, 170, 36);
+  lumiLine(15240, 520, 3, 44);
+  lumiArc(16250, 440, 5, 220, 44);  // por cima da segunda armadilha
+  lumiLine(16740, 520, 3, 44);
+  lumiArc(17300, 480, 4, 170, 38);  // por cima do segundo rolo
+  lumiLine(17540, 486, 3, 44);
+  lumiLine(18340, 520, 3, 44);
+  lumiArc(18700, 480, 4, 170, 38);  // por cima do rolo veloz
+  lumiLine(19040, 520, 3, 44);
   // (5) a clareira
-  lumiLine(5960, 578, 4, 60);
+  lumiLine(19900, 578, 4, 60);
+  lumiLine(20160, 578, 3, 60);
 
   // FAÍSCAS — pool fixo do kit (também usada na quebra da jaula).
   var sparks = kit.makeSparks(64);
@@ -1093,8 +1226,8 @@ window.FG = window.FG || {};
     enemyDefs: enemyDefs,
     obstacleDefs: obstacleDefs,
     bossId: 'dalilesma',
-    bossTriggerX: 6150,
-    arena: { x: 5980, w: 1150 },
+    bossTriggerX: 20550,
+    arena: { x: 20380, w: 1150 },
     reset: reset,
     update: update,
     drawBack: drawBack,

@@ -107,6 +107,7 @@ window.FG = window.FG || {};
     stunHit: false,
     flash: 0,
     eyeGlow: 0,       // brilho do laço na janela de dano
+    tickle: 0,        // >0: janela FORÇADA pelas cócegas do MurphOliver (riso)
     safe: 0,          // carência de contato ao sair da janela (ver takeHit)
     dieTimer: 0,
     dieScale: 1,
@@ -163,6 +164,7 @@ window.FG = window.FG || {};
       this.dieScale = 1;
       this.victoryFired = false;
       this.phase2Wave = -1;
+      this.tickle = 0;
       for (let i = 0; i < MAXBOLA; i++) bolas[i].active = false;
       for (let i = 0; i < MAXRASTRO; i++) rastros[i].active = false;
       for (let i = 0; i < MAXCHUVA; i++) chuvas[i].active = false;
@@ -210,6 +212,24 @@ window.FG = window.FG || {};
       this.armUp = 0;
     },
 
+    // Janela FORÇADA pelas cócegas do MurphOliver. Interrompe o ataque
+    // corrente com os mesmos desarmes da janela normal (o estado `exposto` já
+    // neutraliza bolas, rastros, chuvas e ondas pela flag `janela`), mas com
+    // a duração GENEROSA dos outros chefões (2.6s) — é a recompensa de gastar
+    // a cóceja, que custa 60s de descanso do sapinho. Durante ela, a Dalilesma
+    // e a lesma se contorcem de rir. Retorna false se não havia o que expor.
+    forceExpose() {
+      if (!this.started || this.dead) return false;
+      if (this.state === 'exposto' || this.state === 'dying' ||
+          this.state === 'intro' || this.state === 'dormant') return false;
+      this.expose();
+      this.timer = 2.6;
+      this.tickle = 2.6;
+      this.shake = 0.6;
+      FG.audio.sfx('bossHit');
+      return true;
+    },
+
     // Dano no laço
     takeHit() {
       this.hp--;
@@ -246,6 +266,7 @@ window.FG = window.FG || {};
       const p = FG.player;
       const ov = FG.engine.rectsOverlap;
       if (this.flash > 0) this.flash -= dt;
+      if (this.tickle > 0) this.tickle -= dt;
       if (this.safe > 0) this.safe -= dt;
       if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3);
 
@@ -323,6 +344,8 @@ window.FG = window.FG || {};
         this.charge += (0 - this.charge) * Math.min(1, dt * 4);
         this.x += (this.homeX - this.x) * Math.min(1, dt * 3);
         this.eyeGlow = 0.6 + 0.4 * Math.sin(FG.engine.time * 12);
+        // cócegas: as duas se contorcem de rir (tremida contínua)
+        if (this.tickle > 0) this.shake = Math.max(this.shake, 0.3);
         this.refreshPose();
         // gotinhas de slime pingando do laço aceso
         if (Math.random() < 0.4) {
@@ -772,9 +795,12 @@ window.FG = window.FG || {};
     drawSlug(ctx, t, heat, dying);
     drawGirl(ctx, t, heat, dying);
 
-    // balão de fala da intro: a ordem dela, curta e mandona
+    // balão de fala da intro: a ordem dela, curta e mandona — e a gargalhada
+    // involuntária quando o MurphOliver faz cócegas
     if (boss.state === 'intro') {
       drawBalao(ctx, -40, -(SLUG_H + 190), 'Você não passa!');
+    } else if (boss.tickle > 0 && boss.state === 'exposto') {
+      drawBalao(ctx, -40, -(SLUG_H + 190), 'HAHAHA! Para!');
     }
 
     ctx.restore();

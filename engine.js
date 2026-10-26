@@ -9,7 +9,9 @@ window.FG = window.FG || {};
   // ---------- input ----------
   const input = {
     left: false, right: false, down: false, jump: false, attack: false, interact: false,
+    companion: false,
     jumpPressed: false, attackPressed: false, interactPressed: false,
+    companionPressed: false,
   };
   FG.input = input;
 
@@ -20,11 +22,12 @@ window.FG = window.FG || {};
     jump: ['Space', 'KeyZ', 'ArrowUp', 'KeyW'],
     attack: ['KeyX', 'KeyK'],
     interact: ['KeyE', 'KeyF'],
+    companion: ['KeyC'],   // comanda o MurphOliver (cócegas no chefão)
   };
   const keyToAction = {};
   for (const action in KEYS) for (const code of KEYS[action]) keyToAction[code] = action;
 
-  const pressBuffer = { jump: false, attack: false, interact: false };
+  const pressBuffer = { jump: false, attack: false, interact: false, companion: false };
 
   // Senha do "Pular Fase" no menu de pausa: o próprio #pularSenhaInput
   // (definido mais abaixo) é a ÚNICA fonte de verdade do que foi digitado —
@@ -48,6 +51,7 @@ window.FG = window.FG || {};
       if (action === 'jump') pressBuffer.jump = true;
       if (action === 'attack') pressBuffer.attack = true;
       if (action === 'interact') pressBuffer.interact = true;
+      if (action === 'companion') pressBuffer.companion = true;
     }
     input[action] = true;
     if (engine.state === 'menu' && (action === 'jump' || action === 'attack')) startGame();
@@ -324,7 +328,7 @@ window.FG = window.FG || {};
   function pauseGame() {
     // solta o que estava segurado: sem isto o Heitor continua andando/socando
     // um frame depois de retomar, porque o dedo/tecla nunca soltou de verdade.
-    input.left = input.right = input.down = input.jump = input.attack = input.interact = false;
+    input.left = input.right = input.down = input.jump = input.attack = input.interact = input.companion = false;
     engine.setState('paused');
   }
   function resumeGame() { engine.setState('playing'); }
@@ -419,6 +423,7 @@ window.FG = window.FG || {};
     input.jumpPressed = pressBuffer.jump; pressBuffer.jump = false;
     input.attackPressed = pressBuffer.attack; pressBuffer.attack = false;
     input.interactPressed = pressBuffer.interact; pressBuffer.interact = false;
+    input.companionPressed = pressBuffer.companion; pressBuffer.companion = false;
 
     if (engine.shake.time > 0) engine.shake.time = Math.max(0, engine.shake.time - dt);
 
@@ -431,7 +436,12 @@ window.FG = window.FG || {};
       syncSolids();
       p.update(dt);
       FG.enemies.update(dt);
-      if (FG.companion && FG.companion.active) FG.companion.update(dt);
+      if (FG.companion && FG.companion.active) {
+        FG.companion.update(dt);
+        // borda de subida do comando: o companion decide sozinho se pode
+        // (chefão vivo, sem estar descansando) — aqui é só o funil do input
+        if (input.companionPressed) FG.companion.command();
+      }
 
       // hazards
       for (const hz of FG.level.hazards) {
@@ -901,10 +911,18 @@ window.FG = window.FG || {};
     { key: 'PULO na parede', desc: 'escalar' },
     { key: 'SOCO', desc: 'socar' },
   ];
+  // Com o MurphOliver resgatado a lista ganha a linha do comando dele — as
+  // quatro variantes nascem prontas no load para o drawControls não concatenar
+  // array por frame.
+  const CONTROLS_TECLADO_MURPH = CONTROLS_TECLADO.concat([{ key: 'C', desc: 'MurphOliver' }]);
+  const CONTROLS_TOQUE_MURPH = CONTROLS_TOQUE.concat([{ key: 'MURPH', desc: 'cócegas' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
-    const lista = (FG.touch && FG.touch.active) ? CONTROLS_TOQUE : CONTROLS_TECLADO;
+    const murph = FG.companion && FG.companion.active;
+    const lista = (FG.touch && FG.touch.active)
+      ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+      : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
