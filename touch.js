@@ -71,6 +71,8 @@ window.FG = window.FG || {};
     { id: 'drago', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'drago' },
     // chamada do Poe (soco na chefã da fase 3): mesmo contrato e slot.
     { id: 'poe', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'poe' },
+    // chamada do Icky Licky (soco no chefão da fase 5): mesmo contrato e slot.
+    { id: 'icky', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'icky' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -101,6 +103,10 @@ window.FG = window.FG || {};
     if (b.id === 'poe') {
       return !!(FG.poe && typeof FG.poe.disponivel === 'function' &&
                 FG.poe.disponivel());
+    }
+    if (b.id === 'icky') {
+      return !!(FG.icky && typeof FG.icky.disponivel === 'function' &&
+                FG.icky.disponivel());
     }
     return true;
   }
@@ -655,6 +661,73 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Icky Licky: a carinha da salamandra — domo charcoal, máscaras
+  // bravas e o bocão de aro amarelo. Na recarga (30s) fica apagado com o
+  // arco esvaziando; mesmo contrato dos outros ajudantes.
+  function ickyBtn(ctx, b, on) {
+    var ik = FG.icky;
+    var resto = (ik && ik.restTimer > 0) ? ik.restTimer / (ik.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(ik && typeof ik.podeComandar === 'function' && ik.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(220,200,50,0.35)' : 'rgba(26,22,14,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(175,165,120,0.45)' : 'rgba(240,215,60,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // domo charcoal
+    ctx.fillStyle = apagado ? '#5c5260' : '#4e4450';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y - r * 0.08, r * 0.54, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // sobrancelhas amarelas bravas
+    ctx.strokeStyle = '#f2d820';
+    ctx.lineWidth = r * 0.1;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.4, b.y - r * 0.26);
+    ctx.quadraticCurveTo(b.x - r * 0.18, b.y - r * 0.42, b.x - r * 0.04, b.y - r * 0.3);
+    ctx.moveTo(b.x + r * 0.04, b.y - r * 0.32);
+    ctx.quadraticCurveTo(b.x + r * 0.22, b.y - r * 0.44, b.x + r * 0.42, b.y - r * 0.26);
+    ctx.stroke();
+    // olhos pretos com pupila branca
+    ctx.fillStyle = '#0a090c';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.2, b.y - r * 0.16, r * 0.17, r * 0.12, 0.22, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.2, b.y - r * 0.16, r * 0.17, r * 0.13, -0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.15, b.y - r * 0.15, r * 0.05, r * 0.07, 0, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.25, b.y - r * 0.15, r * 0.055, r * 0.075, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // o bocão de aro amarelo
+    ctx.fillStyle = '#0a090c';
+    ctx.strokeStyle = '#f2d820';
+    ctx.lineWidth = r * 0.09;
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.22, r * 0.34, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ef8090';
+    ctx.beginPath();
+    ctx.ellipse(b.x + r * 0.04, b.y + r * 0.3, r * 0.14, r * 0.07, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#e8dfa8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -669,6 +742,7 @@ window.FG = window.FG || {};
       if (b.tipo === 'gator') { gatorBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'drago') { dragoBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'poe') { poeBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'icky') { ickyBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

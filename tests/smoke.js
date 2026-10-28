@@ -88,7 +88,7 @@ global.window.FG = {};
 const order = [
   'assets.js', 'audio.js',
   'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js',
-  'obstacles.js', 'player.js', 'companion.js', 'babachops.js', 'allistergator.js', 'dragowuggy.js', 'poe.js',
+  'obstacles.js', 'player.js', 'companion.js', 'babachops.js', 'allistergator.js', 'dragowuggy.js', 'poe.js', 'ickylicky.js',
   'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
@@ -222,7 +222,7 @@ for (let f = 0; f < totalFases; f++) {
   // Baba Chops na do Hugo (fase 1), Allister Gator na da Sandrola (fase 2).
   // O certo entra voando, dá UM soco (1 takeHit) e sai voando; recarga 30s.
   // Os demais têm de estar indisponíveis — inclusive fora das suas fases.
-  const AJUDANTES = { hugo: ['baba chops', FG.babachops], sandrola: ['allister gator', FG.allister], sergiola: ['dragowuggy', FG.drago], draculina: ['poe', FG.poe] };
+  const AJUDANTES = { hugo: ['baba chops', FG.babachops], sandrola: ['allister gator', FG.allister], sergiola: ['dragowuggy', FG.drago], draculina: ['poe', FG.poe], otton: ['icky licky', FG.icky] };
   for (const bid in AJUDANTES) {
     const nomeA = AJUDANTES[bid][0], aj = AJUDANTES[bid][1];
     if (!aj) throw new Error('ajudante ' + nomeA + ' não carregou');

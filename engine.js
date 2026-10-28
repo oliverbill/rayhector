@@ -272,6 +272,7 @@ window.FG = window.FG || {};
     if (FG.allister) FG.allister.reset(false);
     if (FG.drago) FG.drago.reset(false);
     if (FG.poe) FG.poe.reset(false);
+    if (FG.icky) FG.icky.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -330,6 +331,7 @@ window.FG = window.FG || {};
     if (FG.allister) FG.allister.reset(true);
     if (FG.drago) FG.drago.reset(true);
     if (FG.poe) FG.poe.reset(true);
+    if (FG.icky) FG.icky.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -434,6 +436,7 @@ window.FG = window.FG || {};
     if (FG.allister) FG.allister.reset(false);
     if (FG.drago) FG.drago.reset(false);
     if (FG.poe) FG.poe.reset(false);
+    if (FG.icky) FG.icky.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -487,6 +490,11 @@ window.FG = window.FG || {};
         // idem: o Poe só responde na luta da Drácula (fase 3)
         FG.poe.update(dt);
         if (input.babaPressed) FG.poe.command();
+      }
+      if (FG.icky) {
+        // idem: o Icky Licky só responde na luta do Otton (fase 5)
+        FG.icky.update(dt);
+        if (input.babaPressed) FG.icky.command();
       }
 
       // hazards
@@ -611,6 +619,7 @@ window.FG = window.FG || {};
     if (FG.allister) FG.allister.draw(ctx, cam);     // idem
     if (FG.drago) FG.drago.draw(ctx, cam);           // idem
     if (FG.poe) FG.poe.draw(ctx, cam);               // idem
+    if (FG.icky) FG.icky.draw(ctx, cam);             // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -979,6 +988,9 @@ window.FG = window.FG || {};
   // Na luta da Drácula (fase 3) o ajudante do B é o Poe.
   const CONTROLS_TECLADO_POE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Poe' }]);
   const CONTROLS_TOQUE_POE = CONTROLS_TOQUE.concat([{ key: 'POE', desc: 'soco no chefão' }]);
+  // Na luta do Otton (fase 5) o ajudante do B é o Icky Licky.
+  const CONTROLS_TECLADO_ICKY = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Icky Licky' }]);
+  const CONTROLS_TOQUE_ICKY = CONTROLS_TOQUE.concat([{ key: 'ICKY', desc: 'soco no chefão' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
@@ -987,6 +999,7 @@ window.FG = window.FG || {};
     const gatr = FG.allister && FG.allister.disponivel();
     const drg = FG.drago && FG.drago.disponivel();
     const po = FG.poe && FG.poe.disponivel();
+    const iky = FG.icky && FG.icky.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
@@ -996,9 +1009,11 @@ window.FG = window.FG || {};
           ? (toque ? CONTROLS_TOQUE_DRAGO : CONTROLS_TECLADO_DRAGO)
           : po
             ? (toque ? CONTROLS_TOQUE_POE : CONTROLS_TECLADO_POE)
-            : toque
-              ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
-              : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
+            : iky
+              ? (toque ? CONTROLS_TOQUE_ICKY : CONTROLS_TECLADO_ICKY)
+              : toque
+                ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+                : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
