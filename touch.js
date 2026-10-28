@@ -66,6 +66,9 @@ window.FG = window.FG || {};
     // mesmo slot do Baba Chops — cada um só existe na luta do seu chefão,
     // então nunca coexistem (e a ação é a mesma: o funil 'baba').
     { id: 'gator', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'gator' },
+    // chamada do DragoWuggy (soco no chefão da fase 4): mesmo contrato e
+    // mesmo slot — cada ajudante só existe na luta do seu chefão.
+    { id: 'drago', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'drago' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -88,6 +91,10 @@ window.FG = window.FG || {};
     if (b.id === 'gator') {
       return !!(FG.allister && typeof FG.allister.disponivel === 'function' &&
                 FG.allister.disponivel());
+    }
+    if (b.id === 'drago') {
+      return !!(FG.drago && typeof FG.drago.disponivel === 'function' &&
+                FG.drago.disponivel());
     }
     return true;
   }
@@ -504,6 +511,78 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do DragoWuggy: a cabeça do dragãozinho — crânio vermelho com os
+  // chifres amarelos, máscaras pretas bravas e o bocão de dentes
+  // triangulares. Na recarga (30s) fica apagado com o arco esvaziando;
+  // mesmo contrato do babaBtn/gatorBtn.
+  function dragoBtn(ctx, b, on) {
+    var dg = FG.drago;
+    var resto = (dg && dg.restTimer > 0) ? dg.restTimer / (dg.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(dg && typeof dg.podeComandar === 'function' && dg.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(230,90,60,0.4)' : 'rgba(40,12,10,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(200,140,120,0.45)' : 'rgba(255,150,110,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // crânio vermelho
+    ctx.fillStyle = apagado ? '#9a4034' : '#e23b2e';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y - r * 0.02, r * 0.52, r * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // chifres amarelos
+    ctx.fillStyle = '#f2e23a';
+    for (var ch = -1; ch <= 1; ch += 2) {
+      ctx.beginPath();
+      ctx.moveTo(b.x + ch * r * 0.18, b.y - r * 0.38);
+      ctx.lineTo(b.x + ch * r * 0.42, b.y - r * 0.72);
+      ctx.lineTo(b.x + ch * r * 0.34, b.y - r * 0.34);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // máscaras pretas + pupila branca
+    ctx.fillStyle = '#0c0c0e';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.22, b.y - r * 0.16, r * 0.17, r * 0.12, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.22, b.y - r * 0.16, r * 0.17, r * 0.12, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(b.x - r * 0.18, b.y - r * 0.17, r * 0.05, 0, Math.PI * 2);
+    ctx.arc(b.x + r * 0.26, b.y - r * 0.17, r * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    // bocão preto com dentinhos triangulares
+    ctx.fillStyle = '#0c0c0e';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.2, r * 0.36, r * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    for (var d = 0; d < 3; d++) {
+      var dx = b.x - r * 0.24 + d * r * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(dx, b.y + r * 0.08);
+      ctx.lineTo(dx + r * 0.08, b.y + r * 0.26);
+      ctx.lineTo(dx + r * 0.16, b.y + r * 0.08);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#f0c8b0';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -516,6 +595,7 @@ window.FG = window.FG || {};
       if (b.tipo === 'murph') { murphBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'baba') { babaBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'gator') { gatorBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'drago') { dragoBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

@@ -270,6 +270,7 @@ window.FG = window.FG || {};
     if (FG.companion) FG.companion.reset(false);
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
+    if (FG.drago) FG.drago.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -326,6 +327,7 @@ window.FG = window.FG || {};
     if (FG.companion) FG.companion.reset(true);
     if (FG.babachops) FG.babachops.reset(true);
     if (FG.allister) FG.allister.reset(true);
+    if (FG.drago) FG.drago.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -428,6 +430,7 @@ window.FG = window.FG || {};
     FG.enemies.reset();
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
+    if (FG.drago) FG.drago.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -471,6 +474,11 @@ window.FG = window.FG || {};
         // Sandrola (fase 2), então os dois nunca disputam o B
         FG.allister.update(dt);
         if (input.babaPressed) FG.allister.command();
+      }
+      if (FG.drago) {
+        // idem: o DragoWuggy só responde na luta do Sergiola (fase 4)
+        FG.drago.update(dt);
+        if (input.babaPressed) FG.drago.command();
       }
 
       // hazards
@@ -593,6 +601,7 @@ window.FG = window.FG || {};
     if (FG.companion && FG.companion.active) FG.companion.draw(ctx, cam);
     if (FG.babachops) FG.babachops.draw(ctx, cam);   // ele mesmo se pula fora de cena
     if (FG.allister) FG.allister.draw(ctx, cam);     // idem
+    if (FG.drago) FG.drago.draw(ctx, cam);           // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -955,20 +964,26 @@ window.FG = window.FG || {};
   // Na luta da Sandrola (fase 2) o ajudante do B é o Allister Gator.
   const CONTROLS_TECLADO_GATOR = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Allister Gator' }]);
   const CONTROLS_TOQUE_GATOR = CONTROLS_TOQUE.concat([{ key: 'GATOR', desc: 'soco no chefão' }]);
+  // Na luta do Sergiola (fase 4) o ajudante do B é o DragoWuggy.
+  const CONTROLS_TECLADO_DRAGO = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'DragoWuggy' }]);
+  const CONTROLS_TOQUE_DRAGO = CONTROLS_TOQUE.concat([{ key: 'DRAGO', desc: 'soco no chefão' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
     const murph = FG.companion && FG.companion.active;
     const baba = FG.babachops && FG.babachops.disponivel();
     const gatr = FG.allister && FG.allister.disponivel();
+    const drg = FG.drago && FG.drago.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
       : gatr
         ? (toque ? CONTROLS_TOQUE_GATOR : CONTROLS_TECLADO_GATOR)
-        : toque
-          ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
-          : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
+        : drg
+          ? (toque ? CONTROLS_TOQUE_DRAGO : CONTROLS_TECLADO_DRAGO)
+          : toque
+            ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+            : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
