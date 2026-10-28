@@ -88,7 +88,7 @@ global.window.FG = {};
 const order = [
   'assets.js', 'audio.js',
   'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js',
-  'obstacles.js', 'player.js', 'companion.js',
+  'obstacles.js', 'player.js', 'companion.js', 'babachops.js',
   'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
@@ -217,6 +217,26 @@ for (let f = 0; f < totalFases; f++) {
   if (!boss.started) throw new Error('chefão ' + boss.id + ' não disparou dentro da arena');
   frames(90); // intro + primeiro ataque
   if (!boss.active) throw new Error('chefão ' + boss.id + ' não ficou ativo após a intro');
+
+  // ---- Baba Chops: exclusivo da luta do Hugo (fase 1) ----
+  // Tecla B: ele entra correndo, dá UM soco (1 takeHit) e some; recarga 30s.
+  if (boss.id === 'hugo' && FG.babachops) {
+    if (!FG.babachops.disponivel()) throw new Error('Baba Chops indisponível na luta do Hugo');
+    if (!FG.babachops.podeComandar()) throw new Error('Baba Chops não pôde ser comandado');
+    const hpAntes = boss.hp;
+    tap('KeyB', 2);
+    frames(240); // entra (até ~2.2s) + soco + sumiço
+    if (boss.hp !== hpAntes - 1) {
+      throw new Error('soco do Baba Chops não tirou 1 de hp: ' + hpAntes + ' -> ' + boss.hp);
+    }
+    if (FG.babachops.mode !== 'fora') throw new Error('Baba Chops não sumiu: ' + FG.babachops.mode);
+    if (!(FG.babachops.restTimer > 0)) throw new Error('recarga do Baba Chops não armou');
+    if (FG.babachops.podeComandar()) throw new Error('Baba Chops comandável durante a recarga');
+    console.log('baba chops: soco ok (hp %d -> %d), recarga %ss',
+      hpAntes, boss.hp, FG.babachops.restTimer.toFixed(1));
+  } else if (FG.babachops && FG.babachops.disponivel()) {
+    throw new Error('Baba Chops disponível fora da luta do Hugo (fase ' + f + ')');
+  }
 
   for (let i = 0; i < 14; i++) {
     key(i % 2 ? 'ArrowLeft' : 'ArrowRight', true);

@@ -9,9 +9,9 @@ window.FG = window.FG || {};
   // ---------- input ----------
   const input = {
     left: false, right: false, down: false, jump: false, attack: false, interact: false,
-    companion: false,
+    companion: false, baba: false,
     jumpPressed: false, attackPressed: false, interactPressed: false,
-    companionPressed: false,
+    companionPressed: false, babaPressed: false,
   };
   FG.input = input;
 
@@ -23,11 +23,12 @@ window.FG = window.FG || {};
     attack: ['KeyX', 'KeyK'],
     interact: ['KeyE', 'KeyF'],
     companion: ['KeyC'],   // comanda o MurphOliver (cócegas no chefão)
+    baba: ['KeyB'],        // chama o Baba Chops (soco no chefão da fase 1)
   };
   const keyToAction = {};
   for (const action in KEYS) for (const code of KEYS[action]) keyToAction[code] = action;
 
-  const pressBuffer = { jump: false, attack: false, interact: false, companion: false };
+  const pressBuffer = { jump: false, attack: false, interact: false, companion: false, baba: false };
 
   // Senha do "Pular Fase" no menu de pausa: o próprio #pularSenhaInput
   // (definido mais abaixo) é a ÚNICA fonte de verdade do que foi digitado —
@@ -52,6 +53,7 @@ window.FG = window.FG || {};
       if (action === 'attack') pressBuffer.attack = true;
       if (action === 'interact') pressBuffer.interact = true;
       if (action === 'companion') pressBuffer.companion = true;
+      if (action === 'baba') pressBuffer.baba = true;
     }
     input[action] = true;
     if (engine.state === 'menu' && (action === 'jump' || action === 'attack')) startGame();
@@ -264,6 +266,7 @@ window.FG = window.FG || {};
     // companheiro resgatado acompanha entre fases: só reposiciona perto do
     // início (o reset(true) do jogo novo acontece em startGame)
     if (FG.companion) FG.companion.reset(false);
+    if (FG.babachops) FG.babachops.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -318,6 +321,7 @@ window.FG = window.FG || {};
     engine.lumis = 0;       // as lumis só zeram em jogo novo; entre fases acumulam
     // o resgate do companheiro também é por partida: jogo novo, sapo na jaula
     if (FG.companion) FG.companion.reset(true);
+    if (FG.babachops) FG.babachops.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -335,7 +339,7 @@ window.FG = window.FG || {};
   function pauseGame() {
     // solta o que estava segurado: sem isto o Heitor continua andando/socando
     // um frame depois de retomar, porque o dedo/tecla nunca soltou de verdade.
-    input.left = input.right = input.down = input.jump = input.attack = input.interact = input.companion = false;
+    input.left = input.right = input.down = input.jump = input.attack = input.interact = input.companion = input.baba = false;
     engine.setState('paused');
   }
   function resumeGame() { engine.setState('playing'); }
@@ -418,6 +422,7 @@ window.FG = window.FG || {};
     if (FG.obstacles) FG.obstacles.reset();
     syncSolids();
     FG.enemies.reset();
+    if (FG.babachops) FG.babachops.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -431,6 +436,7 @@ window.FG = window.FG || {};
     input.attackPressed = pressBuffer.attack; pressBuffer.attack = false;
     input.interactPressed = pressBuffer.interact; pressBuffer.interact = false;
     input.companionPressed = pressBuffer.companion; pressBuffer.companion = false;
+    input.babaPressed = pressBuffer.baba; pressBuffer.baba = false;
 
     if (engine.shake.time > 0) engine.shake.time = Math.max(0, engine.shake.time - dt);
 
@@ -448,6 +454,12 @@ window.FG = window.FG || {};
         // borda de subida do comando: o companion decide sozinho se pode
         // (chefão vivo, sem estar descansando) — aqui é só o funil do input
         if (input.companionPressed) FG.companion.command();
+      }
+      if (FG.babachops) {
+        // o Baba Chops decide sozinho se existe (só na luta do Hugo) e se
+        // pode (recarga de 30s) — aqui é só o funil do input, como o Murph
+        FG.babachops.update(dt);
+        if (input.babaPressed) FG.babachops.command();
       }
 
       // hazards
@@ -568,6 +580,7 @@ window.FG = window.FG || {};
     FG.enemies.draw(ctx, cam);
     FG.player.draw(ctx, cam);
     if (FG.companion && FG.companion.active) FG.companion.draw(ctx, cam);
+    if (FG.babachops) FG.babachops.draw(ctx, cam);   // ele mesmo se pula fora de cena
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -923,13 +936,21 @@ window.FG = window.FG || {};
   // array por frame.
   const CONTROLS_TECLADO_MURPH = CONTROLS_TECLADO.concat([{ key: 'C', desc: 'MurphOliver' }]);
   const CONTROLS_TOQUE_MURPH = CONTROLS_TOQUE.concat([{ key: 'MURPH', desc: 'cócegas' }]);
+  // Na luta do Hugo (fase 1) a linha é a do Baba Chops — ele e o Murph nunca
+  // coexistem (o resgate do sapo é na floresta e zera em jogo novo).
+  const CONTROLS_TECLADO_BABA = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Baba Chops' }]);
+  const CONTROLS_TOQUE_BABA = CONTROLS_TOQUE.concat([{ key: 'BABA', desc: 'soco no chefão' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
     const murph = FG.companion && FG.companion.active;
-    const lista = (FG.touch && FG.touch.active)
-      ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
-      : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
+    const baba = FG.babachops && FG.babachops.disponivel();
+    const toque = FG.touch && FG.touch.active;
+    const lista = baba
+      ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
+      : toque
+        ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+        : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;

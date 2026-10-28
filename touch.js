@@ -56,6 +56,12 @@ window.FG = window.FG || {};
     // (podeComandar), e descansando ganha o arco de recarga — o toque continua
     // indo pro funil em todos os casos: quem ignora é o companion.
     { id: 'companion', action: 'companion', x: 872, y: 284, r: 40, hit: 56, tipo: 'murph' },
+    // chamada do Baba Chops (soco no chefão da fase 1): só existe — para o
+    // dedo e para o desenho — durante a luta do Hugo (FG.babachops.disponivel).
+    // Divide o mesmo lugar do botão do Murph porque os dois nunca coexistem:
+    // o resgate do sapo é na floresta e zera em jogo novo, então na fase 1 o
+    // Murph nunca está ativo. Na recarga (30s) ganha o arco esvaziando.
+    { id: 'baba', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'baba' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -70,8 +76,12 @@ window.FG = window.FG || {};
   // O botão do MurphOliver só existe com ele resgatado — antes disso não pega
   // dedo nem aparece (os demais botões existem sempre).
   function btnExiste(b) {
-    if (b.id !== 'companion') return true;
-    return !!(FG.companion && FG.companion.active);
+    if (b.id === 'companion') return !!(FG.companion && FG.companion.active);
+    if (b.id === 'baba') {
+      return !!(FG.babachops && typeof FG.babachops.disponivel === 'function' &&
+                FG.babachops.disponivel());
+    }
+    return true;
   }
 
   function pick(clientX, clientY, rect) {
@@ -356,6 +366,71 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Baba Chops: a carinha da ovelha negra — juba preta encaracolada,
+  // focinho branco de bocão aberto com dois dentões. Na recarga (30s) fica
+  // apagado com o arco esvaziando; o toque segue indo pro setAction e é o
+  // próprio babachops quem o ignora (mesmo contrato do botão do Murph).
+  function babaBtn(ctx, b, on) {
+    var bc = FG.babachops;
+    var resto = (bc && bc.restTimer > 0) ? bc.restTimer / (bc.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(bc && typeof bc.podeComandar === 'function' && bc.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(200,190,210,0.4)' : 'rgba(20,18,26,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(170,165,180,0.45)' : 'rgba(235,230,240,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // juba preta: disco com bolotas em volta
+    ctx.fillStyle = apagado ? '#2e2c34' : '#17161a';
+    ctx.beginPath();
+    for (var i = 0; i < 8; i++) {
+      var ang = (i / 8) * Math.PI * 2;
+      ctx.moveTo(b.x + Math.cos(ang) * r * 0.52 + r * 0.2, b.y - r * 0.08 + Math.sin(ang) * r * 0.46);
+      ctx.arc(b.x + Math.cos(ang) * r * 0.52, b.y - r * 0.08 + Math.sin(ang) * r * 0.46, r * 0.2, 0, Math.PI * 2);
+    }
+    ctx.moveTo(b.x + r * 0.52, b.y - r * 0.08);
+    ctx.arc(b.x, b.y - r * 0.08, r * 0.52, 0, Math.PI * 2);
+    ctx.fill();
+    // orelhinhas creme
+    ctx.fillStyle = '#f3efe6';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.62, b.y - r * 0.26, r * 0.16, r * 0.1, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.62, b.y - r * 0.26, r * 0.16, r * 0.1, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // focinho branco com o bocão aberto e os dois dentões
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.1, r * 0.42, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#121014';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.16, r * 0.3, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(b.x - r * 0.14, b.y + r * 0.0, r * 0.12, r * 0.16);
+    ctx.fillRect(b.x + r * 0.03, b.y + r * 0.0, r * 0.12, r * 0.16);
+    // olhinhos
+    ctx.fillStyle = '#0a0a0c';
+    ctx.beginPath();
+    ctx.arc(b.x - r * 0.18, b.y - r * 0.18, r * 0.08, 0, Math.PI * 2);
+    ctx.arc(b.x + r * 0.18, b.y - r * 0.18, r * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#d8d4e0';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -366,6 +441,7 @@ window.FG = window.FG || {};
       if (!btnExiste(b)) continue;
       if (on) { ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 18; } else ctx.shadowBlur = 0;
       if (b.tipo === 'murph') { murphBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'baba') { babaBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);
