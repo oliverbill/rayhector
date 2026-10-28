@@ -69,6 +69,8 @@ window.FG = window.FG || {};
     // chamada do DragoWuggy (soco no chefão da fase 4): mesmo contrato e
     // mesmo slot — cada ajudante só existe na luta do seu chefão.
     { id: 'drago', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'drago' },
+    // chamada do Poe (soco na chefã da fase 3): mesmo contrato e slot.
+    { id: 'poe', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'poe' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -95,6 +97,10 @@ window.FG = window.FG || {};
     if (b.id === 'drago') {
       return !!(FG.drago && typeof FG.drago.disponivel === 'function' &&
                 FG.drago.disponivel());
+    }
+    if (b.id === 'poe') {
+      return !!(FG.poe && typeof FG.poe.disponivel === 'function' &&
+                FG.poe.disponivel());
     }
     return true;
   }
@@ -583,6 +589,72 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Poe: a cabeçorra roxa do corvo — topete, máscaras pretas
+  // bravas com pupila branca e o bicão. Na recarga (30s) fica apagado com
+  // o arco esvaziando; mesmo contrato dos outros ajudantes.
+  function poeBtn(ctx, b, on) {
+    var po = FG.poe;
+    var resto = (po && po.restTimer > 0) ? po.restTimer / (po.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(po && typeof po.podeComandar === 'function' && po.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(140,110,190,0.4)' : 'rgba(22,16,34,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(160,150,185,0.45)' : 'rgba(200,170,255,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // cabeça roxa redonda + topete
+    ctx.fillStyle = apagado ? '#5a5272' : '#4a4160';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y, r * 0.52, r * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.2, b.y - r * 0.44);
+    ctx.lineTo(b.x - r * 0.1, b.y - r * 0.62);
+    ctx.lineTo(b.x, b.y - r * 0.46);
+    ctx.lineTo(b.x + r * 0.1, b.y - r * 0.6);
+    ctx.lineTo(b.x + r * 0.2, b.y - r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    // máscaras pretas + pupilas brancas
+    ctx.fillStyle = '#0e0c14';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.2, b.y - r * 0.12, r * 0.18, r * 0.13, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.2, b.y - r * 0.1, r * 0.18, r * 0.14, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.15, b.y - r * 0.11, r * 0.05, r * 0.07, 0, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.25, b.y - r * 0.09, r * 0.055, r * 0.075, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // bicão: boca preta com o gancho roxo-claro
+    ctx.fillStyle = '#0e0c14';
+    ctx.beginPath();
+    ctx.ellipse(b.x + r * 0.02, b.y + r * 0.22, r * 0.3, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5d5272';
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.1, b.y + r * 0.08);
+    ctx.quadraticCurveTo(b.x + r * 0.3, b.y + r * 0.02, b.x + r * 0.38, b.y + r * 0.2);
+    ctx.quadraticCurveTo(b.x + r * 0.2, b.y + r * 0.16, b.x - r * 0.1, b.y + r * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#cfc2e8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -596,6 +668,7 @@ window.FG = window.FG || {};
       if (b.tipo === 'baba') { babaBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'gator') { gatorBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'drago') { dragoBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'poe') { poeBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

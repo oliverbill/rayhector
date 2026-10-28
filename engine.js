@@ -271,6 +271,7 @@ window.FG = window.FG || {};
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
     if (FG.drago) FG.drago.reset(false);
+    if (FG.poe) FG.poe.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -328,6 +329,7 @@ window.FG = window.FG || {};
     if (FG.babachops) FG.babachops.reset(true);
     if (FG.allister) FG.allister.reset(true);
     if (FG.drago) FG.drago.reset(true);
+    if (FG.poe) FG.poe.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -431,6 +433,7 @@ window.FG = window.FG || {};
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
     if (FG.drago) FG.drago.reset(false);
+    if (FG.poe) FG.poe.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -479,6 +482,11 @@ window.FG = window.FG || {};
         // idem: o DragoWuggy só responde na luta do Sergiola (fase 4)
         FG.drago.update(dt);
         if (input.babaPressed) FG.drago.command();
+      }
+      if (FG.poe) {
+        // idem: o Poe só responde na luta da Drácula (fase 3)
+        FG.poe.update(dt);
+        if (input.babaPressed) FG.poe.command();
       }
 
       // hazards
@@ -602,6 +610,7 @@ window.FG = window.FG || {};
     if (FG.babachops) FG.babachops.draw(ctx, cam);   // ele mesmo se pula fora de cena
     if (FG.allister) FG.allister.draw(ctx, cam);     // idem
     if (FG.drago) FG.drago.draw(ctx, cam);           // idem
+    if (FG.poe) FG.poe.draw(ctx, cam);               // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -967,6 +976,9 @@ window.FG = window.FG || {};
   // Na luta do Sergiola (fase 4) o ajudante do B é o DragoWuggy.
   const CONTROLS_TECLADO_DRAGO = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'DragoWuggy' }]);
   const CONTROLS_TOQUE_DRAGO = CONTROLS_TOQUE.concat([{ key: 'DRAGO', desc: 'soco no chefão' }]);
+  // Na luta da Drácula (fase 3) o ajudante do B é o Poe.
+  const CONTROLS_TECLADO_POE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Poe' }]);
+  const CONTROLS_TOQUE_POE = CONTROLS_TOQUE.concat([{ key: 'POE', desc: 'soco no chefão' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
@@ -974,6 +986,7 @@ window.FG = window.FG || {};
     const baba = FG.babachops && FG.babachops.disponivel();
     const gatr = FG.allister && FG.allister.disponivel();
     const drg = FG.drago && FG.drago.disponivel();
+    const po = FG.poe && FG.poe.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
@@ -981,9 +994,11 @@ window.FG = window.FG || {};
         ? (toque ? CONTROLS_TOQUE_GATOR : CONTROLS_TECLADO_GATOR)
         : drg
           ? (toque ? CONTROLS_TOQUE_DRAGO : CONTROLS_TECLADO_DRAGO)
-          : toque
-            ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
-            : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
+          : po
+            ? (toque ? CONTROLS_TOQUE_POE : CONTROLS_TECLADO_POE)
+            : toque
+              ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+              : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
