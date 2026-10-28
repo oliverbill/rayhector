@@ -245,6 +245,23 @@ for (let f = 0; f < totalFases; f++) {
     }
   }
 
+  // ---- MurphOliver: a cóceja agora machuca igual aos ajudantes ----
+  // Na luta da Dalilesma (a única com forceExpose), comandar o Murph tem de
+  // tirar 1 de hp além de abrir a janela. O resgate é forçado aqui porque o
+  // teleporte para a arena pulou a jaula da fase.
+  if (boss.id === 'dalilesma' && FG.companion) {
+    if (!FG.companion.active) FG.companion.rescue(FG.player.x - 60, FG.player.y);
+    frames(10);
+    if (!FG.companion.podeComandar()) throw new Error('Murph não pôde ser comandado na Dalilesma');
+    const hpAntesM = boss.hp;
+    tap('KeyC', 2);
+    frames(180); // voo até o ponto fraco + cóceja
+    if (boss.hp !== hpAntesM - 1) {
+      throw new Error('cóceja do Murph não tirou 1 de hp: ' + hpAntesM + ' -> ' + boss.hp);
+    }
+    console.log('murph: cóceja com dano ok (hp %d -> %d)', hpAntesM, boss.hp);
+  }
+
   for (let i = 0; i < 14; i++) {
     key(i % 2 ? 'ArrowLeft' : 'ArrowRight', true);
     frames(30);

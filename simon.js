@@ -312,9 +312,9 @@ window.FG = window.FG || {};
 
       ctx.save();
       ctx.translate(sx, sy);
-      // o desenho local tem ~160px de altura; o SCALE o traz para o porte
-      // do jogador (30×44)
-      var SCALE = 0.3;
+      // o desenho local tem ~160px de altura; o SCALE o traz para o
+      // DOBRO do porte do jogador (30×44) — ajudante parrudo, bem visível
+      var SCALE = 0.6;
       ctx.scale(this.facing * SCALE, SCALE);
       desenharSimon(ctx, t, {
         ciclo: ciclo,

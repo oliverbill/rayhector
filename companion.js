@@ -210,6 +210,11 @@ window.FG = window.FG || {};
           this.cocegasFase = 1;
           this.cocegasT = 1.2;            // duração das cócegas
           this.restTimer = this.REST_MAX; // gasto no ato
+          // a cóceja machuca de verdade: 1 takeHit, o mesmo dano do soco
+          // dos ajudantes de chefão — ANTES do forceExpose, porque o
+          // takeHit derruba o estado para 'idle' e cancelaria a janela se
+          // viesse depois (e com hp 0 o forceExpose já se recusa sozinho)
+          if (typeof b.takeHit === 'function') b.takeHit();
           b.forceExpose();
           FG.audio.sfx('lumi');
         } else {
