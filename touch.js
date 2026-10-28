@@ -66,13 +66,18 @@ window.FG = window.FG || {};
     // mesmo slot do Baba Chops — cada um só existe na luta do seu chefão,
     // então nunca coexistem (e a ação é a mesma: o funil 'baba').
     { id: 'gator', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'gator' },
-    // chamada do DragoWuggy (soco no chefão da fase 4): mesmo contrato e
+    // chamada do Simon (soco no chefão da fase 4): mesmo contrato e
     // mesmo slot — cada ajudante só existe na luta do seu chefão.
-    { id: 'drago', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'drago' },
+    { id: 'simon', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'simon' },
     // chamada do Poe (soco na chefã da fase 3): mesmo contrato e slot.
     { id: 'poe', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'poe' },
-    // chamada do Icky Licky (soco no chefão da fase 5): mesmo contrato e slot.
-    { id: 'icky', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'icky' },
+    // chamada do Rabie Baby (soco no chefão da fase 5, o Otton): mesmo
+    // contrato e slot dos demais (a fase 5 não tem o botão do Murph).
+    { id: 'rabie', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'rabie' },
+    // chamada do Icky Licky (soco na chefã da fase 6, a Dalilesma): mesmo
+    // contrato, mas em SLOT PRÓPRIO — na floresta o botão do MurphOliver
+    // (872,284) também existe, então o Icky mora à esquerda dele.
+    { id: 'icky', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'icky' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -96,13 +101,17 @@ window.FG = window.FG || {};
       return !!(FG.allister && typeof FG.allister.disponivel === 'function' &&
                 FG.allister.disponivel());
     }
-    if (b.id === 'drago') {
-      return !!(FG.drago && typeof FG.drago.disponivel === 'function' &&
-                FG.drago.disponivel());
+    if (b.id === 'simon') {
+      return !!(FG.simon && typeof FG.simon.disponivel === 'function' &&
+                FG.simon.disponivel());
     }
     if (b.id === 'poe') {
       return !!(FG.poe && typeof FG.poe.disponivel === 'function' &&
                 FG.poe.disponivel());
+    }
+    if (b.id === 'rabie') {
+      return !!(FG.rabie && typeof FG.rabie.disponivel === 'function' &&
+                FG.rabie.disponivel());
     }
     if (b.id === 'icky') {
       return !!(FG.icky && typeof FG.icky.disponivel === 'function' &&
@@ -523,12 +532,12 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  // Botão do DragoWuggy: a cabeça do dragãozinho — crânio vermelho com os
+  // Botão do Simon: a cabeça do dragãozinho — crânio vermelho com os
   // chifres amarelos, máscaras pretas bravas e o bocão de dentes
   // triangulares. Na recarga (30s) fica apagado com o arco esvaziando;
   // mesmo contrato do babaBtn/gatorBtn.
-  function dragoBtn(ctx, b, on) {
-    var dg = FG.drago;
+  function simonBtn(ctx, b, on) {
+    var dg = FG.simon;
     var resto = (dg && dg.restTimer > 0) ? dg.restTimer / (dg.REST_MAX || 30) : 0;
     var recarga = resto > 0;
     var apagado = recarga ||
@@ -728,6 +737,75 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Rabie Baby: a carinha do morcego — cabeça branca felpuda,
+  // orelhões rosa, máscaras de aro magenta e as presinhas. Na recarga (30s)
+  // fica apagado com o arco esvaziando; mesmo contrato dos outros.
+  function rabieBtn(ctx, b, on) {
+    var rb = FG.rabie;
+    var resto = (rb && rb.restTimer > 0) ? rb.restTimer / (rb.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(rb && typeof rb.podeComandar === 'function' && rb.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(240,140,192,0.4)' : 'rgba(36,20,32,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(190,150,175,0.45)' : 'rgba(250,180,220,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // orelhões rosa
+    ctx.fillStyle = apagado ? '#c98cb0' : '#f08cc0';
+    for (var s2 = -1; s2 <= 1; s2 += 2) {
+      ctx.beginPath();
+      ctx.moveTo(b.x + s2 * r * 0.4, b.y - r * 0.1);
+      ctx.lineTo(b.x + s2 * r * 0.28, b.y - r * 0.72);
+      ctx.lineTo(b.x + s2 * r * 0.06, b.y - r * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // cabeça branca
+    ctx.fillStyle = apagado ? '#cfc8c4' : '#f6f3f0';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.04, r * 0.5, r * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // máscaras com aro magenta + pupilas
+    for (var m = -1; m <= 1; m += 2) {
+      var ox = b.x + m * r * 0.2;
+      ctx.fillStyle = '#c2357e';
+      ctx.beginPath(); ctx.ellipse(ox, b.y - r * 0.08, r * 0.18, r * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0e0a10';
+      ctx.beginPath(); ctx.ellipse(ox, b.y - r * 0.07, r * 0.15, r * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(ox + m * r * 0.04, b.y - r * 0.08, r * 0.05, 0, Math.PI * 2); ctx.fill();
+    }
+    // boquinha preta com as presinhas
+    ctx.fillStyle = '#0e0a10';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.26, r * 0.24, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    for (var d = -1; d <= 1; d += 2) {
+      ctx.beginPath();
+      ctx.moveTo(b.x + d * r * 0.12 - 2, b.y + r * 0.16);
+      ctx.lineTo(b.x + d * r * 0.12, b.y + r * 0.34);
+      ctx.lineTo(b.x + d * r * 0.12 + 2, b.y + r * 0.16);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#f0cce0';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -740,8 +818,9 @@ window.FG = window.FG || {};
       if (b.tipo === 'murph') { murphBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'baba') { babaBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'gator') { gatorBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
-      if (b.tipo === 'drago') { dragoBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'simon') { simonBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'poe') { poeBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'rabie') { rabieBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'icky') { ickyBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;

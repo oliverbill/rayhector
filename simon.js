@@ -1,5 +1,5 @@
-// RayHector: As Aventuras do Menino-gênio — dragowuggy.js
-// FG.drago: o DRAGOWUGGY, o dragãozinho vermelho de chifres amarelos,
+// RayHector: As Aventuras do Menino-gênio — simon.js
+// FG.simon: o SIMON, o dragãozinho vermelho de chifres amarelos,
 // topete de cachos, colar de CIFRÃO dourado, barriga branca e um bocão de
 // dentes triangulares — ajudante exclusivo da luta contra o SERGIOLA
 // MUTANTE na fase 4 (Coliseu). Fora dessa luta ele não existe: o botão
@@ -31,7 +31,13 @@ window.FG = window.FG || {};
   // estrondo grave (mesma receita do trovão da mansão, em versão one-shot).
   var raio = { t: 0, x: 0, botY: 0, DUR: 0.3 };
 
-  var drago = {
+  // o rastro de ESTRELINHAS do voo: pool fixa de brilhos de 4 pontas que
+  // nascem atrás dele enquanto voa e se apagam girando (coordenadas de mundo)
+  var estrelas = [];
+  for (var ei = 0; ei < 14; ei++) estrelas.push({ x: 0, y: 0, life: 0, max: 1, size: 0, rot: 0 });
+  estrelas.i = 0;
+
+  var simon = {
     // mode: 'fora' (não está em cena) | 'entra' (voando até a Sergiola) |
     // 'soca' (pairando: arma e desfere o soco) | 'sai' (voando embora)
     mode: 'fora',
@@ -45,7 +51,7 @@ window.FG = window.FG || {};
     restTimer: 0,
     REST_MAX: 30,
 
-    // O DragoWuggy só existe na luta do Sergiola: é isto que o touch.js lê
+    // O Simon só existe na luta do Sergiola: é isto que o touch.js lê
     // para o botão dele aparecer — e some de novo quando ele morre.
     disponivel: function () {
       if (!FG.level || FG.level.bossId !== 'sergiola') return false;
@@ -85,6 +91,8 @@ window.FG = window.FG || {};
       for (var i = 0; i < pows.length; i++) pows[i].life = 0;
       pows.i = 0;
       raio.t = 0;
+      for (var ze = 0; ze < estrelas.length; ze++) estrelas[ze].life = 0;
+      estrelas.i = 0;
       if (novoJogo === true || (this.mode !== 'fora' && !this.socou)) {
         this.restTimer = 0;          // interrompido antes de socar: não gasta
       }
@@ -104,6 +112,13 @@ window.FG = window.FG || {};
         n.y -= 46 * dt;
       }
 
+      // envelhece as estrelinhas do rastro (sobem de leve enquanto apagam)
+      for (var se = 0; se < estrelas.length; se++) {
+        var es2 = estrelas[se];
+        if (es2.life <= 0) continue;
+        es2.life -= dt;
+        es2.y -= 12 * dt;
+      }
       if (raio.t > 0) raio.t -= dt;
 
       if (this.mode === 'fora') return;
@@ -112,6 +127,20 @@ window.FG = window.FG || {};
       var vivo = b && b.id === 'sergiola' && b.started && !b.dead;
       var fx = FG.enemies.fx;
       this.t += dt;
+
+      // semeia o rastro de estrelinhas enquanto voa
+      if (this.mode === 'entra' || this.mode === 'sai') {
+        if (Math.random() < dt * 28) {
+          var es = estrelas[estrelas.i];
+          estrelas.i = (estrelas.i + 1) % estrelas.length;
+          es.x = this.x - this.facing * 18 + (Math.random() - 0.5) * 16;
+          es.y = this.y - 40 + (Math.random() - 0.5) * 26;
+          es.max = 0.6;
+          es.life = 0.6;
+          es.size = 3 + Math.random() * 3;
+          es.rot = Math.random() * Math.PI;
+        }
+      }
 
       if (this.mode === 'entra') {
         // Sergiola morreu/sumiu no caminho: meia-volta sem gastar a recarga
@@ -201,6 +230,33 @@ window.FG = window.FG || {};
       }
       ctx.restore();
 
+      // o rastro de estrelinhas do voo
+      ctx.save();
+      ctx.fillStyle = '#ffe9a0';
+      for (var se2 = 0; se2 < estrelas.length; se2++) {
+        var e4 = estrelas[se2];
+        if (e4.life <= 0) continue;
+        var esx = e4.x - cam.x, esy = e4.y - cam.y;
+        if (esx < -20 || esx > 980) continue;
+        var kk = e4.life / e4.max;
+        ctx.globalAlpha = kk;
+        ctx.save();
+        ctx.translate(esx, esy);
+        ctx.rotate(e4.rot + (1 - kk) * 2);
+        var ss = e4.size * (0.5 + kk * 0.5);
+        ctx.beginPath();
+        for (var pq = 0; pq < 8; pq++) {
+          var ra = (pq % 2 === 0) ? ss : ss * 0.4;
+          var aa = (pq / 8) * Math.PI * 2;
+          if (pq === 0) ctx.moveTo(Math.cos(aa) * ra, Math.sin(aa) * ra);
+          else ctx.lineTo(Math.cos(aa) * ra, Math.sin(aa) * ra);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+
       // o RAIO do trovão do soco: clarão + zigue-zague caindo sobre o chefão
       if (raio.t > 0) {
         var ka = raio.t / raio.DUR;          // 1 → 0
@@ -260,7 +316,7 @@ window.FG = window.FG || {};
       // do jogador (30×44)
       var SCALE = 0.3;
       ctx.scale(this.facing * SCALE, SCALE);
-      desenharDrago(ctx, t, {
+      desenharSimon(ctx, t, {
         ciclo: ciclo,
         voando: voando,
         jaw: this.jaw,
@@ -334,7 +390,7 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
-  function desenharDrago(ctx, t, o) {
+  function desenharSimon(ctx, t, o) {
     var ciclo = o.ciclo, jaw = o.jaw, punch = o.punch || 0;
     var QUADRIL_Y = -34, OMBRO_Y = -64, CORPO_Y = -56, CABECA_Y = -103;
     var bob = Math.sin(t * 4) * 2;
@@ -641,5 +697,5 @@ window.FG = window.FG || {};
     ctx.restore();   // lean
   }
 
-  FG.drago = drago;
+  FG.simon = simon;
 })();

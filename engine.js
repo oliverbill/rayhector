@@ -270,9 +270,10 @@ window.FG = window.FG || {};
     if (FG.companion) FG.companion.reset(false);
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
-    if (FG.drago) FG.drago.reset(false);
+    if (FG.simon) FG.simon.reset(false);
     if (FG.poe) FG.poe.reset(false);
     if (FG.icky) FG.icky.reset(false);
+    if (FG.rabie) FG.rabie.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -329,9 +330,10 @@ window.FG = window.FG || {};
     if (FG.companion) FG.companion.reset(true);
     if (FG.babachops) FG.babachops.reset(true);
     if (FG.allister) FG.allister.reset(true);
-    if (FG.drago) FG.drago.reset(true);
+    if (FG.simon) FG.simon.reset(true);
     if (FG.poe) FG.poe.reset(true);
     if (FG.icky) FG.icky.reset(true);
+    if (FG.rabie) FG.rabie.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -434,9 +436,10 @@ window.FG = window.FG || {};
     FG.enemies.reset();
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
-    if (FG.drago) FG.drago.reset(false);
+    if (FG.simon) FG.simon.reset(false);
     if (FG.poe) FG.poe.reset(false);
     if (FG.icky) FG.icky.reset(false);
+    if (FG.rabie) FG.rabie.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -481,18 +484,23 @@ window.FG = window.FG || {};
         FG.allister.update(dt);
         if (input.babaPressed) FG.allister.command();
       }
-      if (FG.drago) {
-        // idem: o DragoWuggy só responde na luta do Sergiola (fase 4)
-        FG.drago.update(dt);
-        if (input.babaPressed) FG.drago.command();
+      if (FG.simon) {
+        // idem: o Simon só responde na luta do Sergiola (fase 4)
+        FG.simon.update(dt);
+        if (input.babaPressed) FG.simon.command();
       }
       if (FG.poe) {
         // idem: o Poe só responde na luta da Drácula (fase 3)
         FG.poe.update(dt);
         if (input.babaPressed) FG.poe.command();
       }
+      if (FG.rabie) {
+        // idem: o Rabie Baby só responde na luta do Otton (fase 5)
+        FG.rabie.update(dt);
+        if (input.babaPressed) FG.rabie.command();
+      }
       if (FG.icky) {
-        // idem: o Icky Licky só responde na luta do Otton (fase 5)
+        // idem: o Icky Licky só responde na luta da Dalilesma (fase 6)
         FG.icky.update(dt);
         if (input.babaPressed) FG.icky.command();
       }
@@ -617,9 +625,10 @@ window.FG = window.FG || {};
     if (FG.companion && FG.companion.active) FG.companion.draw(ctx, cam);
     if (FG.babachops) FG.babachops.draw(ctx, cam);   // ele mesmo se pula fora de cena
     if (FG.allister) FG.allister.draw(ctx, cam);     // idem
-    if (FG.drago) FG.drago.draw(ctx, cam);           // idem
+    if (FG.simon) FG.simon.draw(ctx, cam);           // idem
     if (FG.poe) FG.poe.draw(ctx, cam);               // idem
     if (FG.icky) FG.icky.draw(ctx, cam);             // idem
+    if (FG.rabie) FG.rabie.draw(ctx, cam);           // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -982,35 +991,47 @@ window.FG = window.FG || {};
   // Na luta da Sandrola (fase 2) o ajudante do B é o Allister Gator.
   const CONTROLS_TECLADO_GATOR = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Allister Gator' }]);
   const CONTROLS_TOQUE_GATOR = CONTROLS_TOQUE.concat([{ key: 'GATOR', desc: 'soco no chefão' }]);
-  // Na luta do Sergiola (fase 4) o ajudante do B é o DragoWuggy.
-  const CONTROLS_TECLADO_DRAGO = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'DragoWuggy' }]);
-  const CONTROLS_TOQUE_DRAGO = CONTROLS_TOQUE.concat([{ key: 'DRAGO', desc: 'soco no chefão' }]);
+  // Na luta do Sergiola (fase 4) o ajudante do B é o Simon.
+  const CONTROLS_TECLADO_SIMON = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Simon' }]);
+  const CONTROLS_TOQUE_SIMON = CONTROLS_TOQUE.concat([{ key: 'SIMON', desc: 'soco no chefão' }]);
   // Na luta da Drácula (fase 3) o ajudante do B é o Poe.
   const CONTROLS_TECLADO_POE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Poe' }]);
   const CONTROLS_TOQUE_POE = CONTROLS_TOQUE.concat([{ key: 'POE', desc: 'soco no chefão' }]);
-  // Na luta do Otton (fase 5) o ajudante do B é o Icky Licky.
+  // Na luta da Dalilesma (fase 6) o ajudante do B é o Icky Licky — e lá o
+  // MurphOliver (resgatado na própria floresta) também está em cena, então
+  // há variantes com as duas linhas.
   const CONTROLS_TECLADO_ICKY = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Icky Licky' }]);
   const CONTROLS_TOQUE_ICKY = CONTROLS_TOQUE.concat([{ key: 'ICKY', desc: 'soco no chefão' }]);
+  // Na luta do Otton (fase 5) o ajudante do B é o Rabie Baby.
+  const CONTROLS_TECLADO_RABIE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Rabie Baby' }]);
+  const CONTROLS_TOQUE_RABIE = CONTROLS_TOQUE.concat([{ key: 'RABIE', desc: 'soco no chefão' }]);
+  const CONTROLS_TECLADO_ICKY_MURPH = CONTROLS_TECLADO_ICKY.concat([{ key: 'C', desc: 'MurphOliver' }]);
+  const CONTROLS_TOQUE_ICKY_MURPH = CONTROLS_TOQUE_ICKY.concat([{ key: 'MURPH', desc: 'cócegas' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
     const murph = FG.companion && FG.companion.active;
     const baba = FG.babachops && FG.babachops.disponivel();
     const gatr = FG.allister && FG.allister.disponivel();
-    const drg = FG.drago && FG.drago.disponivel();
+    const sim = FG.simon && FG.simon.disponivel();
     const po = FG.poe && FG.poe.disponivel();
     const iky = FG.icky && FG.icky.disponivel();
+    const rab = FG.rabie && FG.rabie.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
       : gatr
         ? (toque ? CONTROLS_TOQUE_GATOR : CONTROLS_TECLADO_GATOR)
-        : drg
-          ? (toque ? CONTROLS_TOQUE_DRAGO : CONTROLS_TECLADO_DRAGO)
+        : sim
+          ? (toque ? CONTROLS_TOQUE_SIMON : CONTROLS_TECLADO_SIMON)
           : po
             ? (toque ? CONTROLS_TOQUE_POE : CONTROLS_TECLADO_POE)
-            : iky
-              ? (toque ? CONTROLS_TOQUE_ICKY : CONTROLS_TECLADO_ICKY)
+            : rab
+          ? (toque ? CONTROLS_TOQUE_RABIE : CONTROLS_TECLADO_RABIE)
+          : iky
+              ? (murph
+            ? (toque ? CONTROLS_TOQUE_ICKY_MURPH : CONTROLS_TECLADO_ICKY_MURPH)
+            : (toque ? CONTROLS_TOQUE_ICKY : CONTROLS_TECLADO_ICKY))
               : toque
                 ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
                 : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);

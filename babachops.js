@@ -30,6 +30,12 @@ window.FG = window.FG || {};
   // estrondo grave (mesma receita do trovão da mansão, em versão one-shot).
   var raio = { t: 0, x: 0, botY: 0, DUR: 0.3 };
 
+  // o rastro de ESTRELINHAS do voo: pool fixa de brilhos de 4 pontas que
+  // nascem atrás dele enquanto voa e se apagam girando (coordenadas de mundo)
+  var estrelas = [];
+  for (var ei = 0; ei < 14; ei++) estrelas.push({ x: 0, y: 0, life: 0, max: 1, size: 0, rot: 0 });
+  estrelas.i = 0;
+
   var baba = {
     // mode: 'fora' (não está em cena) | 'entra' (voando até o Hugo) |
     // 'soca' (pairando: arma e desfere o soco) | 'sai' (voando embora)
@@ -84,6 +90,8 @@ window.FG = window.FG || {};
       for (var i = 0; i < pows.length; i++) pows[i].life = 0;
       pows.i = 0;
       raio.t = 0;
+      for (var ze = 0; ze < estrelas.length; ze++) estrelas[ze].life = 0;
+      estrelas.i = 0;
       if (novoJogo === true || (this.mode !== 'fora' && !this.socou)) {
         this.restTimer = 0;          // interrompido antes de socar: não gasta
       }
@@ -103,6 +111,13 @@ window.FG = window.FG || {};
         n.y -= 46 * dt;
       }
 
+      // envelhece as estrelinhas do rastro (sobem de leve enquanto apagam)
+      for (var se = 0; se < estrelas.length; se++) {
+        var es2 = estrelas[se];
+        if (es2.life <= 0) continue;
+        es2.life -= dt;
+        es2.y -= 12 * dt;
+      }
       if (raio.t > 0) raio.t -= dt;
 
       if (this.mode === 'fora') return;
@@ -111,6 +126,20 @@ window.FG = window.FG || {};
       var vivo = b && b.id === 'hugo' && b.started && !b.dead;
       var fx = FG.enemies.fx;
       this.t += dt;
+
+      // semeia o rastro de estrelinhas enquanto voa
+      if (this.mode === 'entra' || this.mode === 'sai') {
+        if (Math.random() < dt * 28) {
+          var es = estrelas[estrelas.i];
+          estrelas.i = (estrelas.i + 1) % estrelas.length;
+          es.x = this.x - this.facing * 18 + (Math.random() - 0.5) * 16;
+          es.y = this.y - 40 + (Math.random() - 0.5) * 26;
+          es.max = 0.6;
+          es.life = 0.6;
+          es.size = 3 + Math.random() * 3;
+          es.rot = Math.random() * Math.PI;
+        }
+      }
 
       if (this.mode === 'entra') {
         // Hugo morreu/sumiu no caminho: dá meia-volta sem gastar a recarga
@@ -197,6 +226,33 @@ window.FG = window.FG || {};
         ctx.globalAlpha = Math.max(0, n.life / n.max);
         ctx.strokeText('POW!', n.x - cam.x, n.y - cam.y);
         ctx.fillText('POW!', n.x - cam.x, n.y - cam.y);
+      }
+      ctx.restore();
+
+      // o rastro de estrelinhas do voo
+      ctx.save();
+      ctx.fillStyle = '#ffe9a0';
+      for (var se2 = 0; se2 < estrelas.length; se2++) {
+        var e4 = estrelas[se2];
+        if (e4.life <= 0) continue;
+        var esx = e4.x - cam.x, esy = e4.y - cam.y;
+        if (esx < -20 || esx > 980) continue;
+        var kk = e4.life / e4.max;
+        ctx.globalAlpha = kk;
+        ctx.save();
+        ctx.translate(esx, esy);
+        ctx.rotate(e4.rot + (1 - kk) * 2);
+        var ss = e4.size * (0.5 + kk * 0.5);
+        ctx.beginPath();
+        for (var pq = 0; pq < 8; pq++) {
+          var ra = (pq % 2 === 0) ? ss : ss * 0.4;
+          var aa = (pq / 8) * Math.PI * 2;
+          if (pq === 0) ctx.moveTo(Math.cos(aa) * ra, Math.sin(aa) * ra);
+          else ctx.lineTo(Math.cos(aa) * ra, Math.sin(aa) * ra);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
       ctx.restore();
 
