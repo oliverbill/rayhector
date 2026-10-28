@@ -62,6 +62,10 @@ window.FG = window.FG || {};
     // o resgate do sapo é na floresta e zera em jogo novo, então na fase 1 o
     // Murph nunca está ativo. Na recarga (30s) ganha o arco esvaziando.
     { id: 'baba', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'baba' },
+    // chamada do Allister Gator (soco na chefã da fase 2): mesmo contrato e
+    // mesmo slot do Baba Chops — cada um só existe na luta do seu chefão,
+    // então nunca coexistem (e a ação é a mesma: o funil 'baba').
+    { id: 'gator', action: 'baba', x: 872, y: 284, r: 40, hit: 56, tipo: 'gator' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -80,6 +84,10 @@ window.FG = window.FG || {};
     if (b.id === 'baba') {
       return !!(FG.babachops && typeof FG.babachops.disponivel === 'function' &&
                 FG.babachops.disponivel());
+    }
+    if (b.id === 'gator') {
+      return !!(FG.allister && typeof FG.allister.disponivel === 'function' &&
+                FG.allister.disponivel());
     }
     return true;
   }
@@ -431,6 +439,71 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Allister Gator: a cabeça do jacaré — crânio verde com os
+  // calombos dos olhos bravos e o focinho de dentes brancos. Na recarga
+  // (30s) fica apagado com o arco esvaziando; mesmo contrato do babaBtn.
+  function gatorBtn(ctx, b, on) {
+    var ag = FG.allister;
+    var resto = (ag && ag.restTimer > 0) ? ag.restTimer / (ag.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(ag && typeof ag.podeComandar === 'function' && ag.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(110,200,80,0.4)' : 'rgba(14,30,10,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(150,185,140,0.45)' : 'rgba(150,235,110,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // crânio verde
+    ctx.fillStyle = apagado ? '#3f7a34' : '#52b23c';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.12, b.y - r * 0.05, r * 0.46, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // focinho p/ a direita
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(b.x, b.y - r * 0.18, r * 0.62, r * 0.34, r * 0.12);
+    else ctx.rect(b.x, b.y - r * 0.18, r * 0.62, r * 0.34);
+    ctx.fill();
+    // calombos + olhos bravos
+    for (var s = 0; s < 2; s++) {
+      var ox = b.x - r * 0.32 + s * r * 0.34;
+      ctx.fillStyle = apagado ? '#3f7a34' : '#52b23c';
+      ctx.beginPath();
+      ctx.arc(ox, b.y - r * 0.42, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0c0c0e';
+      ctx.beginPath();
+      ctx.arc(ox + r * 0.03, b.y - r * 0.41, r * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(ox + r * 0.04, b.y - r * 0.47, r * 0.05, r * 0.05);
+    }
+    // dentes brancos pendurados do focinho
+    ctx.fillStyle = '#ffffff';
+    for (var d = 0; d < 3; d++) {
+      var dx = b.x + r * 0.08 + d * r * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(dx, b.y + r * 0.16);
+      ctx.lineTo(dx + r * 0.07, b.y + r * 0.34);
+      ctx.lineTo(dx + r * 0.14, b.y + r * 0.16);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#c8e8b0';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -442,6 +515,7 @@ window.FG = window.FG || {};
       if (on) { ctx.shadowColor = '#ff9000'; ctx.shadowBlur = 18; } else ctx.shadowBlur = 0;
       if (b.tipo === 'murph') { murphBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'baba') { babaBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'gator') { gatorBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

@@ -23,7 +23,9 @@ window.FG = window.FG || {};
     attack: ['KeyX', 'KeyK'],
     interact: ['KeyE', 'KeyF'],
     companion: ['KeyC'],   // comanda o MurphOliver (cócegas no chefão)
-    baba: ['KeyB'],        // chama o Baba Chops (soco no chefão da fase 1)
+    // a tecla do ajudante de chefão: Baba Chops na fase 1, Allister Gator na
+    // fase 2 — um funil só, cada um decide sozinho se a luta é a dele
+    baba: ['KeyB'],
   };
   const keyToAction = {};
   for (const action in KEYS) for (const code of KEYS[action]) keyToAction[code] = action;
@@ -267,6 +269,7 @@ window.FG = window.FG || {};
     // início (o reset(true) do jogo novo acontece em startGame)
     if (FG.companion) FG.companion.reset(false);
     if (FG.babachops) FG.babachops.reset(false);
+    if (FG.allister) FG.allister.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -322,6 +325,7 @@ window.FG = window.FG || {};
     // o resgate do companheiro também é por partida: jogo novo, sapo na jaula
     if (FG.companion) FG.companion.reset(true);
     if (FG.babachops) FG.babachops.reset(true);
+    if (FG.allister) FG.allister.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -423,6 +427,7 @@ window.FG = window.FG || {};
     syncSolids();
     FG.enemies.reset();
     if (FG.babachops) FG.babachops.reset(false);
+    if (FG.allister) FG.allister.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -460,6 +465,12 @@ window.FG = window.FG || {};
         // pode (recarga de 30s) — aqui é só o funil do input, como o Murph
         FG.babachops.update(dt);
         if (input.babaPressed) FG.babachops.command();
+      }
+      if (FG.allister) {
+        // mesma tecla, mesmo contrato: o Allister só responde na luta da
+        // Sandrola (fase 2), então os dois nunca disputam o B
+        FG.allister.update(dt);
+        if (input.babaPressed) FG.allister.command();
       }
 
       // hazards
@@ -581,6 +592,7 @@ window.FG = window.FG || {};
     FG.player.draw(ctx, cam);
     if (FG.companion && FG.companion.active) FG.companion.draw(ctx, cam);
     if (FG.babachops) FG.babachops.draw(ctx, cam);   // ele mesmo se pula fora de cena
+    if (FG.allister) FG.allister.draw(ctx, cam);     // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -940,17 +952,23 @@ window.FG = window.FG || {};
   // coexistem (o resgate do sapo é na floresta e zera em jogo novo).
   const CONTROLS_TECLADO_BABA = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Baba Chops' }]);
   const CONTROLS_TOQUE_BABA = CONTROLS_TOQUE.concat([{ key: 'BABA', desc: 'soco no chefão' }]);
+  // Na luta da Sandrola (fase 2) o ajudante do B é o Allister Gator.
+  const CONTROLS_TECLADO_GATOR = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Allister Gator' }]);
+  const CONTROLS_TOQUE_GATOR = CONTROLS_TOQUE.concat([{ key: 'GATOR', desc: 'soco no chefão' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
     const murph = FG.companion && FG.companion.active;
     const baba = FG.babachops && FG.babachops.disponivel();
+    const gatr = FG.allister && FG.allister.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
-      : toque
-        ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
-        : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
+      : gatr
+        ? (toque ? CONTROLS_TOQUE_GATOR : CONTROLS_TECLADO_GATOR)
+        : toque
+          ? (murph ? CONTROLS_TOQUE_MURPH : CONTROLS_TOQUE)
+          : (murph ? CONTROLS_TECLADO_MURPH : CONTROLS_TECLADO);
     const h = TIP.padY * 2 + lista.length * TIP.rowH;
     // esmaece de 1 para 0.55 entre 8s e 12s DEPOIS de começar a jogar
     const elapsed = engine.time - playStart;
