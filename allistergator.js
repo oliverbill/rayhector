@@ -216,64 +216,102 @@ window.FG = window.FG || {};
 
   // ------------------------------------------------------------------
   // O fantoche, em coordenadas locais com origem na linha dos pés, olhando
-  // para +x. Cada membro é desenhado girado no seu próprio pivô (quadril,
-  // ombro, raiz do caudão, dobradiça da mandíbula) — é isso que faz "todos
-  // os membros movimentáveis" de verdade.
+  // para +x. Proporções da arte de referência: a CABEÇA é quase metade da
+  // figura, corpo baixinho de barriga listrada com os ossos cruzados,
+  // patas-garra oliva, caudão de barriga clara com espinhos. Cada membro é
+  // desenhado girado no seu próprio pivô (quadril, ombro, raiz do caudão,
+  // dobradiça da mandíbula) — é isso que faz "todos os membros
+  // movimentáveis" de verdade. Redesenho aprovado em preview fora do jogo.
   // ------------------------------------------------------------------
-  var VERDE = '#52b23c';        // o macacão/pele verde
-  var VERDE_ESC = '#2f7a22';    // remendos, escamas do caudão, sombras
-  var BARRIGA = '#cde8a6';      // painel claro da barriga
-  var TRACO = '#14320e';        // contorno verde-escuro
-  var BOCA = '#5a1020';         // interior do bocão
-  var LINGUA = '#e86a8a';
+  var VERDE = '#6ab53e';         // pele/macacão
+  var BARRIGA = '#ddedaa';       // painel claro da barriga / baixo da cauda
+  var OLIVA = '#55651f';         // remendos, garras, sobrancelhas, dedos
+  var TRACO = '#101408';         // contorno grosso quase preto
+  var BOCA = '#0c0c0e';          // interior do bocão (preto, como na arte)
+  var LINGUA = '#ef7a90';
 
-  // um membro: cápsula verde girada em `rot` a partir do pivô, com a patona
-  // na ponta — braços e pernas usam o mesmo desenho.
-  // rot = 0 aponta para baixo; positivo = p/ trás, negativo = p/ frente.
-  function membro(ctx, px, py, rot, len, grossura, pataR) {
+  // um membro: cápsula verde girada em `rot` a partir do pivô.
+  // rot = 0 aponta p/ baixo; positivo = p/ trás, negativo = p/ frente.
+  // tipo: 'perna' (pé verde de dedos oliva) | 'braco' (patona-garra oliva)
+  function membro(ctx, px, py, rot, len, grossura, tipo) {
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(rot);
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = grossura + 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, len); ctx.stroke();
     ctx.strokeStyle = VERDE;
     ctx.lineWidth = grossura;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, len);
-    ctx.stroke();
-    // remendo costurado no meio do membro
-    ctx.fillStyle = VERDE_ESC;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-grossura * 0.36, len * 0.38, grossura * 0.72, 10, 3);
-    else ctx.rect(-grossura * 0.36, len * 0.38, grossura * 0.72, 10);
-    ctx.fill();
-    // a patona na ponta
-    ctx.fillStyle = VERDE;
-    ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.ellipse(0, len + pataR * 0.3, pataR, pataR * 1.15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // garrinhas brancas
-    ctx.fillStyle = '#ffffff';
-    for (var g = -1; g <= 1; g++) {
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, len); ctx.stroke();
+    // as duas listras-remendo oliva do membro (como na referência)
+    ctx.fillStyle = OLIVA;
+    for (var rm = 0; rm < 2; rm++) {
       ctx.beginPath();
-      ctx.moveTo(g * pataR * 0.45 - 2, len + pataR * 1.1);
-      ctx.lineTo(g * pataR * 0.45, len + pataR * 1.55);
-      ctx.lineTo(g * pataR * 0.45 + 2, len + pataR * 1.1);
-      ctx.closePath();
+      if (ctx.roundRect) ctx.roundRect(-grossura * 0.42, len * 0.3 + rm * 9, grossura * 0.84, 6, 3);
+      else ctx.rect(-grossura * 0.42, len * 0.3 + rm * 9, grossura * 0.84, 6);
       ctx.fill();
+    }
+    if (tipo === 'braco') {
+      // patona-garra oliva: luva grande com 3 garras curvas
+      ctx.fillStyle = OLIVA;
+      ctx.strokeStyle = TRACO;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, len + 6, 11, 12, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      for (var g = -1; g <= 1; g++) {
+        ctx.beginPath();
+        ctx.moveTo(g * 6 - 3, len + 13);
+        ctx.quadraticCurveTo(g * 7, len + 24, g * 7 + 3, len + 13);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+    } else {
+      // pezão verde atarracado com dedinhos oliva
+      ctx.fillStyle = VERDE;
+      ctx.strokeStyle = TRACO;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(2, len + 5, 12, 8, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = OLIVA;
+      for (var d = 0; d < 2; d++) {
+        ctx.beginPath();
+        ctx.ellipse(8 - d * 9, len + 9, 4, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
 
+  // osso de desenho animado: barra branca com dois calombos em cada ponta
+  function osso(ctx, len) {
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+    for (var s = -1; s <= 1; s += 2) {
+      for (var k = -1; k <= 1; k += 2) {
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = TRACO;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(s * len / 2, k * 3.6, 5.2, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+    }
+  }
+
   function desenharGator(ctx, t, o) {
     var ciclo = o.ciclo, jaw = o.jaw, punch = o.punch || 0;
-    // pivôs (origem na linha dos pés): quadril, ombro, corpo, cabeça
-    var QUADRIL_Y = -46, OMBRO_Y = -74, CORPO_Y = -60, CABECA_Y = -116;
+    // pivôs (origem na linha dos pés): pernas curtas, corpo baixinho,
+    // cabeça enorme colada no corpo
+    var QUADRIL_Y = -34, OMBRO_Y = -64, CORPO_Y = -56, CABECA_Y = -103;
     var bob = Math.sin(t * 4) * 2;
-    // no soco o tronco inclina junto com o braço (arma atrás, projeta à frente)
     var lean = o.socando ? punch * 0.14 : 0;
 
     ctx.save();
@@ -286,7 +324,7 @@ window.FG = window.FG || {};
     // ----- asinhas brancas nas costas, batendo rápido (o voo dele) -----
     var flap = Math.sin(t * (o.voando ? 30 : 22));
     ctx.save();
-    ctx.translate(-16, OMBRO_Y - 6);
+    ctx.translate(-14, OMBRO_Y - 4);
     ctx.globalAlpha = 0.85;
     for (var aw = 0; aw < 2; aw++) {
       ctx.save();
@@ -301,87 +339,101 @@ window.FG = window.FG || {};
     }
     ctx.restore();
 
-    // ----- o caudão de jacaré: chicoteia na raiz, escamas em cima -----
+    // ----- o caudão: barriga clara em baixo, espinhos no dorso -----
     ctx.save();
-    ctx.translate(-22, QUADRIL_Y - 4);
-    ctx.rotate(Math.sin(t * 6) * 0.14 + 0.1);
+    ctx.translate(-16, QUADRIL_Y + 2);
+    ctx.rotate(Math.sin(t * 6) * 0.1 + 0.06);
     ctx.fillStyle = VERDE;
     ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();                       // cone deitado afinando p/ trás
-    ctx.moveTo(2, -12);
-    ctx.quadraticCurveTo(-34, -16, -52, 2);
-    ctx.quadraticCurveTo(-34, 14, 2, 12);
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(4, -11);
+    ctx.quadraticCurveTo(-26, -13, -40, 8);   // dorso descendo
+    ctx.quadraticCurveTo(-20, 15, 4, 11);     // baixo voltando
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-    ctx.fillStyle = VERDE_ESC;             // escamas (scutes) no dorso
+    // baixo da cauda claro, com os gomos
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(2, -11);
+    ctx.quadraticCurveTo(-26, -13, -40, 8);
+    ctx.quadraticCurveTo(-20, 15, 2, 11);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = BARRIGA;
+    ctx.beginPath();
+    ctx.moveTo(4, 14);
+    ctx.quadraticCurveTo(-22, 17, -40, 10);
+    ctx.quadraticCurveTo(-22, 5, 4, 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70,100,30,0.6)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (var gm = 0; gm < 3; gm++) {
+      ctx.moveTo(-6 - gm * 10, 13);
+      ctx.lineTo(-9 - gm * 10, 3);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // espinhos do dorso
+    ctx.fillStyle = VERDE;
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 2;
     for (var e = 0; e < 3; e++) {
-      var ex = -8 - e * 14;
+      var ex = -9 - e * 10, ey = -10 + e * 3;
       ctx.beginPath();
-      ctx.moveTo(ex, -10 + e * 2);
-      ctx.lineTo(ex - 5, -17 + e * 2.4);
-      ctx.lineTo(ex - 10, -9 + e * 2);
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - 5, ey - 6 + e);
+      ctx.lineTo(ex - 9, ey + 2);
       ctx.closePath();
-      ctx.fill();
+      ctx.fill(); ctx.stroke();
     }
     ctx.restore();
 
-    // ----- membros de TRÁS (lado longe da câmera) -----
-    // perna: pendura do quadril balançando no voo; braço no contratempo
+    // ----- membros de TRÁS -----
+    // braços descansam angulados (o de trás p/ trás, o da frente p/ frente)
+    // para as garras não taparem os ossos cruzados do peito
     var pernaTras = 0.1 + ciclo;
     var bracoTras;
-    if (o.socando) bracoTras = 0.25 + punch * 0.5;          // equilibra o golpe (vai p/ trás)
-    else bracoTras = 0.25 - ciclo * 0.6;
-    ctx.globalAlpha = 0.88;
-    membro(ctx, -6, QUADRIL_Y, pernaTras, 36, 15, 8.5);
-    membro(ctx, -8, OMBRO_Y, bracoTras, 32, 13, 8);
+    if (o.socando) bracoTras = 0.45 + punch * 0.4;
+    else bracoTras = 0.45 - ciclo * 0.5;
+    ctx.globalAlpha = 0.85;
+    membro(ctx, -5, QUADRIL_Y, pernaTras, 24, 15, 'perna');
+    membro(ctx, -12, OMBRO_Y, bracoTras, 26, 13, 'braco');
     ctx.globalAlpha = 1;
 
-    // ----- corpo: o macacão verde com a barriga clara segmentada -----
+    // ----- corpo: baixinho e redondo, barriga listrada + ossos cruzados -----
     ctx.save();
     ctx.translate(0, CORPO_Y + bob * 0.4);
     ctx.fillStyle = VERDE;
     ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 26, 32, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 25, 27, 0, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
-    // barriga: painel claro com as linhas de segmento
-    ctx.fillStyle = BARRIGA;
+    // barriga: painel claro com as listras horizontais
+    ctx.save();
     ctx.beginPath();
-    ctx.ellipse(6, 8, 16, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(70,120,40,0.55)';
+    ctx.ellipse(7, 5, 17, 20, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = BARRIGA;
+    ctx.fillRect(-12, -16, 40, 42);
+    ctx.strokeStyle = 'rgba(70,100,30,0.55)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (var sgi = -1; sgi <= 1; sgi++) {
-      ctx.moveTo(-6, 8 + sgi * 9);
-      ctx.quadraticCurveTo(6, 11 + sgi * 9, 18, 8 + sgi * 9);
+    for (var sgi = 0; sgi < 4; sgi++) {
+      ctx.moveTo(-10, -8 + sgi * 8);
+      ctx.lineTo(26, -8 + sgi * 8);
     }
     ctx.stroke();
-    // remendo escuro no quadril
-    ctx.fillStyle = VERDE_ESC;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-22, 10, 13, 9, 3); else ctx.rect(-22, 10, 13, 9);
-    ctx.fill();
-    // ----- o floco de neve branco no peito -----
+    ctx.restore();
+    // os OSSOS CRUZADOS brancos no peito (a marca dele na referência)
     ctx.save();
-    ctx.translate(2, -16);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (var fl = 0; fl < 6; fl++) {
-      var fa = (fl / 6) * Math.PI * 2;
-      var cx2 = Math.cos(fa), sy2 = Math.sin(fa);
-      ctx.moveTo(0, 0);
-      ctx.lineTo(cx2 * 9, sy2 * 9);
-      // os galhinhos do floco
-      ctx.moveTo(cx2 * 5.5 - sy2 * 2.6, sy2 * 5.5 + cx2 * 2.6);
-      ctx.lineTo(cx2 * 7.5, sy2 * 7.5);
-      ctx.lineTo(cx2 * 5.5 + sy2 * 2.6, sy2 * 5.5 - cx2 * 2.6);
-    }
-    ctx.stroke();
+    ctx.translate(5, -1);
+    ctx.scale(0.62, 0.62);
+    ctx.save(); ctx.rotate(0.65); osso(ctx, 34); ctx.restore();
+    ctx.save(); ctx.rotate(-0.65); osso(ctx, 34); ctx.restore();
     ctx.restore();
     ctx.restore();
 
@@ -389,117 +441,147 @@ window.FG = window.FG || {};
     var pernaFrente = -0.1 - ciclo * 0.9;
     var bracoFrente;
     if (o.socando) {
-      // o braço do soco (rot 0 = p/ baixo; positivo = p/ trás, negativo =
-      // p/ frente): punch -1 = armado atrás e erguido; +1 = desferido na
-      // diagonal de cima, direto na cara da Sandrola
-      bracoFrente = punch <= 0 ? 0.32 - punch * 0.9    // armando: gira p/ trás
-                               : -0.6 - punch * 1.75;  // desferido à frente
+      // desferido quase na horizontal, abaixo do queixo — não atravessa a cabeça
+      bracoFrente = punch <= 0 ? -0.35 - punch * 1.1
+                               : -0.55 - punch * 1.15;
     } else {
-      bracoFrente = 0.32 + ciclo * 0.6;
+      bracoFrente = -0.35 + ciclo * 0.5;    // pendurado p/ frente, longe do peito
     }
-    membro(ctx, 7, QUADRIL_Y, pernaFrente, 38, 16, 9);
-    membro(ctx, 9, OMBRO_Y, bracoFrente, o.socando && punch > 0 ? 34 + punch * 10 : 34, 14, 8.5);
+    membro(ctx, 6, QUADRIL_Y, pernaFrente, 26, 16, 'perna');
+    membro(ctx, 12, OMBRO_Y, bracoFrente, o.socando && punch > 0 ? 28 + punch * 8 : 28, 14, 'braco');
 
-    // ----- a cabeça de jacaré: crânio + focinho comprido, mandíbula -----
+    // ----- a CABEÇA ENORME (a referência é quase metade cabeça) -----
     ctx.save();
-    ctx.translate(0, CABECA_Y + bob);
+    ctx.translate(2, CABECA_Y + bob);
     ctx.rotate(o.socando ? punch * 0.1 : Math.sin(t * 2.2) * 0.04);
 
-    // crânio verde
+    // crânio: feijão grande, mais largo que alto, focinho arredondado p/ +x
     ctx.fillStyle = VERDE;
     ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.ellipse(-2, -12, 24, 20, 0, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-
-    // o focinho de CIMA, comprido para a frente, com narina na ponta
-    ctx.fillStyle = VERDE;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(4, -14, 44, 18, 7); else ctx.rect(4, -14, 44, 18);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = VERDE_ESC;             // narina
-    ctx.beginPath();
-    ctx.ellipse(42, -10, 2.6, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // dentes de cima: triângulos brancos pendurados da beirada do focinho
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 1.6;
-    for (var dc = 0; dc < 4; dc++) {
-      var dx1 = 10 + dc * 10;
-      ctx.beginPath();
-      ctx.moveTo(dx1, 3);
-      ctx.lineTo(dx1 + 4, 13 + jaw * 2);
-      ctx.lineTo(dx1 + 8, 3);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-    }
-
-    // calombos dos olhos no topo, franzidos de raiva
-    for (var ol = 0; ol < 2; ol++) {
-      var ox = -10 + ol * 20;
-      ctx.fillStyle = VERDE;
-      ctx.strokeStyle = TRACO;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.ellipse(ox, -28, 10, 9, 0, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
-      // olho preto com o quadradinho branco descentrado (estilo da referência)
-      ctx.fillStyle = '#0c0c0e';
-      ctx.beginPath();
-      ctx.ellipse(ox + 2, -27, 6, 5.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ox + 3, -29, 3, 3);
-      // sobrancelha brava
-      ctx.strokeStyle = TRACO;
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(ox - 7, -35);
-      ctx.lineTo(ox + 8, -30);
-      ctx.stroke();
-    }
-
-    // a MANDÍBULA de baixo: gira na dobradiça (atrás do focinho) com `jaw`
-    ctx.save();
-    ctx.translate(-4, 2);                  // a dobradiça
-    ctx.rotate(0.1 + jaw * 0.8);
-    // interior do bocão + língua
-    ctx.fillStyle = BOCA;
-    ctx.beginPath();
-    ctx.ellipse(24, 4, 26, 9 + jaw * 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = LINGUA;
-    ctx.beginPath();
-    ctx.ellipse(22, 7 + jaw * 5, 13, 5, 0.1, 0, Math.PI * 2);
-    ctx.fill();
-    // o queixo verde (a borda da mandíbula)
-    ctx.fillStyle = VERDE;
-    ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(24, 10 + jaw * 7, 27, 6, 0, 0, Math.PI);
+    ctx.moveTo(-40, -6);
+    ctx.quadraticCurveTo(-44, -46, -6, -50);   // nuca alta e redonda
+    ctx.quadraticCurveTo(30, -52, 40, -28);    // topo descendo pro focinho
+    ctx.quadraticCurveTo(52, -16, 50, -6);     // ponta do focinho
+    ctx.quadraticCurveTo(48, 2, 36, 2);        // beiço superior
+    ctx.lineTo(-34, 2);
+    ctx.quadraticCurveTo(-42, 2, -40, -6);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-    // dentes de baixo: triângulos apontando para cima, saindo do queixo
+
+    // narina: a vírgula no focinho
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(38, -16, 3.4, 0.4, Math.PI * 1.5);
+    ctx.stroke();
+
+    // sobrancelhas: remendos oliva retos e bravos no topo
+    ctx.fillStyle = OLIVA;
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 2.5;
+    ctx.save();
+    ctx.translate(-20, -44); ctx.rotate(0.22);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-11, -4, 22, 9, 3); else ctx.rect(-11, -4, 22, 9);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(16, -40); ctx.rotate(-0.1);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-12, -4, 24, 9, 3); else ctx.rect(-12, -4, 24, 9);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    // olhos: máscaras pretas grandes e rasgadas com pupila branca oval
+    ctx.fillStyle = '#0c0c0e';
+    ctx.save();
+    ctx.translate(-16, -30); ctx.rotate(0.24);
+    ctx.beginPath(); ctx.ellipse(0, 0, 13, 8.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(16, -28); ctx.rotate(-0.12);
+    ctx.beginPath(); ctx.ellipse(0, 0, 13.5, 9.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(-12, -29, 3.4, 4.6, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(20, -27, 3.8, 5, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ----- o BOCÃO: interior preto gigante, contido na cabeça -----
+    // a abóbada preta fixa do maxilar de cima
+    ctx.fillStyle = BOCA;
+    ctx.beginPath();
+    ctx.moveTo(-36, -2);
+    ctx.quadraticCurveTo(0, -14, 46, -4);     // linha do beiço de cima
+    ctx.quadraticCurveTo(34, 10, 4, 12);
+    ctx.quadraticCurveTo(-28, 10, -36, -2);
+    ctx.closePath();
+    ctx.fill();
+    // dentes de cima colados no beiço: fileira de dentinhos redondos...
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = TRACO;
-    ctx.lineWidth = 1.6;
-    for (var db = 0; db < 3; db++) {
-      var dx2 = 12 + db * 12;
+    ctx.lineWidth = 2;
+    for (var dc = 0; dc < 3; dc++) {
+      var dx1 = -26 + dc * 13;
       ctx.beginPath();
-      ctx.moveTo(dx2, 9 + jaw * 6);
-      ctx.lineTo(dx2 + 4, -1 + jaw * 3);
-      ctx.lineTo(dx2 + 8, 9 + jaw * 6);
+      ctx.ellipse(dx1, -4 - dc * 1.4, 6, 4.5, 0, 0, Math.PI);
+      ctx.fill(); ctx.stroke();
+    }
+    // ...e as duas PRESAS compridas caindo do maxilar
+    for (var pr = 0; pr < 2; pr++) {
+      var px1 = 4 + pr * 28;
+      ctx.beginPath();
+      ctx.moveTo(px1 - 6, -7);
+      ctx.quadraticCurveTo(px1 - 1, 10, px1 + 1, -5);
       ctx.closePath();
       ctx.fill(); ctx.stroke();
     }
+
+    // a MANDÍBULA de baixo: dobradiça no fundo da boca, giro curto — o
+    // queixo desce dentro do limite da cabeça, como na arte
+    ctx.save();
+    ctx.translate(-32, 2);
+    ctx.rotate(0.04 + jaw * 0.32);
+    // o fundo preto que acompanha a mandíbula abrindo
+    ctx.fillStyle = BOCA;
+    ctx.beginPath();
+    ctx.ellipse(36, 6, 36, 7 + jaw * 7, 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    // língua rosa
+    ctx.fillStyle = LINGUA;
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(30, 8 + jaw * 4, 15, 5.5, 0.08, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // o beiço de baixo: o aro verde-claro do queixo
+    ctx.fillStyle = BARRIGA;
+    ctx.strokeStyle = TRACO;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(2, 10 + jaw * 3);
+    ctx.quadraticCurveTo(38, 20 + jaw * 5, 70, 4 + jaw * 2);
+    ctx.quadraticCurveTo(40, 27 + jaw * 5, 4, 16 + jaw * 4);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // presa de baixo apontando para cima + dentinho redondo
+    ctx.fillStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(54, 9 + jaw * 2);
+    ctx.quadraticCurveTo(58, -6 + jaw * 2, 62, 8 + jaw * 2);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(20, 13 + jaw * 4, 5, 4, 0, Math.PI, 0);
+    ctx.fill(); ctx.stroke();
     ctx.restore();
 
     ctx.restore();   // cabeça
-    ctx.restore();   // lean do tronco
+    ctx.restore();   // lean
   }
 
   FG.allister = gator;
