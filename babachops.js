@@ -4,15 +4,16 @@
 // ANÃOZINHO HUGO na fase 1. Fora dessa luta ele não existe: o botão dele
 // (touch.js) e a tecla B só aparecem/respondem com o Hugo acordado.
 //
-// Sob comando, ele entra correndo pela beirada da arena, dá um SOCO no Hugo
-// (POW! — um takeHit de verdade, o mesmo dano do soco do jogador) e SOME
-// numa nuvenzinha de lã. Pode ser acionado a cada 30s (restTimer).
+// Sob comando, ele entra VOANDO pelo céu da arena com asinhas brancas, dá
+// um SOCO no Hugo (POW! — um takeHit de verdade, o mesmo dano do soco do
+// jogador) e sai voando para longe. Pode ser acionado a cada 30s (restTimer).
 //
 // Desenhado 100% em canvas, SEM sprite, como os chefões — e com TODOS os
 // membros articulados de verdade: braços e pernas giram no ombro/quadril
-// (ciclo de corrida, braço armando e desferindo o soco), a mandíbula abre
-// e fecha (ele berra no soco), as orelhas balançam, o rabinho sacode e a
-// cabeça quica no passo.
+// (perninhas balançando no voo, braço armando e desferindo o soco), a
+// mandíbula abre e fecha (ele berra no soco), as orelhas balançam, o
+// rabinho sacode e as asinhas batem. O desenho local é grande, mas a
+// ESCALA final o deixa do tamanho do jogador (ver SCALE no draw).
 // Nenhuma referência a outros módulos FG no load — só em runtime.
 window.FG = window.FG || {};
 
@@ -25,15 +26,15 @@ window.FG = window.FG || {};
   pows.i = 0;
 
   var baba = {
-    // mode: 'fora' (não está em cena) | 'entra' (correndo até o Hugo) |
-    // 'soca' (arma e desfere o soco) | 'some' (sumindo na nuvem de lã)
+    // mode: 'fora' (não está em cena) | 'entra' (voando até o Hugo) |
+    // 'soca' (pairando: arma e desfere o soco) | 'sai' (voando embora)
     mode: 'fora',
-    x: 0, y: 0,              // y = linha do CHÃO sob os pés
+    x: 0, y: 0,              // y = linha dos PÉS (pairando, não pisa no chão)
     facing: 1,
     t: 0,                    // relógio do estado corrente
     jaw: 0,                  // 0..1 — abertura da mandíbula (berro do soco)
     punch: 0,                // 0..1 — braço armado→desferido
-    fade: 1,                 // escala/alpha do sumiço
+    hoverY: 0,               // altura de pairar diante do Hugo
     socou: false,            // o takeHit desta visita já disparou?
     restTimer: 0,
     REST_MAX: 30,
@@ -63,12 +64,11 @@ window.FG = window.FG || {};
       this.t = 0;
       this.jaw = 0;
       this.punch = 0;
-      this.fade = 1;
       this.socou = false;
       this.facing = 1;
-      // entra pela beirada esquerda da arena (o Hugo mora na direita)
-      this.x = a.x + 30;
-      this.y = fx.groundYAt(this.x, 300);
+      // entra voando pelo céu da beirada esquerda (o Hugo mora na direita)
+      this.x = a.x + 20;
+      this.y = fx.groundYAt(a.x + a.w * 0.5, 300) - 320;
       FG.audio.sfx('select');
     },
 
@@ -84,7 +84,6 @@ window.FG = window.FG || {};
       this.mode = 'fora';
       this.jaw = 0;
       this.punch = 0;
-      this.fade = 1;
     },
 
     update: function (dt) {
@@ -106,22 +105,30 @@ window.FG = window.FG || {};
       this.t += dt;
 
       if (this.mode === 'entra') {
-        // Hugo morreu/sumiu no caminho: some sem gastar a recarga
-        if (!vivo) { this.mode = 'some'; this.t = 0; return; }
-        var alvoX = b.x - 150;       // para diante do Hugo, fora do corpo dele
+        // Hugo morreu/sumiu no caminho: dá meia-volta sem gastar a recarga
+        if (!vivo) { this.mode = 'sai'; this.t = 0; return; }
+        // paira diante do nariz do Hugo, na altura do soco
+        var alvoX = b.x - 115;
+        var alvoY = fx.groundYAt(b.x, 300) - 130;
+        this.hoverY = alvoY;
         this.facing = alvoX >= this.x ? 1 : -1;
+        var dx = alvoX - this.x, dy = alvoY - this.y;
+        var dist = Math.sqrt(dx * dx + dy * dy) || 1;
         var vel = 560;
-        if (Math.abs(alvoX - this.x) < vel * dt || this.t > 2.2) {
+        if (dist < vel * dt || this.t > 2.2) {
           this.x = alvoX;
+          this.y = alvoY;
           this.mode = 'soca';
           this.t = 0;
         } else {
-          this.x += this.facing * vel * dt;
+          this.x += (dx / dist) * vel * dt;
+          this.y += (dy / dist) * vel * dt;
         }
-        this.y = fx.groundYAt(this.x, 300);
 
       } else if (this.mode === 'soca') {
         if (vivo) this.facing = b.x >= this.x ? 1 : -1;
+        // pairando: um bob suave na altura do voo
+        this.y = this.hoverY + Math.sin(this.t * 6) * 5;
         // braço: ARMA atrás (0→0.35s), DESFERE (0.35→0.45s), segura esticado
         var k = this.t;
         if (k < 0.35) { this.punch = -Math.min(1, k / 0.3); this.jaw = Math.min(1, k / 0.3); }
@@ -135,29 +142,30 @@ window.FG = window.FG || {};
           if (vivo && typeof b.takeHit === 'function') b.takeHit();
           var nh = pows[pows.i];
           pows.i = (pows.i + 1) % pows.length;
-          nh.x = this.x + this.facing * 80;
-          nh.y = this.y - 110;
+          nh.x = this.x + this.facing * 32;
+          nh.y = this.y - 42;
           nh.max = 0.9;
           nh.life = 0.9;
           for (var p = 0; p < 10; p++) {
-            fx.spawnParticle(this.x + this.facing * 70, this.y - 80,
+            fx.spawnParticle(this.x + this.facing * 28, this.y - 32,
               fx.rand(-160, 160), fx.rand(-260, -60), 0.5,
               3 + Math.random() * 4, '#f4f0e6', 420);
           }
         }
-        if (this.t > 0.85) { this.mode = 'some'; this.t = 0; }
+        if (this.t > 0.85) { this.mode = 'sai'; this.t = 0; this.facing = -1; }
 
-      } else if (this.mode === 'some') {
-        // encolhe e esvai numa nuvenzinha de lã — "deu o soco e sumiu"
-        this.fade = Math.max(0, 1 - this.t / 0.45);
+      } else if (this.mode === 'sai') {
+        // sai voando: sobe em diagonal de volta para o céu da esquerda
         this.jaw = Math.max(0, this.jaw - dt * 5);
         this.punch = Math.max(0, this.punch - dt * 4);
-        if (Math.random() < 0.5) {
-          fx.spawnParticle(this.x + fx.rand(-26, 26), this.y - fx.rand(20, 110),
-            fx.rand(-60, 60), fx.rand(-120, -30), 0.5,
-            4 + Math.random() * 5, 'rgba(60,58,66,0.9)', 60);
+        this.x += this.facing * 480 * dt;
+        this.y -= 300 * dt;
+        var a = FG.level.arena;
+        var teto = fx.groundYAt(a.x + a.w * 0.5, 300) - 560;
+        if (this.x < a.x - 80 || this.x > a.x + a.w + 80 ||
+            this.y < teto || this.t > 3) {
+          this.mode = 'fora';
         }
-        if (this.t > 0.45) this.mode = 'fora';
       }
     },
 
@@ -180,25 +188,22 @@ window.FG = window.FG || {};
 
       if (this.mode === 'fora') return;
       var sx = this.x - cam.x, sy = this.y - cam.y;
-      if (sx < -160 || sx > 960 + 160) return;
+      if (sx < -160 || sx > 960 + 160 || sy < -220) return;
 
       var t = FG.engine.time;
-      var correndo = this.mode === 'entra';
-      // fase do ciclo de corrida: pernas alternadas, braços no contratempo
-      var ciclo = correndo ? Math.sin(t * 13) : 0;
+      var voando = this.mode === 'entra' || this.mode === 'sai';
+      // no voo as perninhas penduram e balançam devagar (não há passo)
+      var ciclo = Math.sin(t * 5) * 0.45;
 
       ctx.save();
       ctx.translate(sx, sy);
-      ctx.scale(this.facing, 1);
-      if (this.fade < 1) {
-        ctx.globalAlpha = this.fade;
-        ctx.translate(0, -60 * (1 - this.fade));
-        ctx.scale(this.fade, this.fade);
-        ctx.translate(0, 60 * (1 - this.fade));
-      }
+      // o desenho local tem ~160px de altura; o SCALE o traz para o porte
+      // do jogador (30×44)
+      var SCALE = 0.3;
+      ctx.scale(this.facing * SCALE, SCALE);
       desenharBaba(ctx, t, {
         ciclo: ciclo,
-        correndo: correndo,
+        voando: voando,
         jaw: this.jaw,
         punch: this.punch,
         socando: this.mode === 'soca',
@@ -259,9 +264,9 @@ window.FG = window.FG || {};
 
   function desenharBaba(ctx, t, o) {
     var ciclo = o.ciclo, jaw = o.jaw, punch = o.punch || 0;
-    // pivôs (origem no chão): quadril, ombro, centro do corpo, da cabeça
+    // pivôs (origem na linha dos pés): quadril, ombro, corpo, cabeça
     var QUADRIL_Y = -46, OMBRO_Y = -72, CORPO_Y = -62, CABECA_Y = -118;
-    var bob = o.correndo ? Math.sin(t * 26) * 2.5 : Math.sin(t * 3) * 1.5;
+    var bob = Math.sin(t * 4) * 2;
     // no soco o tronco inclina junto com o braço (arma atrás, projeta à frente)
     var lean = o.socando ? punch * 0.14 : 0;
 
@@ -272,6 +277,24 @@ window.FG = window.FG || {};
       ctx.translate(0, -QUADRIL_Y);
     }
 
+    // ----- asinhas brancas nas costas, batendo rápido (o voo dele) -----
+    var flap = Math.sin(t * (o.voando ? 30 : 22));
+    ctx.save();
+    ctx.translate(-16, OMBRO_Y - 6);
+    ctx.globalAlpha = 0.85;
+    for (var aw = 0; aw < 2; aw++) {
+      ctx.save();
+      ctx.rotate(-0.5 - aw * 0.4 - flap * 0.45);
+      ctx.fillStyle = aw === 0 ? 'rgba(255,255,255,0.92)' : 'rgba(235,232,242,0.8)';
+      ctx.strokeStyle = TRACO;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(-22, -6, 24, 9, 0.15, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+
     // ----- rabinho: bolota de lã sacudindo na raiz -----
     ctx.save();
     ctx.translate(-30, -58);
@@ -281,11 +304,11 @@ window.FG = window.FG || {};
     ctx.restore();
 
     // ----- membros de TRÁS (lado longe da câmera) -----
-    // perna: gira no quadril; braço: gira no ombro, em contratempo
-    var pernaTras = o.correndo ? ciclo * 0.8 : 0.06;
+    // perna: pendura do quadril balançando no voo; braço no contratempo
+    var pernaTras = 0.1 + ciclo;
     var bracoTras;
     if (o.socando) bracoTras = 0.25 + punch * 0.5;          // equilibra o golpe (vai p/ trás)
-    else bracoTras = o.correndo ? -ciclo * 0.9 + 0.3 : 0.25;
+    else bracoTras = 0.25 - ciclo * 0.6;
     ctx.globalAlpha = 0.88;
     membro(ctx, -6, QUADRIL_Y, pernaTras, 36, 15, 8.5);
     membro(ctx, -8, OMBRO_Y, bracoTras, 32, 13, 8);
@@ -334,7 +357,7 @@ window.FG = window.FG || {};
     ctx.restore();
 
     // ----- membros da FRENTE -----
-    var pernaFrente = o.correndo ? -ciclo * 0.8 : -0.06;
+    var pernaFrente = -0.1 - ciclo * 0.9;
     var bracoFrente;
     if (o.socando) {
       // o braço do soco (rot 0 = p/ baixo; positivo = p/ trás, negativo =
@@ -343,7 +366,7 @@ window.FG = window.FG || {};
       bracoFrente = punch <= 0 ? 0.32 - punch * 0.9    // armando: gira p/ trás
                                : -0.6 - punch * 1.75;  // desferido à frente
     } else {
-      bracoFrente = o.correndo ? ciclo * 0.9 + 0.3 : 0.32;
+      bracoFrente = 0.32 + ciclo * 0.6;
     }
     membro(ctx, 7, QUADRIL_Y, pernaFrente, 38, 16, 9);
     membro(ctx, 9, OMBRO_Y, bracoFrente, o.socando && punch > 0 ? 34 + punch * 10 : 34, 14, 8.5);

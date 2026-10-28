@@ -225,7 +225,7 @@ for (let f = 0; f < totalFases; f++) {
     if (!FG.babachops.podeComandar()) throw new Error('Baba Chops não pôde ser comandado');
     const hpAntes = boss.hp;
     tap('KeyB', 2);
-    frames(240); // entra (até ~2.2s) + soco + sumiço
+    frames(330); // voo de entrada (até ~2.2s) + soco + voo de saída
     if (boss.hp !== hpAntes - 1) {
       throw new Error('soco do Baba Chops não tirou 1 de hp: ' + hpAntes + ' -> ' + boss.hp);
     }
