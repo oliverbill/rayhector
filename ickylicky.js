@@ -28,6 +28,11 @@ window.FG = window.FG || {};
   for (var ni = 0; ni < 4; ni++) pows.push({ x: 0, y: 0, life: 0, max: 1 });
   pows.i = 0;
 
+  // o RAIO do trovão do soco: um relâmpago que cai do céu sobre o chefão no
+  // instante do impacto — clarão na tela, zigue-zague, tremor de câmera e o
+  // estrondo grave (mesma receita do trovão da mansão, em versão one-shot).
+  var raio = { t: 0, x: 0, botY: 0, DUR: 0.3 };
+
   var icky = {
     // mode: 'fora' (não está em cena) | 'entra' (voando até a Otton) |
     // 'soca' (pairando: arma e desfere o soco) | 'sai' (voando embora)
@@ -81,6 +86,7 @@ window.FG = window.FG || {};
     reset: function (novoJogo) {
       for (var i = 0; i < pows.length; i++) pows[i].life = 0;
       pows.i = 0;
+      raio.t = 0;
       if (novoJogo === true || (this.mode !== 'fora' && !this.socou)) {
         this.restTimer = 0;          // interrompido antes de socar: não gasta
       }
@@ -99,6 +105,8 @@ window.FG = window.FG || {};
         n.life -= dt;
         n.y -= 46 * dt;
       }
+
+      if (raio.t > 0) raio.t -= dt;
 
       if (this.mode === 'fora') return;
 
@@ -142,6 +150,12 @@ window.FG = window.FG || {};
           this.socou = true;
           this.restTimer = this.REST_MAX;      // gasto no ato
           FG.audio.sfx('punch');
+          // TROVÃO: o raio cai do céu no ponto do impacto
+          raio.t = raio.DUR;
+          raio.x = vivo ? b.x : this.x + this.facing * 40;
+          raio.botY = this.y - 30;
+          FG.audio.sfx('bossRoar');
+          if (FG.engine.shakeCamera) FG.engine.shakeCamera(13, 0.5);
           if (vivo && typeof b.takeHit === 'function') b.takeHit();
           var nh = pows[pows.i];
           pows.i = (pows.i + 1) % pows.length;
@@ -189,6 +203,50 @@ window.FG = window.FG || {};
         ctx.fillText('POW!', n.x - cam.x, n.y - cam.y);
       }
       ctx.restore();
+
+      // o RAIO do trovão do soco: clarão + zigue-zague caindo sobre o chefão
+      if (raio.t > 0) {
+        var ka = raio.t / raio.DUR;          // 1 → 0
+        ctx.save();
+        // clarão branco na tela inteira, esvaindo rápido
+        ctx.globalAlpha = 0.38 * ka * ka;
+        ctx.fillStyle = '#eef2ff';
+        ctx.fillRect(0, 0, 960, 540);
+        // o zigue-zague, do topo da tela até o ponto do impacto
+        var rx = raio.x - cam.x, by = raio.botY - cam.y;
+        ctx.globalAlpha = Math.min(1, ka * 1.6);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        var segs = 6;
+        var pts = [{ x: rx, y: -10 }];
+        for (var sg = 1; sg <= segs; sg++) {
+          var ff = sg / segs;
+          var jag = (sg === segs) ? 0 : ((sg % 2 === 0) ? 1 : -1) * (8 + (sg * 13) % 14);
+          pts.push({ x: rx + jag, y: -10 + (by + 10) * ff });
+        }
+        ctx.shadowColor = '#c8d8ff';
+        ctx.shadowBlur = 22;
+        ctx.strokeStyle = 'rgba(200,215,255,0.6)';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var p1 = 1; p1 < pts.length; p1++) ctx.lineTo(pts[p1].x, pts[p1].y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#fdfeff';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var p2 = 1; p2 < pts.length; p2++) ctx.lineTo(pts[p2].x, pts[p2].y);
+        ctx.stroke();
+        // clarão radial no impacto
+        var gg = ctx.createRadialGradient(rx, by, 0, rx, by, 70);
+        gg.addColorStop(0, 'rgba(235,240,255,0.9)');
+        gg.addColorStop(1, 'rgba(235,240,255,0)');
+        ctx.fillStyle = gg;
+        ctx.beginPath(); ctx.arc(rx, by, 70, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
 
       if (this.mode === 'fora') return;
       var sx = this.x - cam.x, sy = this.y - cam.y;
