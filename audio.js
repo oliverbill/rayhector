@@ -1,15 +1,16 @@
 // Fagulho: Lendas do Bosque — FG.audio: todo o áudio do jogo em WebAudio
-// procedural (osciladores, ruído gerado, filtros). A ÚNICA exceção é a
-// trilha da caverna, que é um mp3 de verdade tocado por um <audio> (ver
-// ARQUIVOS, mais abaixo) — se o arquivo não carregar, a versão procedural da
-// caverna assume o lugar e a fase nunca fica muda.
+// procedural (osciladores, ruído gerado, filtros). As EXCEÇÕES são a trilha
+// da caverna e as dos chefões das fases 1 a 6, mp3s de verdade tocados por
+// um <audio> (ver ARQUIVOS, mais abaixo) — se o arquivo não carregar, a
+// versão procedural ('caverna' ou 'boss') assume o lugar e a fase nunca
+// fica muda.
 //
 // Contrato (ver SPEC.md):
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
-//   FG.audio.music(name) — 'overworld'|'boss'|'pantano'|'mansao'|'coliseu'|
-//                          'caverna'|'floresta'|null;
-//                          troca com fade ~0.4s
+//   FG.audio.music(name) — 'overworld'|'boss'|'boss1'|'boss2'|'boss3'|'boss4'|
+//                          'boss5'|'boss6'|'pantano'|'mansao'|'coliseu'|
+//                          'caverna'|'floresta'|null; troca com fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
 // vira no-op silencioso se o init ainda não rodou ou o contexto não roda.
@@ -73,6 +74,9 @@ window.FG = window.FG || {};
       // roda em TODO gesto, então é daqui que a trilha de arquivo é retomada
       // quando o primeiro play foi barrado
       retomarArquivo();
+      // pedido de música que chegou antes do contexto existir (ver pedida):
+      // refaz agora que actx está de pé
+      if (pedida !== atual) music(pedida);
     } catch (e) { /* áudio quebrado não derruba o jogo */ }
   }
 
@@ -974,6 +978,12 @@ window.FG = window.FG || {};
   // máquina). Tudo o mais do jogo continua procedural.
   var ARQUIVOS = {
     caverna: { src: 'musica-caverna.mp3', vol: 0.9 },
+    boss1: { src: 'musica-boss1.mp3', vol: 0.9, fallback: 'boss' },
+    boss2: { src: 'musica-boss2.mp3', vol: 0.9, fallback: 'boss' },
+    boss3: { src: 'musica-boss3.mp3', vol: 0.9, fallback: 'boss' },
+    boss4: { src: 'musica-boss4.mp3', vol: 0.9, fallback: 'boss' },
+    boss5: { src: 'musica-boss5.mp3', vol: 0.9, fallback: 'boss' },
+    boss6: { src: 'musica-boss6.mp3', vol: 0.9, fallback: 'boss' },
   };
 
   var arqRuim = {};  // trilha cujo arquivo falhou: cai no procedural, sem insistir
@@ -1016,7 +1026,7 @@ window.FG = window.FG || {};
         arqRuim[name] = true;
         if (atual !== name) return;
         pararArquivo(false);
-        iniciarProcedural(name);
+        iniciarProcedural(def.fallback || name);
       });
     } catch (e) { /* sem listener: no pior caso, silêncio nessa fase */ }
 
@@ -1077,8 +1087,15 @@ window.FG = window.FG || {};
 
   // -------------------------------------------------------- despachante --
   var atual = null;  // trilha pedida pelo jogo (de arquivo ou procedural)
+  // pedida sobrevive ao no-op de music() sem actx: o atalho de debug
+  // ?chefe=1 solta o jogador já em cima do gatilho do chefão, que chama
+  // music() no 1º frame — antes de qualquer gesto, com actx ainda nulo. Sem
+  // isto o pedido se perdia para sempre e o chefão ficava mudo até trocar
+  // de fase; init() reconsulta pedida assim que o contexto existir.
+  var pedida = null;
 
   function music(name) {
+    pedida = name;
     try {
       if (!actx) return;                    // init ainda não rodou: no-op
       if (name === atual) return;           // mesma música: não reinicia

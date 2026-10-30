@@ -2943,8 +2943,94 @@ window.FG = window.FG || {};
     return v - Math.floor(v);
   }
 
-  // --- arquibancada com gente, ao fundo: fileiras de vultos coloridos
-  // acima do topY, mais o vulto que se ergue e acena durante o telegraph ---
+  // Um torcedor da arquibancada: a criatura verde-oliva do coliseu — chapéu
+  // cônico azul-petróleo com pena vermelha puxada de lado, olhos arregalados
+  // saltados, corpo franzino envolto no mesmo pano do chapéu. Gesticula sem
+  // parar (braço acena numa onda própria por semente) e de vez em quando
+  // ergue um naco de comida bem alto antes de arremessar — o arremesso em si
+  // continua sendo o `food` do obstáculo; isto é só o gesto que o anuncia.
+  function drawPlateiaCriatura(ctx, px, py, sd, t) {
+    var bob = Math.sin(t * 1.6 + sd * 30) * 2.2;
+    var aceno = Math.sin(t * 3.4 + sd * 50);          // braço indo e vindo
+    var erguido = Math.sin(t * 0.9 + sd * 17);         // fase lenta: de vez em
+    var mostrando = erguido > 0.8;                     // quando ergue a comida
+    var y = py + bob;
+
+    ctx.save();
+    ctx.translate(px, y);
+
+    // corpo: tronco magro verde-oliva envolto no pano azul-petróleo (como o
+    // cachecol/manto da referência), levemente curvado pra frente
+    ctx.fillStyle = '#2f6b6a';
+    ctx.beginPath();
+    ctx.ellipse(0, 4.5, 5.4, 5.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#7a8f3a';
+    ctx.beginPath();
+    ctx.ellipse(0.6, 1.6, 3.6, 4.2, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // cabeça pequena, verde-oliva, puxada um pouco pra baixo (corcunda)
+    ctx.fillStyle = '#8fa348';
+    ctx.beginPath();
+    ctx.arc(0.4, -5.4, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // chapéu cônico azul-petróleo em aba larga, puxado de lado
+    ctx.fillStyle = '#1f6f72';
+    ctx.beginPath();
+    ctx.moveTo(-5.4, -7.4);
+    ctx.quadraticCurveTo(-1, -16.5, 6.4, -8.6);
+    ctx.quadraticCurveTo(1.4, -6.6, -5.4, -7.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#163f44';
+    ctx.beginPath();
+    ctx.ellipse(0.2, -7.8, 6.2, 1.7, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    // pena vermelha espetada no alto
+    ctx.strokeStyle = '#9c1c28'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0.4, -13.8);
+    ctx.quadraticCurveTo(2.6, -18.6, 0.8, -21.6);
+    ctx.stroke();
+
+    // sobrancelhas grossas e olhos arregalados (dois globos brancos com
+    // pupila preta pequena), igual à cara de espanto da referência
+    ctx.strokeStyle = '#1a2008'; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-3.4, -7.6); ctx.lineTo(-0.8, -8.2);
+    ctx.moveTo(0.8, -8.2); ctx.lineTo(3, -7.4);
+    ctx.stroke();
+    ctx.fillStyle = '#f4f0e0';
+    ctx.beginPath(); ctx.arc(-2, -6.1, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2, -5.8, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1208';
+    ctx.beginPath(); ctx.arc(-1.8, -6.1, 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2.2, -5.8, 0.55, 0, Math.PI * 2); ctx.fill();
+
+    // braço gesticulando: aceno contínuo; na fase alta, ergue um naco de
+    // comida acima da cabeça como quem mede a mira antes de atirar
+    ctx.strokeStyle = '#8fa348'; ctx.lineWidth = 1.7; ctx.lineCap = 'round';
+    var handX = 3.6 + aceno * 2.6;
+    var handY = mostrando ? -13 : (0.4 - Math.abs(aceno) * 4.4);
+    ctx.beginPath();
+    ctx.moveTo(3.2, 1.2);
+    ctx.lineTo(handX, handY);
+    ctx.stroke();
+    if (mostrando) {
+      ctx.fillStyle = '#c85a3a';
+      ctx.beginPath();
+      ctx.arc(handX, handY - 1.6, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // --- arquibancada com a plateia de criaturas, ao fundo: fileiras delas
+  // gesticulando e brandindo comida, mais o vulto que se ergue e acena
+  // durante o telegraph de arremesso ---
   function drawPlateiaFundo(ctx, o, cam, t) {
     var top = o.topY - PLATEIA_STAND_H, bot = o.topY + 14;
     if (!visible(cam, o.x - 20, top - 10, o.w + 40, bot - top + 20)) return;
@@ -2958,24 +3044,14 @@ window.FG = window.FG || {};
     ctx.fillStyle = wg;
     ctx.fillRect(x0, y0 - 6, o.w, 16);
 
-    // fileiras de assentos com gente — cores vivas fazendo contraste com o
-    // fundo escuro do coliseu
-    var cores = ['#e0a840', '#c85a3a', '#7ab850', '#4a90c8', '#c84a90', '#e8d050'];
+    // fileiras de assentos lotadas da criatura do coliseu, gesticulando
     var rows = 4, perRow = Math.max(6, Math.round(o.w / 26));
     for (var r = 0; r < rows; r++) {
       var ry = y0 - 20 - r * (PLATEIA_STAND_H - 20) / rows;
       for (var i = 0; i < perRow; i++) {
         var sd = seatSeed(i + r * 97, o.seed);
         var px = x0 + 10 + sd * Math.max(1, o.w - 20);
-        var bob = Math.sin(t * 1.6 + sd * 30) * 2.2;
-        ctx.fillStyle = cores[(i + r) % cores.length];
-        ctx.beginPath();
-        ctx.ellipse(px, ry + bob, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#2a1c14';
-        ctx.beginPath();
-        ctx.arc(px, ry + bob - 9, 3.2, 0, Math.PI * 2);
-        ctx.fill();
+        drawPlateiaCriatura(ctx, px, ry, sd, t);
       }
     }
 

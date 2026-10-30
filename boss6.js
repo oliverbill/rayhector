@@ -124,7 +124,7 @@ window.FG = window.FG || {};
       this.state = 'intro';
       this.timer = 1.4;      // um pouco mais longa: dá tempo de ler o balão
       FG.audio.sfx('bossRoar');
-      FG.audio.music('boss');
+      FG.audio.music('boss6');
     },
 
     resolveGeometry() {

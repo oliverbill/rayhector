@@ -193,7 +193,7 @@ window.FG = window.FG || {};
       this.state = 'intro';
       this.timer = 1.2;
       FG.audio.sfx('bossRoar');
-      FG.audio.music('boss');
+      FG.audio.music('boss2');
     },
 
     resolveGeometry() {
