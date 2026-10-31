@@ -268,6 +268,15 @@ window.FG = window.FG || {};
     // companheiro resgatado acompanha entre fases: só reposiciona perto do
     // início (o reset(true) do jogo novo acontece em startGame)
     if (FG.companion) FG.companion.reset(false);
+    // A partir da fase 6 (índice 5, a floresta — onde a jaula vive), o
+    // MurphOliver já começa COM o jogador, sem precisar quebrar a jaula pra
+    // "ganhar" o companheiro: a obrigatoriedade do resgate saiu. level6.js
+    // já sabe lidar com isso sozinho — se companion.active já é true antes
+    // de chegar na jaula, ela nasce desenhada quebrada (mesma regra que o
+    // atalho ?chefe=1 sempre usou, ver jaula.quebrada em level6.js reset()).
+    if (FG.companion && !FG.companion.active && i >= 5 && FG.companion.rescue) {
+      FG.companion.rescue(FG.level.playerStart.x - 60, FG.level.playerStart.y);
+    }
     if (FG.babachops) FG.babachops.reset(false);
     if (FG.allister) FG.allister.reset(false);
     if (FG.simon) FG.simon.reset(false);

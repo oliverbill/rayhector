@@ -277,6 +277,12 @@ window.FG = window.FG || {};
     tremor: 0,        // tempo de tremida depois de um soco
   };
 
+  // O CAÇADOR — puramente decorativo, de guarda ao lado da própria jaula que
+  // armou. Sem colisão e sem IA: só respira (balanço leve) e vira a cabeça
+  // pra acompanhar o jogador, pra não parecer um recorte parado. Fica à
+  // direita da jaula — à esquerda já é o arbusto de espinhos Hz(14240,...).
+  var cacador = { x: jaula.x + jaula.w + 30, y: 620 };
+
   // ---------------------------------------------------------------
   // LUMIS
   // ---------------------------------------------------------------
@@ -876,6 +882,9 @@ window.FG = window.FG || {};
     // a jaula do caçador (ou os restos dela)
     if (jaula.x < x1 && jaula.x + jaula.w > x0) drawJaula(ctx, t);
 
+    // o próprio caçador, de guarda ao lado
+    if (cacador.x > x0 - 40 && cacador.x < x1 + 40) drawCacador(ctx, cacador, t);
+
     // totens-checkpoint
     for (var c = 0; c < checkpoints.length; c++) {
       var cp = checkpoints[c];
@@ -1141,6 +1150,132 @@ window.FG = window.FG || {};
         ctx.restore();
       }
     }
+    ctx.restore();
+  }
+
+  // --- o caçador: couro e pele de urso por cima, capuz fundo cobrindo o
+  // rosto, barba grisalha à mostra, espingarda grande nos dois braços.
+  // Postura plantada, de guarda, respirando devagar — até a jaula quebrar:
+  // a partir daí (jaula.quebrada) ele fica irritado pra sempre — cara
+  // vermelha, sobrancelhas fechadas, tremendo de raiva, arma erguida e
+  // apontada pra frente em vez de descansada no peito. ---
+  function drawCacador(ctx, c, t) {
+    var p = FG.player;
+    var olhar = 0; // -1 olha pra esquerda, 1 pra direita, 0 de frente
+    if (p) olhar = p.x < c.x ? -1 : 1;
+    if (!olhar) olhar = 1;
+    var irritado = jaula.quebrada;
+    var respira = irritado ? Math.sin(t * 7) * 2 : Math.sin(t * 1.4) * 1.4;
+    var tremor = irritado ? Math.sin(t * 46) * 1.3 : 0;
+
+    ctx.save();
+    ctx.translate(c.x + tremor, c.y + respira);
+
+    // sombra no chão
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(0, 1, 18, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // tudo daqui pra baixo é desenhado "virado pra direita" — o scale cuida
+    // de espelhar pro outro lado, sem precisar multiplicar cada x por olhar
+    ctx.save();
+    ctx.scale(olhar, 1);
+
+    // pernas — calça de couro escura, botas (postura mais aberta e plantada
+    // quando bravo)
+    var passo = irritado ? 3 : 0;
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(-11 - passo, -30, 9, 30);
+    ctx.fillRect(2 + passo, -30, 9, 30);
+    ctx.fillStyle = '#20140c';
+    ctx.fillRect(-12 - passo, -6, 11, 7);
+    ctx.fillRect(1 + passo, -6, 11, 7);
+
+    // torso — manto de pele de urso sobre o couro, gola felpuda
+    ctx.fillStyle = '#4a3420';
+    ctx.beginPath();
+    ctx.moveTo(-14, -28);
+    ctx.lineTo(14, -28);
+    ctx.lineTo(11, -58);
+    ctx.lineTo(-11, -58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#6a5438';
+    ctx.beginPath();
+    ctx.ellipse(0, -58, 13, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // tiras de couro cruzadas no peito
+    ctx.strokeStyle = '#2a1c10'; ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-11, -56); ctx.lineTo(10, -30);
+    ctx.moveTo(10, -56); ctx.lineTo(-11, -30);
+    ctx.stroke();
+
+    // ESPINGARDA GRANDE — cano comprido + coronha de madeira. De guarda,
+    // fica cruzada e baixa no peito; irritado, ele a ergue na horizontal,
+    // o cano apontado pra frente.
+    var gx0 = -6, gy0 = irritado ? -50 : -40;
+    var gx1 = irritado ? 48 : 30, gy1 = irritado ? -50 : -20;
+    ctx.strokeStyle = '#17181a'; ctx.lineWidth = 5.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(gx0, gy0); ctx.lineTo(gx1, gy1);
+    ctx.stroke();
+    ctx.strokeStyle = '#4a4e54'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(gx0, gy0 - 1.6); ctx.lineTo(gx1, gy1 - 1.6);
+    ctx.stroke();
+    // coronha de madeira na base do cano
+    ctx.save();
+    ctx.translate(gx0, gy0);
+    ctx.rotate(Math.atan2(gy1 - gy0, gx1 - gx0));
+    ctx.fillStyle = '#5e4022';
+    ctx.fillRect(-15, -5, 17, 10);
+    ctx.restore();
+
+    // braços segurando a arma — um na coronha, outro apoiando o cano
+    ctx.strokeStyle = '#4a3420'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-9, -32); ctx.lineTo(gx0 + 2, gy0 - 4);
+    ctx.moveTo(9, -40); ctx.lineTo(gx0 + (gx1 - gx0) * 0.6, gy0 + (gy1 - gy0) * 0.6 - 6);
+    ctx.stroke();
+
+    // cabeça: capuz fundo, só queixo e barba à mostra
+    ctx.fillStyle = '#c99a6e';
+    ctx.beginPath();
+    ctx.arc(0, -66, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a1a';
+    ctx.beginPath();
+    ctx.moveTo(-9, -66);
+    ctx.quadraticCurveTo(-10, -78, 2, -80);
+    ctx.quadraticCurveTo(11, -78, 9, -66);
+    ctx.quadraticCurveTo(0, -72, -9, -66);
+    ctx.closePath();
+    ctx.fill();
+    // barba grisalha
+    ctx.fillStyle = '#c8c0b4';
+    ctx.beginPath();
+    ctx.moveTo(-6, -62);
+    ctx.quadraticCurveTo(0, -54, 6, -62);
+    ctx.quadraticCurveTo(0, -58, -6, -62);
+    ctx.fill();
+
+    if (irritado) {
+      // cara vermelha de raiva + sobrancelhas fechadas numa careta
+      ctx.fillStyle = 'rgba(210,40,30,0.4)';
+      ctx.beginPath(); ctx.arc(0, -66, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#1a140c'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-6, -71); ctx.lineTo(0, -68);
+      ctx.moveTo(6, -71); ctx.lineTo(0, -68);
+      ctx.stroke();
+    }
+    // olhos — sob a sombra do capuz, dois pontos acesos
+    ctx.fillStyle = '#1a140c';
+    ctx.beginPath(); ctx.arc(2, -67, 1.3, 0, Math.PI * 2); ctx.arc(6, -67, 1.3, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore(); // fim do scale(olhar,1)
     ctx.restore();
   }
 

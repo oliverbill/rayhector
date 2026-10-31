@@ -291,9 +291,14 @@ window.FG = window.FG || {};
       this.inQuicksand = inQuicksand;
       if (inQuicksand) { jumpsUsed = 0; glideLeft = GLIDE_TIME; coyoteTimer = 0; }
 
-      // pose de nado: o blend persegue inWater (deita/levanta sem pular de pose)
-      swimBlend += ((inWater ? 1 : 0) - swimBlend) * Math.min(1, dt * 9);
-      if (inWater) {
+      // Pisando no fundo, debaixo d'água, não é nadar — é andar. `swimming`
+      // só é verdade longe do chão; no leito do mar (fase 7) o jogador fica
+      // de pé e corre normalmente, sem a física nem a pose de nado.
+      const swimming = inWater && !this.onGround;
+
+      // pose de nado: o blend persegue `swimming` (deita/levanta sem pular de pose)
+      swimBlend += ((swimming ? 1 : 0) - swimBlend) * Math.min(1, dt * 9);
+      if (swimming) {
         // braçada de crawl: gira rápido enquanto sobe nadando, lenta boiando
         swimPhase += dt * (this.vy < 0 ? 11 : 4.5);
         // bolhinhas ocasionais saindo da boca (cor da aura, o pool é o mesmo)
@@ -371,19 +376,28 @@ window.FG = window.FG || {};
       this.glideLeft = glideLeft;   // espelhado para os testes e para o desenho
 
       // gravidade (limitada pelo planar ou pelo atrito na parede) — ou, dentro
-      // d'água, o nado: segurar PULO sobe, soltar afunda devagar, tudo em
-      // velocidades curtas para a água parecer densa e não um céu de cabeça
-      // para baixo.
-      if (inWater) {
+      // d'água mas longe do chão, o nado: segurar PULO sobe, soltar afunda
+      // devagar, tudo em velocidades curtas para a água parecer densa e não
+      // um céu de cabeça para baixo. Pisando no fundo (`swimming` falso
+      // mesmo com `inWater` verdadeiro) cai direto no `else` de baixo —
+      // gravidade e corrida normais, de pé.
+      if (swimming) {
+        // afundoLento: campo opcional por fase (ver level7.js) — número em
+        // px/s com a velocidade (bem mais lenta) do mergulho inicial da
+        // praia, pesado e longo até o fundo do poço de entrada, em vez do
+        // nado normal de combate. Nenhuma outra fase seta este campo, então
+        // a água continua densa-mas-ágil como sempre em todo o resto do
+        // jogo. `|| 0` deixa `false`/`undefined` caírem na taxa normal.
+        const afundoLento = FG.level.afundoLento || 0;
         if (input.jump) this.vy -= 1500 * dt;   // braçada contínua para cima
-        else this.vy += 520 * dt;               // afunda devagar
+        else this.vy += (afundoLento || 520) * dt; // afunda devagar (ou MUITO devagar)
         // Perto da superfície o cap de subida NÃO se aplica: o pulo que o
         // coyote-de-água libera (vy -720) passa inteiro e o salto para a
         // margem sai de verdade. Sem esta exceção o cap de -280 engolia o
         // pulo e a saída da água virava um quicar infinito na linha d'água.
         const pertoDaSuperficie = (this.y + this.h * 0.55) < waterTop + 70;
         if (!pertoDaSuperficie && this.vy < -280) this.vy = -280;
-        if (this.vy > 220) this.vy = 220;
+        if (this.vy > (afundoLento || 220)) this.vy = afundoLento || 220;
         // a água também segura a corrida
         if (this.vx > 240) this.vx = 240;
         if (this.vx < -240) this.vx = -240;

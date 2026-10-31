@@ -1,8 +1,9 @@
 // Fagulho: Lendas do Bosque — enemies.js
 // FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe, e os da
 // gruta submersa do pântano: piranha, carango, jacaré, candiru; os da
-// mansão: lobo, fantasma, ratazana; e os da floresta: tarantula, cobra),
-// as pools de partícula e o registro de chefões. Cada chefão mora no seu arquivo
+// mansão: lobo, fantasma, ratazana; os da floresta: tarantula, cobra; e os
+// da praia: tubarao, peixeespada, baleia, orca), as pools de partícula e o registro de
+// chefões. Cada chefão mora no seu arquivo
 // (boss1.js, boss2.js, boss3.js) e regista-se aqui no load; enemies.js só
 // escolhe qual deles entra em cena, pelo bossId da fase. Nenhuma referência a
 // outros módulos no load — só dentro de funções chamadas em runtime.
@@ -143,6 +144,10 @@ window.FG = window.FG || {};
     else if (e.type === 'morcego') { e.w = 38; e.h = 22; }  // caverna: dorme no teto e acorda em voo
     else if (e.type === 'tarantula') { e.w = 46; e.h = 30; } // floresta: azul, patrulha e bote curto
     else if (e.type === 'cobra') { e.w = 56; e.h = 22; }     // floresta: serpenteia e dá o bote esticada
+    else if (e.type === 'tubarao') { e.w = 86; e.h = 38; e.hp = 2; e.dmg = 2; } // praia: o predador do recife
+    else if (e.type === 'peixeespada') { e.w = 60; e.h = 22; } // praia: investida reta, igual ao peixe voador
+    else if (e.type === 'baleia') { e.w = 260; e.h = 104; e.hp = 5; e.dmg = 3; } // praia: gigante, lenta, machuca igual um muro
+    else if (e.type === 'orca') { e.w = 210; e.h = 76; e.hp = 4; e.dmg = 3; }    // praia: mais rápida e agressiva que o tubarão
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
@@ -670,6 +675,194 @@ window.FG = window.FG || {};
           e.st = 'parado';
           e.vx = 0;
           e.timer = rand(1.2, 1.8);
+        }
+      }
+    } else if (e.type === 'tubarao') {
+      // Tubarão do recife: igual à piranha da gruta submersa (patrulha
+      // flutuando sem gravidade, eriça e dá o bote), só que maior, mais
+      // rápido e com alcance de detecção bem mais largo — o predador de
+      // verdade da praia, não um susto de poça.
+      const t = FG.engine.time + e.phase;
+      const dxS = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyS = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 72;
+        e.x += e.dir * SPD * dt;
+        if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+        if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 2.2);
+        e.y = e.baseY + Math.sin(t * 1.8) * 9;
+        if (Math.random() < 0.025) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.9 : 0.1), e.y + e.h * 0.25,
+            rand(-10, 10), -36, 0.8, 3, 'rgba(210,245,255,0.75)', -45);
+        }
+        if (dxS * dxS + dyS * dyS < 260 * 260 && Math.abs(dyS) < 140) {
+          e.dir = dxS >= 0 ? 1 : -1;
+          e.st = 'erica';
+          e.timer = 0.3;        // some mais a bochecha, tubarão é maior
+        }
+      } else if (e.st === 'erica') {
+        e.timer -= dt;
+        e.y = e.baseY + Math.sin(t * 34) * 2.2;
+        if (e.timer <= 0) {
+          const d = Math.sqrt(dxS * dxS + dyS * dyS) || 1;
+          const BOTE = 480;
+          e.dir = dxS >= 0 ? 1 : -1;
+          e.vx = (dxS / d) * BOTE;
+          e.vy = (dyS / d) * BOTE;
+          e.st = 'bote';
+          e.timer = 0.55;
+        }
+      } else { // bote
+        e.timer -= dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (Math.random() < 0.4) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.1 : 0.9), e.y + e.h * 0.5,
+            rand(-26, 26), rand(-46, -12), 0.35, 2.5 + Math.random() * 2.5, 'rgba(210,245,255,0.8)', -55);
+        }
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.baseY = e.y;
+          e.vx = 0; e.vy = 0;
+        }
+      }
+    } else if (e.type === 'peixeespada') {
+      // Peixe-espada: idêntico ao 'peixe' voador (fica parado bufando até o
+      // alcance horizontal, dispara reto como um torpedo com o bico à
+      // frente, some de cena se sair da vista e volta ao posto depois de um
+      // tempo) — só reskinado mais rápido e fino, o bico é a arma dele.
+      if (e.st === 'parado') {
+        e.x = e.spawnX;
+        e.y = e.spawnY + Math.sin((FG.engine.time + e.phase) * 3.4) * 5;
+        if (Math.random() < 0.02) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.92 : 0.08), e.y + e.h * 0.35,
+            rand(-8, 8), -34, 0.7, 3, 'rgba(210,235,255,0.75)', -40);
+        }
+        const dxE = (p.x + p.w / 2) - (e.x + e.w / 2);
+        const dyE = (p.y + p.h / 2) - (e.y + e.h / 2);
+        if (Math.abs(dxE) < e.range && Math.abs(dyE) < 120) {
+          e.dir = dxE >= 0 ? 1 : -1;
+          e.st = 'disparo';
+          e.vx = e.dir * e.speed;
+        }
+      } else if (e.st === 'disparo') {
+        e.x += e.dir * e.speed * dt;
+        e.y = e.spawnY;
+        spawnParticle(e.x + e.w * (e.dir > 0 ? 0.03 : 0.97), e.y + e.h * (0.3 + Math.random() * 0.4),
+          rand(-30, 30), rand(-50, -10), 0.3, 2 + Math.random() * 2.5, 'rgba(220,240,255,0.85)', -60);
+        const cam = FG.engine.cam;
+        if (e.x + e.w < cam.x - CULL || e.x > cam.x + VIEW_W + CULL ||
+            Math.abs(e.x - e.spawnX) > VIEW_W + 240) {
+          e.st = 'sumido';
+          e.timer = 2.2;
+        }
+      } else {
+        e.timer -= dt;
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.x = e.spawnX;
+          e.y = e.spawnY;
+        }
+        return;
+      }
+    } else if (e.type === 'baleia') {
+      // Baleia: gigante do recife — a mesma patrulha-e-bote do tubarão, só
+      // que bem mais lenta e com alcance de detecção maior (ela não precisa
+      // ser ágil: o próprio tamanho já é a ameaça, machuca igual um muro
+      // vivo que de vez em quando investe).
+      const t = FG.engine.time + e.phase;
+      const dxB = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyB = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 36;
+        e.x += e.dir * SPD * dt;
+        if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+        if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 1.6);
+        e.y = e.baseY + Math.sin(t * 0.9) * 14;
+        if (Math.random() < 0.02) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.88 : 0.12), e.y + e.h * 0.2,
+            rand(-14, 14), -40, 1, 4, 'rgba(210,245,255,0.7)', -40);
+        }
+        if (dxB * dxB + dyB * dyB < 340 * 340 && Math.abs(dyB) < 180) {
+          e.dir = dxB >= 0 ? 1 : -1;
+          e.st = 'erica';
+          e.timer = 0.5; // telegraph longo: dá tempo de nadar pra longe
+        }
+      } else if (e.st === 'erica') {
+        e.timer -= dt;
+        e.y = e.baseY + Math.sin(t * 20) * 3;
+        if (e.timer <= 0) {
+          const d = Math.sqrt(dxB * dxB + dyB * dyB) || 1;
+          const BOTE = 260;
+          e.dir = dxB >= 0 ? 1 : -1;
+          e.vx = (dxB / d) * BOTE;
+          e.vy = (dyB / d) * BOTE;
+          e.st = 'bote';
+          e.timer = 0.75;
+        }
+      } else { // bote
+        e.timer -= dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (Math.random() < 0.5) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.1 : 0.9), e.y + e.h * 0.5,
+            rand(-30, 30), rand(-50, -15), 0.4, 3 + Math.random() * 3, 'rgba(210,245,255,0.75)', -50);
+        }
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.baseY = e.y;
+          e.vx = 0; e.vy = 0;
+        }
+      }
+    } else if (e.type === 'orca') {
+      // Orca: a predadora de verdade do recife — a mesma estrutura do
+      // tubarão, só que mais rápida pra eriçar e pra dar o bote, com alcance
+      // de detecção maior. É o bicho mais perigoso dos comuns desta fase.
+      const t = FG.engine.time + e.phase;
+      const dxO = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyO = (p.y + p.h / 2) - (e.y + e.h / 2);
+      if (e.st === 'parado') {
+        const SPD = 92;
+        e.x += e.dir * SPD * dt;
+        if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+        if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 2.4);
+        e.y = e.baseY + Math.sin(t * 2) * 10;
+        if (Math.random() < 0.03) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.9 : 0.1), e.y + e.h * 0.22,
+            rand(-12, 12), -38, 0.8, 3.4, 'rgba(210,245,255,0.75)', -45);
+        }
+        if (dxO * dxO + dyO * dyO < 300 * 300 && Math.abs(dyO) < 160) {
+          e.dir = dxO >= 0 ? 1 : -1;
+          e.st = 'erica';
+          e.timer = 0.22;
+        }
+      } else if (e.st === 'erica') {
+        e.timer -= dt;
+        e.y = e.baseY + Math.sin(t * 38) * 2.4;
+        if (e.timer <= 0) {
+          const d = Math.sqrt(dxO * dxO + dyO * dyO) || 1;
+          const BOTE = 560;
+          e.dir = dxO >= 0 ? 1 : -1;
+          e.vx = (dxO / d) * BOTE;
+          e.vy = (dyO / d) * BOTE;
+          e.st = 'bote';
+          e.timer = 0.5;
+        }
+      } else { // bote
+        e.timer -= dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (Math.random() < 0.45) {
+          spawnParticle(e.x + e.w * (e.dir > 0 ? 0.1 : 0.9), e.y + e.h * 0.5,
+            rand(-28, 28), rand(-48, -14), 0.35, 3 + Math.random() * 3, 'rgba(210,245,255,0.8)', -55);
+        }
+        if (e.timer <= 0) {
+          e.st = 'parado';
+          e.baseY = e.y;
+          e.vx = 0; e.vy = 0;
         }
       }
     }
@@ -1773,6 +1966,318 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- tubarão do recife: corpo azul-acinzentado torpedo, barbatana dorsal
+  // triangular ereta, cauda em meia-lua, boca cheia de dentes triangulares
+  // brancos sempre à mostra — o predador da praia, maior e mais lento de
+  // nadadeira que o peixe-espada, mas de mordida bem mais dolorida. ---
+  function drawTubarao(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const ericado = e.st === 'erica';
+    const bote = e.st === 'bote';
+    const wob = Math.sin(t * (ericado || bote ? 22 : 6) + e.phase) * (bote ? 7 : 3.5);
+    ctx.save();
+    ctx.translate(cx + (ericado ? Math.sin(t * 50) * 1.2 : 0), cy);
+    ctx.scale(e.dir, 1);
+    if (bote) ctx.scale(1.14, 0.9);
+
+    // cauda em meia-lua, lobo de cima bem maior que o de baixo
+    ctx.fillStyle = '#3d5a68';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.32, 0);
+    ctx.lineTo(-e.w * 0.62, -16 + wob);
+    ctx.lineTo(-e.w * 0.50, 0);
+    ctx.lineTo(-e.w * 0.60, 9 + wob * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // nadadeiras peitorais, rígidas, apontando pra trás
+    ctx.fillStyle = '#34505c';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.02, e.h * 0.3);
+    ctx.lineTo(-e.w * 0.14, e.h * 0.62);
+    ctx.lineTo(e.w * 0.18, e.h * 0.36);
+    ctx.closePath();
+    ctx.fill();
+
+    // corpo torpedo: dorso cinza-azulado, barriga clara (contra-sombra, como
+    // tubarão de verdade)
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, '#5a7f8e');
+    g.addColorStop(0.45, '#3c5d6c');
+    g.addColorStop(0.72, '#e8f2f2');
+    g.addColorStop(1, '#f4fbfb');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.5, 0);
+    ctx.quadraticCurveTo(e.w * 0.3, -e.h * 0.52, -e.w * 0.3, -e.h * 0.4);
+    ctx.quadraticCurveTo(-e.w * 0.48, -e.h * 0.1, -e.w * 0.46, 0);
+    ctx.quadraticCurveTo(-e.w * 0.48, e.h * 0.1, -e.w * 0.3, e.h * 0.4);
+    ctx.quadraticCurveTo(e.w * 0.3, e.h * 0.52, e.w * 0.5, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // barbatana dorsal triangular, ereta — a silhueta que todo mundo
+    // reconhece de longe
+    ctx.fillStyle = '#2c4650';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.02, -e.h * 0.38);
+    ctx.lineTo(e.w * 0.08, -e.h * 1.0 - wob * 0.3);
+    ctx.lineTo(e.w * 0.24, -e.h * 0.32);
+    ctx.closePath();
+    ctx.fill();
+
+    // guelras: fileira de arcos escuros no flanco
+    ctx.strokeStyle = 'rgba(20,40,48,0.5)'; ctx.lineWidth = 2;
+    for (let gi = 0; gi < 4; gi++) {
+      ctx.beginPath();
+      ctx.arc(e.w * (0.16 + gi * 0.045), 0, e.h * 0.3, -0.8, 0.8);
+      ctx.stroke();
+    }
+
+    // boca com dentes triangulares brancos SEMPRE à mostra — sem telegraph
+    // de abrir/fechar, o sorriso de tubarão não disfarça
+    const abre = bote || ericado ? 6.5 : 4.5;
+    ctx.fillStyle = '#1a2428';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.5, 0);
+    ctx.lineTo(e.w * 0.2, -abre);
+    ctx.lineTo(e.w * 0.2, abre);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 4; i++) {
+      const tx = e.w * (0.23 + i * 0.065);
+      const th = abre * (1 - i * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(tx, -th); ctx.lineTo(tx + 3.4, -th); ctx.lineTo(tx + 1.7, -th + 3.4);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(tx + 3.4, th); ctx.lineTo(tx + 6.8, th); ctx.lineTo(tx + 5.1, th - 3.4);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // olho preto pequeno, frio
+    ctx.fillStyle = '#0a0f12';
+    ctx.beginPath(); ctx.arc(e.w * 0.22, -e.h * 0.14, 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.arc(e.w * 0.235, -e.h * 0.17, 1.1, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  // --- peixe-espada: corpo fino prateado-azulado, bico comprido rígido à
+  // frente, nadadeira dorsal alta e pontiaguda — a investida é o próprio
+  // bico virando lança quando ele dispara reto no jogador. ---
+  function drawPeixeEspada(ctx, e, t) {
+    const dando = e.st === 'disparo';
+    const wob = Math.sin(t * (dando ? 32 : 8) + e.phase) * (dando ? 4 : 2.2);
+    ctx.save();
+    ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+    ctx.scale(e.dir, 1);
+    ctx.scale(dando ? 1.3 : 1, dando ? 0.82 : 1);
+
+    // cauda em foice, bem recortada
+    ctx.fillStyle = '#1f4d66';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.34, 0);
+    ctx.lineTo(-e.w * 0.58, -13 + wob);
+    ctx.lineTo(-e.w * 0.46, 0);
+    ctx.lineTo(-e.w * 0.58, 13 + wob);
+    ctx.closePath();
+    ctx.fill();
+
+    // nadadeira dorsal alta, como uma crista
+    ctx.fillStyle = 'rgba(30,90,120,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.08, -e.h * 0.3);
+    ctx.quadraticCurveTo(0, -e.h * 1.15 - wob * 0.3, e.w * 0.14, -e.h * 0.26);
+    ctx.closePath();
+    ctx.fill();
+
+    // corpo fino, fusiforme, prateado com dorso azul-aço
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, '#2c6487');
+    g.addColorStop(0.5, '#bcdfea');
+    g.addColorStop(1, '#eef8fb');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(-e.w * 0.02, 0, e.w * 0.34, e.h * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // o BICO — comprido, rígido, cinza-escuro: a arma da investida
+    ctx.strokeStyle = '#2a2e32'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.3, 0);
+    ctx.lineTo(e.w * (dando ? 0.74 : 0.62), 0);
+    ctx.stroke();
+
+    // olho redondo, atento
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(e.w * 0.2, -e.h * 0.1, 4.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0d1a22';
+    ctx.beginPath(); ctx.arc(e.w * 0.22, -e.h * 0.1, 2.3, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  // --- baleia: gigante cinza do recife, barriga clara, borbulhando pelo
+  // respiro nas costas — a mesma silhueta da baleia decorativa do fundo do
+  // level7.js, só que de perto, com mais detalhe, porque agora é um bicho
+  // de verdade com o qual se pode trombar. ---
+  function drawBaleia(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const bote = e.st === 'bote';
+    const wob = Math.sin(t * (bote ? 10 : 3.2) + e.phase) * (bote ? 8 : 4);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(e.dir, 1);
+
+    // cauda em leque horizontal, larga
+    ctx.fillStyle = '#3c4b58';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.34, 0);
+    ctx.quadraticCurveTo(-e.w * 0.5, -22 + wob, -e.w * 0.62, -32 + wob);
+    ctx.lineTo(-e.w * 0.5, 0);
+    ctx.lineTo(-e.w * 0.62, 32 + wob * 0.5);
+    ctx.quadraticCurveTo(-e.w * 0.5, 22 + wob * 0.5, -e.w * 0.34, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // nadadeira peitoral comprida
+    ctx.fillStyle = '#2e3a44';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.05, e.h * 0.2);
+    ctx.quadraticCurveTo(-e.w * 0.08, e.h * 0.55, -e.w * 0.02, e.h * 0.62);
+    ctx.quadraticCurveTo(e.w * 0.16, e.h * 0.38, e.w * 0.2, e.h * 0.22);
+    ctx.closePath();
+    ctx.fill();
+
+    // corpo: dorso cinza-azulado, barriga clara, bem arredondado
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, '#5c7080');
+    g.addColorStop(0.42, '#3c4b58');
+    g.addColorStop(0.68, '#e8ece8');
+    g.addColorStop(1, '#f4f6f0');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.46, -e.h * 0.05);
+    ctx.quadraticCurveTo(e.w * 0.3, -e.h * 0.5, -e.w * 0.1, -e.h * 0.46);
+    ctx.quadraticCurveTo(-e.w * 0.4, -e.h * 0.2, -e.w * 0.36, 0);
+    ctx.quadraticCurveTo(-e.w * 0.4, e.h * 0.2, -e.w * 0.1, e.h * 0.46);
+    ctx.quadraticCurveTo(e.w * 0.3, e.h * 0.5, e.w * 0.46, -e.h * 0.05);
+    ctx.closePath();
+    ctx.fill();
+
+    // sulcos ventrais (textura de baleia filtradora)
+    ctx.strokeStyle = 'rgba(140,150,140,0.5)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(e.w * 0.1 - i * 6, e.h * 0.2);
+      ctx.lineTo(e.w * 0.02 - i * 6, e.h * 0.4);
+      ctx.stroke();
+    }
+
+    // respiro soltando bolhas grandes
+    if (Math.random() < 0.06) {
+      spawnParticle(e.x + e.w * (e.dir > 0 ? 0.55 : 0.45), e.y - e.h * 0.1,
+        rand(-10, 10), -80, 0.9, 6 + Math.random() * 5, 'rgba(220,245,255,0.6)', -60);
+    }
+
+    // olho pequeno, gentil
+    ctx.fillStyle = '#1a1c1e';
+    ctx.beginPath(); ctx.arc(e.w * 0.3, -e.h * 0.06, 3.4, 0, Math.PI * 2); ctx.fill();
+
+    // boca: linha curva, quase sempre fechada — não é agressiva à toa
+    ctx.strokeStyle = '#1a1c1e'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.46, 0);
+    ctx.quadraticCurveTo(e.w * 0.3, (bote ? 10 : 4), e.w * 0.14, 2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // --- orca: preta e branca, manchas clássicas, barbatana dorsal alta e
+  // reta — a predadora mais rápida do recife, desenhada com mais detalhe que
+  // a versão decorativa do fundo (que é só silhueta). ---
+  function drawOrca(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const bote = e.st === 'bote';
+    const ericada = e.st === 'erica';
+    const wob = Math.sin(t * (bote || ericada ? 16 : 5) + e.phase) * (bote ? 9 : 4.5);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(e.dir, 1);
+    if (bote) ctx.scale(1.1, 0.92);
+
+    // cauda larga e preta
+    ctx.fillStyle = '#0c0e10';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.32, 0);
+    ctx.quadraticCurveTo(-e.w * 0.5, -20 + wob, -e.w * 0.6, -28 + wob);
+    ctx.lineTo(-e.w * 0.48, 0);
+    ctx.lineTo(-e.w * 0.6, 28 + wob * 0.5);
+    ctx.quadraticCurveTo(-e.w * 0.5, 20 + wob * 0.5, -e.w * 0.32, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // corpo: preto por cima, branco por baixo, mancha atrás do olho
+    const g = ctx.createLinearGradient(0, -e.h * 0.5, 0, e.h * 0.5);
+    g.addColorStop(0, '#16181a');
+    g.addColorStop(0.5, '#0c0e10');
+    g.addColorStop(0.62, '#f0f2f0');
+    g.addColorStop(1, '#fafcf8');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, e.w * 0.46, e.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // mancha branca oval atrás e acima do olho — a assinatura da orca
+    ctx.fillStyle = 'rgba(240,245,245,0.92)';
+    ctx.beginPath();
+    ctx.ellipse(e.w * 0.08, -e.h * 0.1, e.w * 0.14, e.h * 0.1, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // barbatana dorsal alta e QUASE RETA — mais vertical que a do tubarão
+    ctx.fillStyle = '#0c0e10';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.06, -e.h * 0.4);
+    ctx.lineTo(e.w * 0.02, -e.h * 1.15 - wob * 0.3);
+    ctx.lineTo(e.w * 0.16, -e.h * 0.34);
+    ctx.closePath();
+    ctx.fill();
+
+    // nadadeira peitoral
+    ctx.fillStyle = '#0c0e10';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.08, e.h * 0.3);
+    ctx.lineTo(-e.w * 0.1, e.h * 0.58);
+    ctx.lineTo(e.w * 0.2, e.h * 0.36);
+    ctx.closePath();
+    ctx.fill();
+
+    // boca sempre entreaberta, dentes pequenos e cerrados
+    const abre = bote || ericada ? 4.5 : 3;
+    ctx.fillStyle = '#1a1416';
+    ctx.beginPath();
+    ctx.moveTo(e.w * 0.48, 0);
+    ctx.lineTo(e.w * 0.2, -abre);
+    ctx.lineTo(e.w * 0.2, abre);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 3; i++) {
+      const tx = e.w * (0.24 + i * 0.07);
+      ctx.beginPath(); ctx.arc(tx, 0, 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // olho — ponto preto dentro da mancha branca
+    ctx.fillStyle = '#0a0c0e';
+    ctx.beginPath(); ctx.arc(e.w * 0.18, -e.h * 0.08, 2.6, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
   // --- gladiador de biga: carro de guerra de madeira com duas rodas raiadas,
   // puxado por nada (a "tração" é a própria fúria da corrida), com o
   // gladiador em pé atrás do peitoril — capacete emplumado, escudo redondo
@@ -1953,7 +2458,14 @@ window.FG = window.FG || {};
     // Some inteiro o elenco comum no instante em que o chefão começa: a luta
     // é só dele, sem espinhoco/voadeira/sapeca sobrando de fundo. Diferente
     // de reset(), não mexe no boss nem nas lumis — é só esta lista.
+    // Marca cada um como morto ANTES de esvaziar o array: o MurphOliver
+    // (companion.js) pode estar com `this.alvo` apontando pra um desses no
+    // instante exato do gatilho — sem o .dead=true aqui, a referência dele
+    // fica órfã (fora da lista, mas nunca marcada morta) e ele trava pra
+    // sempre voando atrás de um bicho que não existe mais, preso em modo de
+    // ataque e surdo ao comando do chefão.
     clearRegulares() {
+      for (let i = 0; i < this.list.length; i++) this.list[i].dead = true;
       this.list.length = 0;
     },
 
@@ -1998,6 +2510,10 @@ window.FG = window.FG || {};
         else if (e.type === 'morcego') drawMorcego(ctx, e, t);
         else if (e.type === 'tarantula') drawTarantula(ctx, e, t);
         else if (e.type === 'cobra') drawCobra(ctx, e, t);
+        else if (e.type === 'tubarao') drawTubarao(ctx, e, t);
+        else if (e.type === 'peixeespada') drawPeixeEspada(ctx, e, t);
+        else if (e.type === 'baleia') drawBaleia(ctx, e, t);
+        else if (e.type === 'orca') drawOrca(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();

@@ -1,19 +1,26 @@
 // Fagulho: Lendas do Bosque — companion.js
-// FG.companion: o MurphOliver, o sapinho voador resgatado da jaula do caçador
-// na fase da floresta. Depois do resgate ele acompanha o Heitor pelo resto da
-// partida (persiste entre fases; só zera em jogo novo), voando com asinhas de
+// FG.companion: o MurphOliver, o sapinho voador que acompanha o Heitor a
+// partir da fase 6 (floresta) em diante — sem precisar de resgate algum,
+// persiste entre fases (só zera em jogo novo), voando com asinhas de
 // libélula sempre um pouco atrás e acima. Não colide, não machuca, não morre —
 // mas reage (comemora o soco, se entristece quando a fagulha apaga) e ajuda de
-// DUAS maneiras:
-//  1. Na fase, por conta própria: conta os inimigos que chegam perto do
-//     jogador e, a cada 10, voa até o mais próximo e o elimina (uma bordoada,
-//     morte pelo caminho normal do enemies.js). Só 1 em cada 10 — quem limpa
-//     a fase continua sendo o jogador.
-//  2. Na luta de chefão, sob comando (botão próprio, fiação no engine/touch):
-//     voa até o chefão e faz CÓCEGAS nele, forçando a janela de
-//     vulnerabilidade (boss.forceExpose). Custa caro: depois ele descansa 30s
+// DUAS maneiras bem diferentes:
+//  1. Na fase, por conta própria, SEM BOTÃO: conta os inimigos que chegam
+//     perto do jogador e, a cada 2, voa até o mais próximo contado e o
+//     elimina (uma bordoada, morte pelo caminho normal do enemies.js). Quem
+//     limpa a fase continua sendo o jogador.
+//  2. Na luta de chefão, sob comando (botão B, fiação no engine/touch): voa
+//     até o chefão e faz CÓCEGAS nele, forçando a janela de vulnerabilidade
+//     (boss.forceExpose). Essa SIM custa caro: depois ele descansa 30s
 //     dormindo no posto. Fora da luta o botão fica desabilitado
-//     (podeComandar() é o critério — o touch.js o lê para apagar o botão).
+//     (podeComandar() é o critério — o touch.js o lê para apagar o botão) —
+//     o botão B é exclusivo do chefão; a ajuda comum nunca passa por ele.
+//
+// clearRegulares() (enemies.js) marca cada bicho comum como morto ANTES de
+// esvaziar a lista, no instante em que um chefão começa — sem isso, se o
+// MurphOliver estivesse voando atrás de um deles bem nesse instante, a
+// referência ficava órfã (fora da lista, `.dead` nunca virava true) e ele
+// travava pra sempre em modo de ataque, surdo ao comando do chefão.
 //
 // A cabeça é a foto real INTEIRA (FG.assets.murphHead, embutida em assets.js
 // com cabelo e laço prateado), desenhada grande sobre o corpinho de sapo verde
@@ -52,20 +59,21 @@ window.FG = window.FG || {};
     restTimer: 0,              // segundos de descanso restantes (0 = pronto)
     REST_MAX: 30,
 
-    // --- a ajuda automática (1 inimigo a cada 10) ---
+    // --- a ajuda automática (1 bordoada a cada 2 inimigos avistados) ---
     vistos: 0,                 // inimigos que já entraram no raio do jogador
-    AJUDA_CADA: 10,
+    AJUDA_CADA: 2,
     alvo: null,                // o inimigo da bordoada corrente
     ataqueFase: 0,             // 0 = voando até o alvo, 1 = bordoada
     ataqueT: 0,
 
-    // Resgate: a fase chama quando a jaula quebra. Nasce no lugar da jaula e
-    // a mola o leva até o posto atrás do jogador.
+    // Nasce ativo a partir da fase 6 (ver engine.js loadLevel) ou no lugar
+    // da jaula, se algum dia alguém chamar isso manualmente de novo. A mola
+    // o leva até o posto atrás do jogador.
     rescue: function (x, y) {
       this.active = true;
       this.x = x; this.y = y;
       this.vx = 0; this.vy = 0;
-      this.cheer = 1.2;        // sai da jaula comemorando
+      this.cheer = 1.2;        // entra comemorando
       this.mode = 'segue';
       this.restTimer = 0;
       this.vistos = 0;
@@ -238,12 +246,14 @@ window.FG = window.FG || {};
       }
     },
 
-    // ---- a ajuda automática: 1 inimigo a cada 10 ----
-    // Conta cada inimigo vivo que ENTRA no raio de 300px do jogador (a marca
-    // _murphVisto vive no próprio objeto do inimigo e morre com ele no
-    // repovoamento do enemies.reset). No décimo, parte para a bordoada no
-    // inimigo contado mais próximo — e SÓ nesse: o contador zera no ato,
-    // então ele nunca limpa a fase sozinho.
+    // A ajuda de fase não tem botão nem cansaço — mas tem cota: 1 bordoada a
+    // cada 2 inimigos que chegam perto do jogador, não qualquer um a
+    // qualquer momento. Quem limpa a fase continua sendo o jogador; o
+    // MurphOliver só dá uma força de vez em quando. O ÚNICO lugar onde ele
+    // "cansa" de verdade (descanso de 30s) e precisa de comando continua
+    // sendo a cóceja do chefão (ver command()/podeComandar, botão B) — essa
+    // distinção é o ponto todo: ajuda de fase é automática e sem botão,
+    // ajuda de chefão é cara e sob comando.
     contarInimigos: function (p) {
       var en = FG.enemies;
       if (!en || !en.list || typeof en.kill !== 'function') return;

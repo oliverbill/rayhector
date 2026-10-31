@@ -3,14 +3,17 @@
 // da caverna e as dos chefões das fases 1 a 6, mp3s de verdade tocados por
 // um <audio> (ver ARQUIVOS, mais abaixo) — se o arquivo não carregar, a
 // versão procedural ('caverna' ou 'boss') assume o lugar e a fase nunca
-// fica muda.
+// fica muda. O chefão da fase 7 (Torpedão Francisco) ainda não tem mp3
+// próprio: usa a trilha procedural genérica 'boss', mesmo ponto de partida
+// que todos os outros chefões tiveram antes de ganhar arquivo.
 //
 // Contrato (ver SPEC.md):
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
 //   FG.audio.music(name) — 'overworld'|'boss'|'boss1'|'boss2'|'boss3'|'boss4'|
 //                          'boss5'|'boss6'|'pantano'|'mansao'|'coliseu'|
-//                          'caverna'|'floresta'|null; troca com fade ~0.4s
+//                          'caverna'|'floresta'|'praia'|null; troca com
+//                          fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
 // vira no-op silencioso se o init ainda não rodou ou o contexto não roda.
@@ -565,6 +568,25 @@ window.FG = window.FG || {};
     71, 0, 69, 0, 67, 0, 0, 0,    // G:  pousa no sol — fecho
   ];
 
+  // A trilha da PRAIA/fundo do mar: BPM bem mais lento que tudo (82), pad
+  // sustentado por baixo (a mesma cama do pântano) e por cima um arpejo
+  // pentatônico de sol maior tocado num sine puro — "brilho de luz coando
+  // na água" em vez de flauta ou sino. Nada de bumbo/caixa: o pulso vem de
+  // um swell de ruído filtrado (a onda lambendo), e bolhas soltas fora da
+  // grade preenchem o resto, como os pios da floresta.
+  var PR_RAIZ = [43, 50, 52, 48, 43, 50, 52, 48]; // G2 D3 Em3 C3 G2 D3 Em3 C3
+
+  var PR_MEL = [
+    67, 0, 71, 0, 74, 0, 71, 0,   // G:  sol si ré' si
+    62, 0, 67, 0, 71, 0, 67, 0,   // D:  ré sol si sol
+    64, 0, 67, 0, 71, 0, 74, 0,   // Em: mi sol si ré'
+    60, 0, 64, 0, 67, 0, 64, 0,   // C:  dó mi sol mi
+    69, 0, 74, 0, 71, 0, 67, 0,   // G:  lá ré' si sol — sobe e desce
+    62, 0, 66, 0, 69, 0, 66, 0,   // D:  variação
+    64, 0, 69, 0, 72, 0, 67, 0,   // Em: mi lá dó' sol
+    60, 0, 62, 0, 64, 0, 0, 0,    // C:  dó ré mi — respira, fecho
+  ];
+
   var SONGS = {
     overworld: {
       bpm: 104,
@@ -607,6 +629,12 @@ window.FG = window.FG || {};
       stepDur: 60 / 116 / 2, // colcheia
       steps: 64,
       agenda: agendaFloresta,
+    },
+    praia: {
+      bpm: 82,
+      stepDur: 60 / 82 / 2, // colcheia
+      steps: 64,
+      agenda: agendaPraia,
     },
   };
 
@@ -882,6 +910,20 @@ window.FG = window.FG || {};
            attack: 0.005, dest: dest });
   }
 
+  // bolha subindo: sine fino com a frequência escapando pra cima rápido —
+  // vive FORA da grade, como o pio, pontuando que estamos debaixo d'água.
+  function bolha(t, dest) {
+    tone({ t: t, dur: 0.24, vol: 0.045, type: 'sine', freq: 480, freqEnd: 1500,
+           attack: 0.01, dest: dest });
+  }
+
+  // onda lambendo a areia: swell de ruído passa-baixa, ataque e decay longos
+  // — o pulso da praia no lugar de bumbo/caixa, sem nenhum estalo seco.
+  function ondaLeve(t, dest) {
+    ruido({ t: t, dur: 0.7, vol: 0.05, ftype: 'lowpass', f0: 900, f1: 260, q: 0.8,
+           attack: 0.18, dest: dest });
+  }
+
   function agendaFloresta(step, t, dest) {
     var s = step % 64;
     var volta = Math.floor(step / 64);
@@ -915,6 +957,43 @@ window.FG = window.FG || {};
     // 3 em 3 voltas, pra nunca virar padrão
     if (s === 13 || s === 43) pio(t, dest);
     if (volta % 3 === 2 && s === 27) pio(t, dest);
+  }
+
+  function agendaPraia(step, t, dest) {
+    var s = step % 64;
+    var volta = Math.floor(step / 64);
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.praia.stepDur;
+
+    // pad sustentado o compasso inteiro: fundamental + 3ª + 5ª, bem baixo na
+    // mixagem — a mesma ideia de cama do pântano, só que em modo maior
+    // aberto em vez de menor fechado
+    if (dentro === 0) {
+      var raiz = PR_RAIZ[compasso];
+      tone({ t: t, dur: dur * 8, vol: 0.045, type: 'sine', freq: nf(raiz),
+             filtro: { type: 'lowpass', f0: 420 }, attack: 0.3, dest: dest });
+      tone({ t: t, dur: dur * 8, vol: 0.03, type: 'sine', freq: nf(raiz + 4 + 12),
+             attack: 0.35, dest: dest });
+      tone({ t: t, dur: dur * 8, vol: 0.025, type: 'sine', freq: nf(raiz + 7 + 12),
+             attack: 0.35, dest: dest });
+    }
+
+    // arpejo de "luz na água": sine puro, bem suave, sem o brilho de
+    // harmônico que a flauta da floresta tem — mais difuso, debaixo d'água
+    if (PR_MEL[s]) {
+      tone({ t: t, dur: dur * 3.2, vol: 0.1, type: 'sine', freq: nf(PR_MEL[s]),
+             attack: 0.09, dest: dest });
+    }
+
+    // onda lambendo a areia nos tempos 1 e 5 — pulso bem mais espaçado que
+    // qualquer outra fase, porque a praia é a mais lenta das sete
+    if (dentro === 0 || dentro === 4) ondaLeve(t, dest);
+
+    // bolhas soltas fora da grade, em passos primos — o pio da floresta
+    // virado bolha; um terceiro borbulho só de 3 em 3 voltas
+    if (s === 11 || s === 37) bolha(t, dest);
+    if (volta % 3 === 1 && s === 51) bolha(t, dest);
   }
 
   // -- máquina do scheduler --
