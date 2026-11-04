@@ -52,6 +52,56 @@ window.FG = window.FG || {};
     peixes.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, w: 22, h: 13, rot: 0 });
   }
 
+  // ---------- MAREMOTO: a parede de água da arena ----------
+  // A cada 30s o recife inteiro se mexe: 1,5s de aviso (rugido grave e a
+  // água escurecendo na beirada esquerda) e depois uma parede de água
+  // atravessa a arena da esquerda para a direita — ou seja, EMPURRANDO o
+  // jogador para cima do Francisco, que mora na direita. Quem é pego perde o
+  // controle por MAREMOTO_PARALISIA segundos: não é dano, é a janela que o
+  // chefão tem para bater nele de graça. Não há como desviar por cima nem por
+  // baixo (é um maremoto — a coluna de água é inteira); o que dá para fazer é
+  // estar longe do chefão quando ela chegar, e gastar a cóceja do MurphOliver
+  // para interromper o ataque dele enquanto o controle não volta.
+  const MAREMOTO_EVERY = 30;        // segundos entre ondas
+  const MAREMOTO_AVISO = 1.5;       // telegraph antes da onda largar
+  const MAREMOTO_PARALISIA = 2.2;   // segundos sem controle, para quem é pego
+  const ONDA_W = 150;               // espessura da parede de água
+  const ONDA_SPEED = 900;           // px/s de travessia
+  const ONDA_H = 460;               // altura desenhada, do chão para cima
+
+  const mare = {
+    state: 'off',   // off|aviso|onda
+    timer: 0,       // off: até a próxima onda; aviso: até largar
+    x: 0,           // centro da parede de água
+    pegou: false,   // já paralisou nesta onda? (uma vez por onda, não por frame)
+  };
+
+  // ---------- RODAMOINHO: o puxão para dentro da luta ----------
+  // A cada 15s abre um rodamoinho embaixo do jogador. Meio segundo de sucção
+  // (dá para fugir se já estiver correndo para fora do raio) e, se ele ainda
+  // estiver dentro, o redemoinho o CARREGA até a cara do Francisco e o solta
+  // lá — é o que impede a luta de virar "fico no canto esquerdo atirando de
+  // longe". Durante o carrego quem manda na posição é este arquivo (p.ride,
+  // mesmo contrato da montanha-russa), e por isso ele não leva dano no
+  // caminho: a conta chega ao ser solto, colado no chefão.
+  const RODA_EVERY = 15;        // segundos entre rodamoinhos
+  const RODA_SUCCAO = 0.55;     // telegraph girando e puxando
+  const RODA_GRAB_R = 120;      // raio em que o puxão pega de verdade
+  const RODA_CARRY = 0.8;       // segundos de viagem até o chefão
+
+  const roda = {
+    state: 'off',   // off|succao|carregando|fim
+    timer: 0,
+    x: 0, y: 0,     // olho do rodamoinho
+    fromX: 0, fromY: 0, // de onde o jogador saiu (interpolação da viagem)
+    t: 0,           // 0..1 da viagem
+    giro: 0,        // ângulo acumulado do desenho
+  };
+
+  // Marca de dono do p.ride durante o carrego — objeto só para identidade,
+  // como o `o` da montanha-russa em obstacles.js.
+  const RIDE_RODA = { tipo: 'rodamoinho' };
+
   const MAXMINA = 8;
   const minas = [];
   for (let i = 0; i < MAXMINA; i++) {
@@ -108,7 +158,11 @@ window.FG = window.FG || {};
       this.state = 'intro';
       this.timer = 1.2;
       FG.audio.sfx('bossRoar');
-      FG.audio.music('boss');
+      FG.audio.music('boss7');
+      // os dois perigos de arena começam a contar do zero da luta
+      mare.timer = MAREMOTO_EVERY;
+      mare.state = 'off';
+      roda.timer = RODA_EVERY;
     },
 
     resolveGeometry() {
@@ -145,6 +199,7 @@ window.FG = window.FG || {};
       this.cardumeAngs = [];
       for (let i = 0; i < MAXPEIXE; i++) peixes[i].active = false;
       for (let i = 0; i < MAXMINA; i++) minas[i].active = false;
+      resetHazards();
     },
 
     refreshPose() {
@@ -490,11 +545,17 @@ window.FG = window.FG || {};
     update(dt) {
       this.step(dt);
       if (this.started || this.dead) updateBossStuff(dt);
+      updateHazards(dt);
     },
 
     draw(ctx, cam) {
+      drawRodamoinho(ctx, cam);   // atrás de tudo: o jogador é sugado por cima dele
       drawFrancisco(ctx, cam);
       drawBossStuff(ctx, cam);
+      // a parede de água fica na frente do chefão, mas ainda ATRÁS do
+      // jogador (o engine pinta o player depois dos inimigos) — de propósito:
+      // paralisado dentro da onda ele continua visível
+      drawMaremoto(ctx, cam);
     },
   };
 
@@ -567,6 +628,262 @@ window.FG = window.FG || {};
       spawnParticle(x, y, Math.cos(a) * v, Math.sin(a) * v, 0.45, 4 + Math.random() * 4,
         'rgba(255,200,120,0.85)', 0);
     }
+  }
+
+  // ==================================================================
+  // MAREMOTO e RODAMOINHO — os dois perigos da arena, em cima dos quatro
+  // ataques do chefão. Não pertencem a ele (não param quando ele está
+  // exposto, e não dependem do ataque da vez): são o recife reagindo.
+  // ==================================================================
+  function resetHazards() {
+    mare.state = 'off'; mare.timer = 0; mare.x = 0; mare.pegou = false;
+    roda.state = 'off'; roda.timer = 0; roda.t = 0; roda.giro = 0;
+    const p = FG.player;
+    if (p) {
+      // só solta o que é nosso — p.ride de outra coisa não se mexe
+      if (p.ride === RIDE_RODA) p.ride = null;
+      p.paralisado = 0;
+    }
+  }
+
+  // Só com a luta de fato em curso: nem na intro, nem depois de morto — nada
+  // de paralisar o jogador no meio da cena de vitória.
+  function hazardsAtivos() {
+    return boss.started && boss.active && !boss.dead && boss.state !== 'intro';
+  }
+
+  function updateHazards(dt) {
+    const p = FG.player;
+    if (!p || !hazardsAtivos()) {
+      if (mare.state !== 'off' || roda.state !== 'off') resetHazards();
+      return;
+    }
+    const a = FG.level.arena;
+
+    // ---------------- MAREMOTO ----------------
+    if (mare.state === 'off') {
+      mare.timer -= dt;
+      if (mare.timer <= 0) {
+        mare.state = 'aviso';
+        mare.timer = MAREMOTO_AVISO;
+        mare.pegou = false;
+        FG.audio.sfx('maremoto');
+      }
+    } else if (mare.state === 'aviso') {
+      mare.timer -= dt;
+      // espuma juntando na beirada esquerda: é de lá que a parede vem
+      if (Math.random() < 0.7) {
+        spawnParticle(a.x + rand(0, 50), boss.groundY - Math.random() * ONDA_H,
+          rand(60, 200), rand(-50, 10), 0.5, 2 + Math.random() * 3,
+          'rgba(230,250,255,0.6)', -30);
+      }
+      if (mare.timer <= 0) {
+        mare.state = 'onda';
+        mare.x = a.x - ONDA_W;
+        boss.shake = 0.8;
+      }
+    } else { // 'onda' — atravessando a arena
+      mare.x += ONDA_SPEED * dt;
+      for (let k = 0; k < 2; k++) {
+        spawnParticle(mare.x + rand(-ONDA_W / 2, ONDA_W / 2),
+          boss.groundY - Math.random() * ONDA_H, rand(140, 340), rand(-90, 20),
+          0.45, 2 + Math.random() * 4, 'rgba(235,252,255,0.7)', -40);
+      }
+      // a coluna de água é inteira: maremoto não se desvia por cima nem por
+      // baixo, o que dá para escolher é ONDE estar quando ela passar
+      const dentro = (p.x + p.w) > mare.x - ONDA_W / 2 && p.x < mare.x + ONDA_W / 2;
+      if (dentro && !mare.pegou && p.ride !== RIDE_RODA) {
+        mare.pegou = true;
+        p.paralisar(MAREMOTO_PARALISIA);
+        p.vx = 520;   // vai junto com a água — ou seja, para cima do chefão
+        p.vy = -120;
+        FG.audio.sfx('sinking');
+      }
+      if (mare.x > a.x + a.w + ONDA_W) {
+        mare.state = 'off';
+        mare.timer = MAREMOTO_EVERY;
+      }
+    }
+
+    // ---------------- RODAMOINHO ----------------
+    if (roda.state === 'off') {
+      roda.timer -= dt;
+      if (roda.timer <= 0) {
+        roda.state = 'succao';
+        roda.timer = RODA_SUCCAO;
+        roda.x = p.x + p.w / 2;
+        roda.y = p.y + p.h / 2;
+        roda.giro = 0;
+        FG.audio.sfx('rodamoinho');
+      }
+    } else if (roda.state === 'succao') {
+      roda.timer -= dt;
+      roda.giro += dt * 9;
+      const dx = roda.x - (p.x + p.w / 2), dy = roda.y - (p.y + p.h / 2);
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      // puxão de aviso: forte o bastante para sentir, fraco o bastante para
+      // quem já estava correndo para fora conseguir sair do raio
+      if (p.ride !== RIDE_RODA && d < RODA_GRAB_R * 2.2) {
+        p.vx += (dx / d) * 430 * dt;
+        p.vy += (dy / d) * 300 * dt;
+      }
+      for (let k = 0; k < 2; k++) {
+        const ang = roda.giro * 2 + k * Math.PI;
+        const rr = 30 + Math.random() * 70;
+        spawnParticle(roda.x + Math.cos(ang) * rr, roda.y + Math.sin(ang) * rr,
+          -Math.cos(ang) * 180, -Math.sin(ang) * 180, 0.4, 2 + Math.random() * 2.5,
+          'rgba(200,240,255,0.65)', 0);
+      }
+      if (roda.timer <= 0) {
+        if (d < RODA_GRAB_R && !p.hang && !p.ride) {
+          roda.state = 'carregando';
+          roda.t = 0;
+          roda.fromX = p.x;
+          roda.fromY = p.y;
+          p.ride = RIDE_RODA;   // daqui até soltar, a posição é nossa
+          p.vx = 0; p.vy = 0;
+          FG.audio.sfx('rodamoinho');
+        } else {
+          roda.state = 'off';
+          roda.timer = RODA_EVERY;   // escapou: o próximo vem no tempo normal
+        }
+      }
+    } else { // 'carregando' — a viagem até a cara do Francisco
+      roda.giro += dt * 15;
+      roda.t = Math.min(1, roda.t + dt / RODA_CARRY);
+      const lado = roda.fromX < boss.x ? -1 : 1;  // chega pelo lado de onde veio
+      // o chefão pode estar no meio de um torpedo, colado numa parede — o
+      // destino fica preso dentro da arena para o jogador nunca ser depositado
+      // dentro da pedra
+      const alvoX = Math.max(a.x + 40, Math.min(a.x + a.w - 40 - p.w,
+        boss.x + lado * 110 - p.w / 2));
+      const alvoY = boss.y - DIVER_H * 0.45 - p.h / 2;
+      const e = roda.t * roda.t * (3 - 2 * roda.t);  // smoothstep: sai devagar, chega devagar
+      p.x = roda.fromX + (alvoX - roda.fromX) * e;
+      p.y = roda.fromY + (alvoY - roda.fromY) * e;
+      roda.x = p.x + p.w / 2;
+      roda.y = p.y + p.h / 2;
+      if (Math.random() < 0.9) {
+        spawnParticle(roda.x + rand(-26, 26), roda.y + rand(-26, 26),
+          rand(-90, 90), rand(-90, 90), 0.35, 2 + Math.random() * 3,
+          'rgba(210,245,255,0.7)', 0);
+      }
+      if (roda.t >= 1) {
+        p.ride = null;
+        p.vx = -lado * 60;
+        p.vy = 0;
+        p.facing = -lado;      // solta já encarando o chefão
+        roda.state = 'off';
+        roda.timer = RODA_EVERY;
+      }
+    }
+  }
+
+  function drawMaremoto(ctx, cam) {
+    if (mare.state === 'off') return;
+    const a = FG.level.arena;
+    const topo = boss.groundY - ONDA_H, baixo = boss.groundY + 40;
+    ctx.save();
+    ctx.translate(-cam.x, -cam.y);
+
+    if (mare.state === 'aviso') {
+      // a água escurecendo na beirada de onde a onda vem, pulsando no tempo
+      // que falta — é o único aviso, e precisa ser visível de longe
+      const pulso = 0.25 + 0.3 * Math.abs(Math.sin(FG.engine.time * 8));
+      const g = ctx.createLinearGradient(a.x, 0, a.x + 260, 0);
+      g.addColorStop(0, 'rgba(20,70,110,' + pulso.toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(20,70,110,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(a.x, topo, 260, baixo - topo);
+      ctx.restore();
+      return;
+    }
+
+    // a parede: corpo azul translúcido, crista branca espumando, listras
+    // claras correndo por dentro para dar a sensação de volume de água
+    const x0 = mare.x - ONDA_W / 2;
+    const g = ctx.createLinearGradient(x0, 0, x0 + ONDA_W, 0);
+    g.addColorStop(0, 'rgba(120,200,230,0.22)');
+    g.addColorStop(0.55, 'rgba(60,150,200,0.55)');
+    g.addColorStop(1, 'rgba(235,252,255,0.75)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, topo, ONDA_W, baixo - topo);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 9; i++) {
+      const yy = topo + (i + 0.5) * ((baixo - topo) / 9);
+      const ond = Math.sin(FG.engine.time * 6 + i) * 18;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 16 + ond, yy);
+      ctx.quadraticCurveTo(x0 + ONDA_W * 0.6, yy - 14, x0 + ONDA_W - 6 + ond * 0.4, yy + 6);
+      ctx.stroke();
+    }
+
+    // crista: bolhas grandes na frente da parede, onde ela arrebenta
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for (let i = 0; i < 14; i++) {
+      const yy = topo + ((i * 97) % (baixo - topo));
+      const r = 5 + ((i * 31) % 9);
+      ctx.beginPath();
+      ctx.arc(x0 + ONDA_W - 4 + Math.sin(FG.engine.time * 5 + i) * 6, yy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawRodamoinho(ctx, cam) {
+    if (roda.state === 'off') return;
+    const carregando = roda.state === 'carregando';
+    const R = carregando ? 95 : RODA_GRAB_R;
+    ctx.save();
+    ctx.translate(roda.x - cam.x, roda.y - cam.y);
+    ctx.rotate(roda.giro);
+
+    // funil: anéis concêntricos cada vez mais escuros, dando o buraco
+    for (let i = 4; i >= 1; i--) {
+      const rr = R * (i / 4);
+      ctx.fillStyle = 'rgba(10,40,70,' + (0.1 + (5 - i) * 0.09).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rr, rr * 0.82, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // braços da espiral
+    ctx.strokeStyle = 'rgba(225,248,255,0.65)';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    for (let b = 0; b < 4; b++) {
+      ctx.save();
+      ctx.rotate((b / 4) * Math.PI * 2);
+      ctx.beginPath();
+      for (let s = 0; s <= 16; s++) {
+        const f = s / 16;
+        const ang = f * 2.4;
+        const rr = R * (1 - f * 0.86);
+        const px = Math.cos(ang) * rr, py = Math.sin(ang) * rr * 0.82;
+        if (s === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // raio em que o puxão pega de verdade, enquanto ainda dá para fugir
+    if (!carregando) {
+      ctx.save();
+      ctx.globalAlpha = 0.3 + 0.2 * Math.abs(Math.sin(FG.engine.time * 7));
+      ctx.strokeStyle = '#9ce8ff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 8]);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, RODA_GRAB_R, RODA_GRAB_R * 0.82, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
   }
 
   // ==================================================================

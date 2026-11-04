@@ -134,6 +134,17 @@ window.FG = window.FG || {};
     ctx.fill();
   }
 
+  // Controle morto: é este objeto que entra no lugar do FG.input enquanto o
+  // Fagulho está paralisado (ver `paralisado` no update). Mais seguro que
+  // espalhar `if (paralisado)` por cada leitura de botão — nada do input
+  // real vaza, nem os *Pressed de um frame.
+  const NO_INPUT = {
+    left: false, right: false, down: false, jump: false, attack: false, interact: false,
+    companion: false, baba: false,
+    jumpPressed: false, attackPressed: false, interactPressed: false,
+    companionPressed: false, babaPressed: false,
+  };
+
   const player = {
     // ---------- campos do contrato ----------
     x: 0, y: 0, w: 30, h: 44,
@@ -159,10 +170,24 @@ window.FG = window.FG || {};
     // decide a falha (afundou demais) é o engine, olhando inQuicksand/qsEntryY.
     inQuicksand: false,
     qsEntryY: 0,
+    // Paralisado: segundos restantes sem controle nenhum (nem corrida, nem
+    // pulo, nem soco) — quem liga é o maremoto do Torpedão Francisco
+    // (boss7.js), via paralisar(). A física continua rodando: ele fica à
+    // deriva, afundando devagar, e é isso que dá ao chefão a janela de bater
+    // nele. Dano e invulnerabilidade seguem normais.
+    paralisado: 0,
 
     // ---------- lógica ----------
     update(dt) {
-      const input = FG.input;
+      let input = FG.input;
+
+      // Paralisia tem precedência sobre tudo menos os blocos de cipó/atração
+      // mais abaixo (lá o controle já não vale): o timer corre e o input real
+      // é trocado pelo morto antes de qualquer leitura de botão.
+      if (this.paralisado > 0) {
+        this.paralisado = Math.max(0, this.paralisado - dt);
+        input = NO_INPUT;
+      }
 
       // ---------- passageiro de atração: mesmo tratamento do cipó ----------
       if (this.ride) {
@@ -507,6 +532,13 @@ window.FG = window.FG || {};
       }
     },
 
+    // Tira o controle do jogador por `t` segundos (maremoto da fase 7).
+    // Nunca encurta uma paralisia em curso — uma onda chegando em cima de
+    // outra só pode piorar, não salvar.
+    paralisar(t) {
+      if (t > this.paralisado) this.paralisado = t;
+    },
+
     hurt(dmg, fromX) {
       // passageiro de uma atração (ex. montanha-russa): imune por enquanto
       // durar o passeio — não faz sentido levar dano de espinho/trovão numa
@@ -532,6 +564,7 @@ window.FG = window.FG || {};
       this.onGround = false;
       this.hang = null;         // nunca renascer ainda pendurado num cipó
       this.ride = null;         // nem no meio de um passeio de atração
+      this.paralisado = 0;      // nem paralisado por uma onda que já passou
       this.attackBox.active = false;
       coyoteTimer = 0; jumpBuffer = 0; jumpsUsed = 0; jumpCut = false;
       gliding = false; glideLeft = GLIDE_TIME; attackTimer = 0; attackCooldown = 0;
@@ -769,6 +802,32 @@ window.FG = window.FG || {};
         ctx.restore();
         ctx.fillStyle = '#fff0b0';
         ctx.beginPath(); ctx.arc(0, -SH - 4, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // ---- paralisado (maremoto): estrelinhas girando sobre a cabeça ----
+      // É o aviso visual de que o controle não responde — sem isso o jogador
+      // só sente que o jogo travou. Elipse achatada, para parecer que giram
+      // em volta da cabeça e não num anel chapado.
+      if (this.paralisado > 0) {
+        ctx.save();
+        ctx.fillStyle = '#ffe070';
+        ctx.shadowColor = '#ffd040';
+        ctx.shadowBlur = 8;
+        for (let i = 0; i < 3; i++) {
+          const ang = t * 5 + (i / 3) * Math.PI * 2;
+          const ex = Math.cos(ang) * 15, ey = -SH - 8 + Math.sin(ang) * 4;
+          const r = 3 + Math.sin(ang) * 0.8;
+          ctx.beginPath();
+          for (let k = 0; k < 10; k++) {
+            const a2 = (k / 10) * Math.PI * 2 - Math.PI / 2;
+            const rr = k % 2 ? r * 0.45 : r;
+            if (k === 0) ctx.moveTo(ex + Math.cos(a2) * rr, ey + Math.sin(a2) * rr);
+            else ctx.lineTo(ex + Math.cos(a2) * rr, ey + Math.sin(a2) * rr);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
       }
 
       ctx.restore();

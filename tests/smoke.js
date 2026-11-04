@@ -87,9 +87,9 @@ global.window.FG = {};
 // exercita as três. Só assets/audio/player/enemies/engine são obrigatórios.
 const order = [
   'assets.js', 'audio.js',
-  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js',
+  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js', 'level7.js',
   'obstacles.js', 'player.js', 'companion.js', 'babachops.js', 'allistergator.js', 'simon.js', 'poe.js', 'ickylicky.js', 'rabiebaby.js',
-  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js',
+  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js', 'boss7.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {
@@ -260,6 +260,50 @@ for (let f = 0; f < totalFases; f++) {
       throw new Error('cóceja do Murph não tirou 1 de hp: ' + hpAntesM + ' -> ' + boss.hp);
     }
     console.log('murph: cóceja com dano ok (hp %d -> %d)', hpAntesM, boss.hp);
+  }
+
+  // ---- fase 7: rodamoinho (15s) e maremoto (30s) ----
+  // Os dois perigos de arena do Torpedão Francisco. O rodamoinho tem de
+  // DEPOSITAR o jogador perto do chefão e devolver o controle (p.ride limpo);
+  // o maremoto tem de PARALISAR — e paralisado o soco não pode sair, senão a
+  // janela que o chefão ganha não vale nada. O relógio aqui é o do jogo
+  // (frames de 16,7ms), por isso 15s = ~900 frames.
+  if (boss.id === 'francisco') {
+    const px0 = FG.player.x;
+    let levado = false, perto = 0;
+    for (let k = 0; k < 1100 && !levado; k++) {
+      FG.player.hp = FG.player.maxHp;   // o chefão continua atacando: não é isso que se mede aqui
+      frames(1);
+      if (FG.player.ride) {             // está sendo carregado agora
+        levado = true;
+        for (let j = 0; j < 90 && FG.player.ride; j++) { FG.player.hp = FG.player.maxHp; frames(1); }
+        perto = Math.abs((FG.player.x + FG.player.w / 2) - boss.x);
+      }
+    }
+    if (!levado) throw new Error('rodamoinho não pegou o jogador em ~18s de luta');
+    if (FG.player.ride) throw new Error('rodamoinho não devolveu o controle (p.ride continua setado)');
+    if (perto > 200) throw new Error('rodamoinho não levou o jogador até o chefão: ficou a ' + perto.toFixed(0) + 'px');
+    console.log('rodamoinho: levou o jogador de x=%d até %dpx do chefão e soltou',
+      px0 | 0, perto | 0);
+
+    let paralisou = false, socouParalisado = false;
+    key('KeyX', true);                   // socando sem parar: paralisado não pode sair soco
+    for (let k = 0; k < 2200 && !paralisou; k++) {
+      FG.player.hp = FG.player.maxHp;
+      frames(1);
+      if (FG.player.paralisado > 0) {
+        paralisou = true;
+        for (let j = 0; j < 100 && FG.player.paralisado > 0; j++) {
+          FG.player.hp = FG.player.maxHp;
+          frames(1);
+          if (FG.player.attackBox.active) socouParalisado = true;
+        }
+      }
+    }
+    key('KeyX', false);
+    if (!paralisou) throw new Error('maremoto não paralisou o jogador em ~36s de luta');
+    if (socouParalisado) throw new Error('paralisado e o soco saiu: a janela do chefão não vale nada');
+    console.log('maremoto: paralisou o jogador e o soco não saiu durante a paralisia');
   }
 
   for (let i = 0; i < 14; i++) {

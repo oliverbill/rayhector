@@ -11,7 +11,7 @@
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
 //   FG.audio.music(name) — 'overworld'|'boss'|'boss1'|'boss2'|'boss3'|'boss4'|
-//                          'boss5'|'boss6'|'pantano'|'mansao'|'coliseu'|
+//                          'boss5'|'boss6'|'boss7'|'pantano'|'mansao'|'coliseu'|
 //                          'caverna'|'floresta'|'praia'|null; troca com
 //                          fade ~0.4s
 //
@@ -366,6 +366,20 @@ window.FG = window.FG || {};
     sinking: function (t) {
       ruido({ t: t, dur: 0.5, vol: 0.14, ftype: 'lowpass', f0: 700, f1: 160, q: 1.0, attack: 0.03 });
       tone({ t: t, dur: 0.4, vol: 0.12, type: 'sine', freq: 140, freqEnd: 60, attack: 0.02 });
+    },
+    // MAREMOTO (fase 7): estrondo grave e longo de parede de água chegando —
+    // é o aviso de 1,5s antes da onda cruzar a arena, por isso o ruído sobe
+    // de volume em vez de estourar de uma vez
+    maremoto: function (t) {
+      ruido({ t: t, dur: 1.6, vol: 0.2, ftype: 'lowpass', f0: 300, f1: 1400, q: 0.8, attack: 0.5 });
+      tone({ t: t, dur: 1.5, vol: 0.14, type: 'sine', freq: 50, freqEnd: 110, attack: 0.4 });
+      tone({ t: t + 0.9, dur: 0.7, vol: 0.1, type: 'triangle', freq: 90, freqEnd: 40, attack: 0.1 });
+    },
+    // RODAMOINHO (fase 7): sucção girando — parente do `sinking` da areia,
+    // mas subindo de frequência, porque este PUXA em vez de afundar
+    rodamoinho: function (t) {
+      ruido({ t: t, dur: 0.8, vol: 0.16, ftype: 'bandpass', f0: 400, f1: 1800, q: 3.0, attack: 0.06 });
+      tone({ t: t, dur: 0.7, vol: 0.12, type: 'sine', freq: 120, freqEnd: 300, attack: 0.04 });
     },
     // blip de menu
     select: function (t) {
@@ -1063,6 +1077,7 @@ window.FG = window.FG || {};
     boss4: { src: 'musica-boss4.mp3', vol: 0.9, fallback: 'boss' },
     boss5: { src: 'musica-boss5.mp3', vol: 0.9, fallback: 'boss' },
     boss6: { src: 'musica-boss6.mp3', vol: 0.9, fallback: 'boss' },
+    boss7: { src: 'musica-boss7.mp3', vol: 0.9, fallback: 'boss' },
   };
 
   var arqRuim = {};  // trilha cujo arquivo falhou: cai no procedural, sem insistir
