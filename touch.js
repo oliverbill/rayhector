@@ -78,6 +78,12 @@ window.FG = window.FG || {};
     // contrato, mas em SLOT PRÓPRIO — na floresta o botão do MurphOliver
     // (872,284) também existe, então o Icky mora à esquerda dele.
     { id: 'icky', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'icky' },
+    // chamada da Maggie Mako (dentada na chefã da fase 8, a Verola): mesmo
+    // contrato dos demais ajudantes, mesma ação 'baba' (a tecla B) — e no
+    // SLOT do Icky (748,260), pela mesma razão dele: na fase 8 o Murph está
+    // em cena e o (872,284) é o botão da cóceja. Fases diferentes, os dois
+    // nunca coexistem.
+    { id: 'maggie', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'maggie' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -116,6 +122,10 @@ window.FG = window.FG || {};
     if (b.id === 'icky') {
       return !!(FG.icky && typeof FG.icky.disponivel === 'function' &&
                 FG.icky.disponivel());
+    }
+    if (b.id === 'maggie') {
+      return !!(FG.maggie && typeof FG.maggie.disponivel === 'function' &&
+                FG.maggie.disponivel());
     }
     return true;
   }
@@ -806,6 +816,93 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão da Maggie Mako: a carinha da tubarona — cabeça teal com a dorsal,
+  // olhos bravos puxados, o sorriso enorme de dentes triangulares e o dente
+  // de tubarão dourado do colar. Na recarga (30s) fica apagado com o arco
+  // esvaziando; mesmo contrato dos outros ajudantes.
+  function maggieBtn(ctx, b, on) {
+    var mg = FG.maggie;
+    var resto = (mg && mg.restTimer > 0) ? mg.restTimer / (mg.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(mg && typeof mg.podeComandar === 'function' && mg.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(42,166,173,0.4)' : 'rgba(12,32,36,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(120,165,165,0.45)' : 'rgba(120,225,230,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // a dorsal no topo da cabeça
+    ctx.fillStyle = apagado ? '#4e8288' : '#2aa6ad';
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.14, b.y - r * 0.42);
+    ctx.quadraticCurveTo(b.x - r * 0.08, b.y - r * 0.82, b.x + r * 0.18, b.y - r * 0.86);
+    ctx.quadraticCurveTo(b.x + r * 0.08, b.y - r * 0.6, b.x + r * 0.16, b.y - r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    // cabeça teal
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y - r * 0.04, r * 0.54, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // olhos bravos puxados (brancos de pupila escura) + sobrancelha em V
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.2, b.y - r * 0.18, r * 0.13, r * 0.08, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.2, b.y - r * 0.18, r * 0.13, r * 0.08, -0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0b2326';
+    ctx.beginPath();
+    ctx.arc(b.x - r * 0.16, b.y - r * 0.17, r * 0.045, 0, Math.PI * 2);
+    ctx.arc(b.x + r * 0.16, b.y - r * 0.17, r * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0b2326';
+    ctx.lineWidth = r * 0.07;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.36, b.y - r * 0.36);
+    ctx.lineTo(b.x, b.y - r * 0.24);
+    ctx.lineTo(b.x + r * 0.37, b.y - r * 0.35);
+    ctx.stroke();
+    // o SORRISO enorme: bocão escuro com a fileira de dentes triangulares
+    ctx.fillStyle = '#5e1420';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.16, r * 0.4, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    for (var d2 = 0; d2 < 5; d2++) {
+      var tx = b.x - r * 0.3 + d2 * r * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(tx, b.y + r * 0.04);
+      ctx.lineTo(tx + r * 0.065, b.y + r * 0.2);
+      ctx.lineTo(tx + r * 0.13, b.y + r * 0.05);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // o dente de tubarão DOURADO do colar, abaixo do sorriso
+    ctx.fillStyle = apagado ? '#b09050' : '#e8b23a';
+    ctx.strokeStyle = '#0b2326';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.08, b.y + r * 0.44);
+    ctx.quadraticCurveTo(b.x - r * 0.08, b.y + r * 0.6, b.x, b.y + r * 0.74);
+    ctx.quadraticCurveTo(b.x + r * 0.08, b.y + r * 0.58, b.x + r * 0.08, b.y + r * 0.44);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#bfe6e0';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -822,6 +919,7 @@ window.FG = window.FG || {};
       if (b.tipo === 'poe') { poeBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'rabie') { rabieBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'icky') { ickyBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'maggie') { maggieBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);

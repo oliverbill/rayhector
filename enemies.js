@@ -1,8 +1,10 @@
 // Fagulho: Lendas do Bosque — enemies.js
 // FG.enemies: os bichos comuns (espinhoco, voadeira, sapeca, peixe, e os da
 // gruta submersa do pântano: piranha, carango, jacaré, candiru; os da
-// mansão: lobo, fantasma, ratazana; os da floresta: tarantula, cobra; e os
-// da praia: tubarao, peixeespada, baleia, orca), as pools de partícula e o registro de
+// mansão: lobo, fantasma, ratazana; os da floresta: tarantula, cobra; os da
+// praia: tubarao, peixeespada, baleia, orca; e os das terras de lava:
+// fantasmachama, piglin, ghast, blaze — estes dois últimos cuspindo bolas de
+// fogo de uma pool compartilhada), as pools de partícula e o registro de
 // chefões. Cada chefão mora no seu arquivo
 // (boss1.js, boss2.js, boss3.js) e regista-se aqui no load; enemies.js só
 // escolhe qual deles entra em cena, pelo bossId da fase. Nenhuma referência a
@@ -108,6 +110,117 @@ window.FG = window.FG || {};
     return best;
   }
 
+  // ------------------------------------------------------------------
+  // Bolas de fogo do Nether — pool fixa COMPARTILHADA entre ghast e blaze.
+  // Uma pool só porque os dois tipos convivem na mesma fase e o teto de
+  // projéteis em cena é um orçamento da fase, não de cada bicho: 12 chegam
+  // para um ghast (1 a cada ~2.8s) e dois blazes (rajadas de 3) sem nunca
+  // reciclar bola viva. Apagada inteira no reset() — projétil não sobrevive
+  // à troca de fase nem ao respawn.
+  // ------------------------------------------------------------------
+  const MAXB = 12;
+  const BOLA_SPD = 300;       // velocidade da bola (px/s)
+  const BOLA_DMG = 2;         // fogo do Nether dói mais que um esbarrão
+  const BOLA_R = 10;          // raio (a hitbox é o quadrado circunscrito)
+  const BOLA_VIDA = 4;        // segundos de vida máxima (rede de segurança)
+  const bolas = [];
+  for (let i = 0; i < MAXB; i++) {
+    bolas.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, ox: 0, oy: 0, age: 0 });
+  }
+  let bNext = 0;
+  // hitbox de trabalho reutilizada (nada de alocar objeto por frame)
+  const bolaRect = { x: 0, y: 0, w: BOLA_R * 2, h: BOLA_R * 2 };
+
+  function spawnBola(x, y, alvoX, alvoY) {
+    const b = bolas[bNext];
+    bNext = (bNext + 1) % MAXB;
+    const dx = alvoX - x, dy = alvoY - y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    b.active = true;
+    b.x = x; b.y = y;
+    b.ox = x; b.oy = y;       // origem: a bola some longe de onde nasceu
+    b.vx = (dx / d) * BOLA_SPD;
+    b.vy = (dy / d) * BOLA_SPD;
+    b.age = 0;
+    FG.audio.sfx('bossSpit');
+  }
+
+  // O centro da bola está dentro de algum sólido? (bola de fogo não fura pedra)
+  function bolaEmSolido(b) {
+    const solids = FG.level.solids;
+    for (let i = 0; i < solids.length; i++) {
+      const s = solids[i];
+      if (b.x >= s.x && b.x <= s.x + s.w && b.y >= s.y && b.y <= s.y + s.h) return true;
+    }
+    return false;
+  }
+
+  function updateBolas(dt) {
+    const p = FG.player;
+    for (let i = 0; i < MAXB; i++) {
+      const b = bolas[i];
+      if (!b.active) continue;
+      b.age += dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      // rastro de fogo, com parcimônia — a bola já tem glow no desenho
+      if (Math.random() < 0.45) {
+        spawnParticle(b.x + rand(-3, 3), b.y + rand(-3, 3), rand(-20, 20), rand(-30, 10),
+          0.35, 3 + Math.random() * 3, 'rgba(255,150,40,0.85)', -80);
+      }
+      // some: velha demais, dentro de pedra, ou a mais de ~1 tela da origem
+      const ddx = b.x - b.ox, ddy = b.y - b.oy;
+      if (b.age > BOLA_VIDA || bolaEmSolido(b) ||
+          ddx * ddx + ddy * ddy > (VIEW_W + 240) * (VIEW_W + 240)) {
+        b.active = false;
+        continue;
+      }
+      // contato com o player: 2 de dano (o hurt() já cuida do invuln)
+      bolaRect.x = b.x - BOLA_R;
+      bolaRect.y = b.y - BOLA_R;
+      if (FG.engine.rectsOverlap(bolaRect, p)) {
+        p.hurt(BOLA_DMG, b.x);
+        b.active = false;
+      }
+    }
+  }
+
+  function drawBolas(ctx, cam) {
+    ctx.save();
+    for (let i = 0; i < MAXB; i++) {
+      const b = bolas[i];
+      if (!b.active) continue;
+      const sx = b.x - cam.x, sy = b.y - cam.y;
+      if (sx < -40 || sx > VIEW_W + 40) continue;
+      // bola laranja incandescente com miolo claro e glow
+      const g = ctx.createRadialGradient(sx - 2, sy - 2, 1, sx, sy, BOLA_R + 4);
+      g.addColorStop(0, '#fff2c0');
+      g.addColorStop(0.4, '#ffb030');
+      g.addColorStop(1, '#d84a08');
+      ctx.shadowColor = '#ff8a20';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(sx, sy, BOLA_R, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Há chão logo abaixo do pé da frente? Para quem patrulha SEM cair da
+  // borda (o piglin): testa um ponto um passo à frente e um palmo abaixo
+  // dos pés contra os sólidos — sem sólido ali, a borda chegou.
+  function chaoAFrente(e) {
+    const px = e.dir > 0 ? e.x + e.w + 3 : e.x - 3;
+    const py = e.y + e.h + 10;
+    const solids = FG.level.solids;
+    for (let i = 0; i < solids.length; i++) {
+      const s = solids[i];
+      if (px >= s.x && px <= s.x + s.w && py >= s.y && py <= s.y + s.h) return true;
+    }
+    return false;
+  }
+
   // ==================================================================
   // Inimigos comuns
   // ==================================================================
@@ -148,11 +261,19 @@ window.FG = window.FG || {};
     else if (e.type === 'peixeespada') { e.w = 60; e.h = 22; } // praia: investida reta, igual ao peixe voador
     else if (e.type === 'baleia') { e.w = 260; e.h = 104; e.hp = 5; e.dmg = 3; } // praia: gigante, lenta, machuca igual um muro
     else if (e.type === 'orca') { e.w = 210; e.h = 76; e.hp = 4; e.dmg = 3; }    // praia: mais rápida e agressiva que o tubarão
+    else if (e.type === 'fantasmachama') { e.w = 36; e.h = 42; }                 // lava: bolota de fogo flutuante assustada
+    else if (e.type === 'piglin') { e.w = 44; e.h = 56; e.hp = 2; e.dmg = 2; }   // lava: bárbaro porco de espada dourada
+    else if (e.type === 'ghast') { e.w = 64; e.h = 64; e.hp = 2; }               // lava: cubo voador que cospe bola de fogo
+    else if (e.type === 'blaze') { e.w = 40; e.h = 52; e.hp = 2; }               // lava: bastões em órbita, rajada tripla
     else { e.w = 38; e.h = 32; } // sapeca
     // baseY: linha da patrulha da piranha/jacaré — desliza de volta ao spawnY
     // depois de um bote, para não teleportar na vertical ao retomar a ondulação.
     e.baseY = def.y;
     if (e.type === 'carango') e.timer = rand(1.2, 2.2); // primeira pinçada dessincronizada
+    // atiradores do Nether: primeiro tiro dessincronizado, para dois deles
+    // lado a lado não cuspirem em uníssono
+    if (e.type === 'ghast') e.timer = rand(0.8, 2.8);
+    if (e.type === 'blaze') { e.timer = rand(1.0, 3.2); e.shots = 0; }
     return e;
   }
 
@@ -864,6 +985,113 @@ window.FG = window.FG || {};
           e.baseY = e.y;
           e.vx = 0; e.vy = 0;
         }
+      }
+    } else if (e.type === 'fantasmachama') {
+      // Fantasma DE CHAMA das terras de lava: o parente ígneo do fantasma da
+      // mansão — mesma receita (sem gravidade, senoide em torno de baseY,
+      // deriva devagar na direção do jogador quando ele chega perto), só que
+      // o gatilho é fixo em ~260px e o corpo é uma bolota de fogo que vai
+      // soltando brasa. A ameaça continua sendo a insistência, não a
+      // velocidade.
+      const t = FG.engine.time + e.phase;
+      const dxF = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyF = (p.y + p.h / 2) - (e.y + e.h / 2);
+      const perto = Math.abs(dxF) < 260 && Math.abs(dyF) < 220;
+      if (perto) {
+        const d = Math.sqrt(dxF * dxF + dyF * dyF) || 1;
+        const SPD = 42;
+        e.x += (dxF / d) * SPD * dt;
+        e.baseY += (dyF / d) * SPD * dt;
+        e.dir = dxF >= 0 ? 1 : -1;
+      } else {
+        e.baseY += (e.spawnY - e.baseY) * Math.min(1, dt * 0.6);
+        e.x += (e.spawnX - e.x) * Math.min(1, dt * 0.4);
+      }
+      e.y = e.baseY + Math.sin(t * 1.8) * 14;
+      // brasinha subindo de vez em quando: fogo vivo avisa que está aceso
+      if (Math.random() < 0.05) {
+        spawnParticle(e.x + e.w * (0.3 + Math.random() * 0.4), e.y + e.h * 0.5,
+          rand(-12, 12), rand(-70, -30), 0.5, 2 + Math.random() * 2, 'rgba(255,160,50,0.85)', -60);
+      }
+    } else if (e.type === 'piglin') {
+      // Bárbaro piglin: patrulha a plataforma como o lobo (gravidade,
+      // colisão, vira na parede e nas bordas do range), mas SEM nunca cair
+      // da borda — antes de cada passo testa se há chão sob o pé da frente
+      // (chaoAFrente), porque lá embaixo é lava e piglin tem pavor dela.
+      // Com o jogador a <200px no mesmo nível ergue a espada dourada e
+      // INVESTE bem mais rápido.
+      const SPD_PATROL = 55, SPD_CARGA = 240;
+      e.vy += GRAV * dt;
+      const dxP = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyP = (p.y + p.h / 2) - (e.y + e.h / 2);
+      const investindo = Math.abs(dxP) < 200 && Math.abs(dyP) < 70;
+      if (investindo) e.dir = dxP >= 0 ? 1 : -1;
+      e.st = investindo ? 'investe' : 'parado';
+      e.vx = e.dir * (investindo ? SPD_CARGA : SPD_PATROL);
+      const wantVx = e.vx;
+      FG.engine.moveAndCollide(e, dt);
+      // meia-volta num teste só: borda à frente, parede, ou fim do range —
+      // uma condição composta para nunca virar duas vezes no mesmo frame
+      // (duas viradas se anulam e ele despencava na lava)
+      if ((e.onGround && !chaoAFrente(e)) ||
+          (wantVx !== 0 && e.vx === 0) ||
+          (e.dir > 0 && e.x > e.spawnX + e.range) ||
+          (e.dir < 0 && e.x < e.spawnX - e.range)) {
+        e.dir = -e.dir;
+      }
+    } else if (e.type === 'ghast') {
+      // Ghast: o cubo branco voador de tentáculos. Flutua em senoide dentro
+      // do range (sem gravidade) de olhos fechados e, com o jogador a
+      // <560px, abre os olhos vermelhos e cospe UMA bola de fogo mirada a
+      // cada ~2.8s (pool compartilhada com o blaze — ver spawnBola).
+      const t = FG.engine.time + e.phase;
+      const SPD = 38;
+      e.x += e.dir * SPD * dt;
+      if (e.dir > 0 && e.x > e.spawnX + e.range) e.dir = -1;
+      if (e.dir < 0 && e.x < e.spawnX - e.range) e.dir = 1;
+      e.y = e.spawnY + Math.sin(t * 1.2) * 26;
+      const dxG = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyG = (p.y + p.h / 2) - (e.y + e.h / 2);
+      e.timer -= dt;
+      if (e.timer <= 0 && dxG * dxG + dyG * dyG < 560 * 560) {
+        spawnBola(e.x + e.w / 2, e.y + e.h * 0.72,
+          p.x + p.w / 2, p.y + p.h / 2);
+        e.timer = 2.8;
+        e.st = 'atira';      // olhos abertos — o desenho lê este estado
+      }
+      // os olhos ficam abertos só um instante depois do cuspe; o resto do
+      // tempo o ghast dorme de olhos fechados, como no jogo de referência
+      if (e.st === 'atira' && e.timer < 2.2) e.st = 'parado';
+    } else if (e.type === 'blaze') {
+      // Blaze: paira no lugar subindo e descendo devagar (a amplitude é o
+      // range, com teto de 60px para não varrer a tela) e, a cada ~3.2s com
+      // o jogador a <480px, dispara uma RAJADA de 3 bolas de fogo em
+      // sequência rápida — cada uma mirada no jogador NO INSTANTE do
+      // próprio tiro, então correr durante a rajada é o que a torna justa.
+      const t = FG.engine.time + e.phase;
+      e.x = e.spawnX;
+      e.y = e.spawnY + Math.sin(t * 0.9) * Math.min(e.range, 60);
+      const dxZ = (p.x + p.w / 2) - (e.x + e.w / 2);
+      const dyZ = (p.y + p.h / 2) - (e.y + e.h / 2);
+      e.dir = dxZ >= 0 ? 1 : -1;
+      // fumaça cinza subindo — o blaze é brasa queimando o tempo todo
+      if (Math.random() < 0.06) {
+        spawnParticle(e.x + e.w * (0.25 + Math.random() * 0.5), e.y + e.h * 0.2,
+          rand(-10, 10), rand(-60, -30), 0.8, 3 + Math.random() * 3, 'rgba(130,130,135,0.5)', -40);
+      }
+      e.timer -= dt;
+      if (e.st === 'rajada') {
+        if (e.timer <= 0) {
+          spawnBola(e.x + e.w / 2, e.y + e.h * 0.5,
+            p.x + p.w / 2, p.y + p.h / 2);
+          e.shots -= 1;
+          if (e.shots <= 0) { e.st = 'parado'; e.timer = 3.2; }
+          else e.timer = 0.18;      // intervalo entre as 3 da rajada
+        }
+      } else if (e.timer <= 0 && dxZ * dxZ + dyZ * dyZ < 480 * 480) {
+        e.st = 'rajada';
+        e.shots = 3;
+        e.timer = 0;                // o primeiro tiro sai já no próximo passo
       }
     }
 
@@ -2402,6 +2630,335 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // --- fantasma de chama: bolota de fogo laranja com carinha assustada e
+  // bracinhos — o lençol aqui é a própria labareda, com o rabo de fogo
+  // ondulando embaixo e a ponta da chama dançando em cima ---
+  function drawFantasmaChama(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const tw = t * 3 + e.phase;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (e.dir < 0) ctx.scale(-1, 1);
+
+    // halo quente pulsando
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, e.w * 1.5);
+    halo.addColorStop(0, 'rgba(255,150,40,0.30)');
+    halo.addColorStop(1, 'rgba(255,100,10,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, e.w * 1.5, 0, Math.PI * 2); ctx.fill();
+
+    // corpo-labareda: cúpula redonda em cima, barra ondulada embaixo (o
+    // rabo de fogo, mesma construção da bainha do fantasma da mansão)
+    const g = ctx.createLinearGradient(0, -e.h * 0.55, 0, e.h * 0.5);
+    g.addColorStop(0, '#ffe9a0');
+    g.addColorStop(0.45, '#ffab2e');
+    g.addColorStop(1, '#e05808');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.46, 0);
+    ctx.quadraticCurveTo(-e.w * 0.5, -e.h * 0.5, 0, -e.h * 0.52);
+    ctx.quadraticCurveTo(e.w * 0.5, -e.h * 0.5, e.w * 0.46, 0);
+    const n = 4;
+    for (let i = 0; i <= n; i++) {
+      const fx = e.w * 0.46 - i * (e.w * 0.92 / n);
+      const wob = Math.sin(tw * 2.4 + i * 1.5) * 5;
+      ctx.lineTo(fx, e.h * 0.4 + wob + ((i % 2) ? 7 : 0));
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // ponta de chama dançando no topo da cabeça
+    ctx.fillStyle = '#ffd24a';
+    ctx.beginPath();
+    ctx.moveTo(-5, -e.h * 0.48);
+    ctx.quadraticCurveTo(Math.sin(tw * 3.6) * 6, -e.h * 0.82, 2 + Math.sin(tw * 3.6) * 4, -e.h * 0.66);
+    ctx.quadraticCurveTo(5, -e.h * 0.54, 5, -e.h * 0.46);
+    ctx.closePath();
+    ctx.fill();
+
+    // bracinhos de fogo, curtos, abanando — o desespero da carinha em gesto
+    ctx.strokeStyle = '#ffb030'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      const up = Math.sin(tw * 2.8 + (s > 0 ? 0 : 1.3)) * 4;
+      ctx.beginPath();
+      ctx.moveTo(s * e.w * 0.42, -e.h * 0.06);
+      ctx.quadraticCurveTo(s * e.w * 0.62, -e.h * 0.18 + up, s * e.w * 0.7, -e.h * 0.3 + up);
+      ctx.stroke();
+    }
+
+    // carinha assustada: olhos grandes arregalados e boca de "ó" torta
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.ellipse(s * e.w * 0.17, -e.h * 0.2, 5, 6.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#301008';
+      ctx.beginPath();
+      ctx.arc(s * e.w * 0.17 + 1.4, -e.h * 0.18, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // sobrancelhas erguidas de susto
+    ctx.strokeStyle = '#8a3008'; ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.26, -e.h * 0.36); ctx.lineTo(-e.w * 0.1, -e.h * 0.33);
+    ctx.moveTo(e.w * 0.1, -e.h * 0.33); ctx.lineTo(e.w * 0.26, -e.h * 0.36);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(80,20,5,0.75)';
+    ctx.beginPath();
+    ctx.ellipse(0, -e.h * 0.02, 3.6, 5, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // --- piglin: humanoide porco cúbico do Nether — cabeça caixote rosada com
+  // orelhas caídas, presas e olhos vermelhos, colete escuro e a espada
+  // DOURADA, erguida bem alto na investida ---
+  function drawPiglin(ctx, e, t) {
+    const cx = e.x + e.w / 2, gy = e.y + e.h;
+    const investe = e.st === 'investe';
+    const passo = Math.sin(t * (investe ? 16 : 8) + e.phase);
+    ctx.save();
+    ctx.translate(cx, gy);
+    ctx.scale(e.dir, 1);
+
+    // pernas cúbicas marchando
+    ctx.fillStyle = '#5a3440';
+    for (let s = -1; s <= 1; s += 2) {
+      const swing = passo * (investe ? 7 : 3) * s;
+      ctx.fillRect(s * e.w * 0.16 - 4 + swing * 0.4, -e.h * 0.3, 9, e.h * 0.3);
+    }
+
+    // tronco: colete de couro escuro sobre pele rosada
+    const g = ctx.createLinearGradient(0, -e.h * 0.68, 0, -e.h * 0.28);
+    g.addColorStop(0, '#e89aa0');
+    g.addColorStop(0.5, '#d4808a');
+    g.addColorStop(1, '#a85a66');
+    ctx.fillStyle = g;
+    ctx.fillRect(-e.w * 0.3, -e.h * 0.68, e.w * 0.6, e.h * 0.4);
+    ctx.fillStyle = '#3c2a1a';
+    ctx.fillRect(-e.w * 0.3, -e.h * 0.62, e.w * 0.6, e.h * 0.14);
+    // cinto com fivela de ouro
+    ctx.fillStyle = '#2a1c10';
+    ctx.fillRect(-e.w * 0.3, -e.h * 0.34, e.w * 0.6, 5);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillRect(-4, -e.h * 0.345, 8, 6);
+
+    // braço de trás, caído
+    ctx.strokeStyle = '#d4808a'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-e.w * 0.26, -e.h * 0.58);
+    ctx.lineTo(-e.w * 0.34, -e.h * 0.4 + passo * 2);
+    ctx.stroke();
+
+    // cabeça CAIXOTE rosada
+    const hy = -e.h * 0.68;      // base da cabeça
+    const hw = e.w * 0.52, hh = e.h * 0.34;
+    const hg = ctx.createLinearGradient(0, hy - hh, 0, hy);
+    hg.addColorStop(0, '#f2aab0');
+    hg.addColorStop(1, '#c86a76');
+    ctx.fillStyle = hg;
+    ctx.fillRect(-hw / 2, hy - hh, hw, hh);
+    // orelhas caídas dos lados
+    ctx.fillStyle = '#b05a68';
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(s * hw / 2, hy - hh * 0.85);
+      ctx.lineTo(s * (hw / 2 + 7), hy - hh * 0.4 + Math.sin(t * 5 + e.phase) * 1.5);
+      ctx.lineTo(s * hw / 2, hy - hh * 0.45);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // focinho quadrado com narinas
+    ctx.fillStyle = '#e0888e';
+    ctx.fillRect(hw * 0.1, hy - hh * 0.5, hw * 0.42, hh * 0.34);
+    ctx.fillStyle = '#7a3a44';
+    ctx.fillRect(hw * 0.2, hy - hh * 0.38, 3, 4);
+    ctx.fillRect(hw * 0.36, hy - hh * 0.38, 3, 4);
+    // presas para cima, saindo do focinho
+    ctx.fillStyle = '#f4ecd8';
+    ctx.fillRect(hw * 0.12, hy - hh * 0.26, 3.4, 7);
+    ctx.fillRect(hw * 0.44, hy - hh * 0.26, 3.4, 7);
+    // olhos VERMELHOS (pixel de fúria; mais acesos na investida)
+    ctx.save();
+    if (investe) { ctx.shadowColor = '#ff3020'; ctx.shadowBlur = 8; }
+    ctx.fillStyle = '#e82818';
+    ctx.fillRect(hw * 0.02, hy - hh * 0.72, 4.4, 4.4);
+    ctx.fillRect(hw * 0.3, hy - hh * 0.72, 4.4, 4.4);
+    ctx.restore();
+
+    // braço da frente com a espada DOURADA: baixa na patrulha, erguida bem
+    // alto na investida — o telegraph ambulante do atropelo
+    const ax = e.w * 0.26, ay = -e.h * 0.56;
+    const swAng = investe ? -1.9 : -0.5;     // ângulo da lâmina (erguida/baixa)
+    ctx.strokeStyle = '#d4808a'; ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax + 10, ay + (investe ? -12 : 10));
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(ax + 10, ay + (investe ? -12 : 10));
+    ctx.rotate(swAng);
+    // cabo e guarda
+    ctx.fillStyle = '#6a4a20';
+    ctx.fillRect(-2, -4, 4, 10);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillRect(-6, -6, 12, 4);
+    // lâmina dourada com fio claro
+    const lg = ctx.createLinearGradient(0, -26, 0, -6);
+    lg.addColorStop(0, '#ffe890');
+    lg.addColorStop(1, '#d8a018');
+    ctx.fillStyle = lg;
+    ctx.beginPath();
+    ctx.moveTo(-3, -6);
+    ctx.lineTo(-3, -22);
+    ctx.lineTo(0, -28);
+    ctx.lineTo(3, -22);
+    ctx.lineTo(3, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // --- ghast: o cubo branco voador, tentáculos pendurados ondulando, olhos
+  // FECHADOS (dois riscos tristes) que abrem VERMELHOS no instante do cuspe ---
+  function drawGhast(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const atira = e.st === 'atira';
+    const tw = t * 2 + e.phase;
+    ctx.save();
+    ctx.translate(cx, cy + Math.sin(tw * 1.4) * 2);
+
+    // tentáculos pendurados (desenhados antes do cubo, saem de trás dele)
+    ctx.strokeStyle = '#d8d8dc'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const bx = -e.w * 0.32 + i * e.w * 0.16;
+      const wob = Math.sin(tw * 2.2 + i * 1.1) * 6;
+      const len = e.h * (0.34 + (i % 2) * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(bx, e.h * 0.3);
+      ctx.quadraticCurveTo(bx + wob * 0.5, e.h * 0.3 + len * 0.6, bx + wob, e.h * 0.3 + len);
+      ctx.stroke();
+    }
+
+    // o CUBO branco, levemente sombreado para ter volume
+    const g = ctx.createLinearGradient(-e.w * 0.5, -e.h * 0.5, e.w * 0.4, e.h * 0.4);
+    g.addColorStop(0, '#fbfbfd');
+    g.addColorStop(0.6, '#e4e4ea');
+    g.addColorStop(1, '#babac4');
+    ctx.fillStyle = g;
+    ctx.fillRect(-e.w * 0.5, -e.h * 0.5, e.w, e.h * 0.82);
+    // aresta de sombra na base e na lateral (leitura de cubo, não de folha)
+    ctx.fillStyle = 'rgba(120,120,135,0.35)';
+    ctx.fillRect(-e.w * 0.5, e.h * 0.24, e.w, e.h * 0.08);
+    ctx.fillRect(e.w * 0.42, -e.h * 0.5, e.w * 0.08, e.h * 0.82);
+
+    if (atira) {
+      // olhos ABERTOS, vermelhos e acesos — só na janela do cuspe
+      ctx.save();
+      ctx.shadowColor = '#ff3020'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#e81818';
+      ctx.fillRect(-e.w * 0.3, -e.h * 0.26, e.w * 0.14, e.h * 0.14);
+      ctx.fillRect(e.w * 0.16, -e.h * 0.26, e.w * 0.14, e.h * 0.14);
+      ctx.restore();
+      // boca escancarada cuspindo
+      ctx.fillStyle = '#5a1212';
+      ctx.fillRect(-e.w * 0.12, -e.h * 0.02, e.w * 0.24, e.h * 0.2);
+    } else {
+      // olhos fechados: dois riscos caídos, a cara chorosa clássica
+      ctx.strokeStyle = '#55555f'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-e.w * 0.3, -e.h * 0.2); ctx.lineTo(-e.w * 0.14, -e.h * 0.16);
+      ctx.moveTo(e.w * 0.14, -e.h * 0.16); ctx.lineTo(e.w * 0.3, -e.h * 0.2);
+      ctx.stroke();
+      // lagrimazinha cinzenta sob um olho
+      ctx.fillStyle = 'rgba(140,140,155,0.6)';
+      ctx.beginPath();
+      ctx.ellipse(-e.w * 0.22, -e.h * 0.06, 2, 3.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // boca pequena, fechada
+      ctx.fillStyle = '#55555f';
+      ctx.fillRect(-e.w * 0.06, 0, e.w * 0.12, 3);
+    }
+    ctx.restore();
+  }
+
+  // um bastão dourado do blaze: retângulo vertical com pontas queimadas.
+  // Função de módulo (não closure dentro do draw) para não alocar por frame.
+  function drawBastaoBlaze(ctx, bx, by, escala) {
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.scale(escala, 1);
+    const bg = ctx.createLinearGradient(0, -9, 0, 9);
+    bg.addColorStop(0, '#ffe070');
+    bg.addColorStop(0.5, '#e8a020');
+    bg.addColorStop(1, '#a85e08');
+    ctx.fillStyle = bg;
+    ctx.fillRect(-2.6, -9, 5.2, 18);
+    ctx.fillStyle = 'rgba(90,40,5,0.8)';
+    ctx.fillRect(-2.6, -9, 5.2, 3);
+    ctx.fillRect(-2.6, 6, 5.2, 3);
+    ctx.restore();
+  }
+
+  // --- blaze: cabeça cúbica amarela de cara séria pairando numa coluna de
+  // fumaça, com os bastões dourados orbitando em DOIS anéis que giram em
+  // sentidos opostos — os bastões da frente passam por cima da cabeça, os de
+  // trás por baixo, para a órbita ter profundidade ---
+  function drawBlaze(ctx, e, t) {
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    const tw = t * 1.0 + e.phase;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // glow geral de brasa
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, e.w * 1.4);
+    halo.addColorStop(0, 'rgba(255,170,40,0.25)');
+    halo.addColorStop(1, 'rgba(255,120,10,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, e.w * 1.4, 0, Math.PI * 2); ctx.fill();
+
+    // anéis de bastões: 2 anéis x 4 bastões, girando em sentidos opostos.
+    // O seno dá o x na elipse da órbita; o cosseno diz se o bastão está na
+    // frente (desenha depois da cabeça) ou atrás (desenha antes).
+    const R1 = e.w * 0.62, R2 = e.w * 0.52;
+    // passada de TRÁS dos dois anéis
+    for (let i = 0; i < 4; i++) {
+      const a1 = tw * 2.4 + (i / 4) * Math.PI * 2;
+      if (Math.cos(a1) <= 0) drawBastaoBlaze(ctx, Math.sin(a1) * R1, e.h * 0.06 + Math.cos(a1) * 6, 0.8);
+      const a2 = -tw * 3.1 + (i / 4) * Math.PI * 2 + 0.6;
+      if (Math.cos(a2) <= 0) drawBastaoBlaze(ctx, Math.sin(a2) * R2, e.h * 0.32 + Math.cos(a2) * 5, 0.8);
+    }
+
+    // cabeça CÚBICA amarela, cara séria
+    const hw = e.w * 0.78, hh = e.w * 0.78;
+    const hg = ctx.createLinearGradient(-hw / 2, -e.h * 0.46, hw / 2, -e.h * 0.46 + hh);
+    hg.addColorStop(0, '#ffe078');
+    hg.addColorStop(0.6, '#f0b030');
+    hg.addColorStop(1, '#b87410');
+    ctx.fillStyle = hg;
+    ctx.fillRect(-hw / 2, -e.h * 0.46, hw, hh);
+    // sombra de aresta
+    ctx.fillStyle = 'rgba(140,80,10,0.4)';
+    ctx.fillRect(-hw / 2, -e.h * 0.46 + hh - 4, hw, 4);
+    // cara SÉRIA: sobrancelha reta pesada, olhos de fenda escura, sem boca
+    ctx.fillStyle = '#3a2004';
+    ctx.fillRect(-hw * 0.34, -e.h * 0.24, hw * 0.26, 4);     // sobrancelha esq
+    ctx.fillRect(hw * 0.08, -e.h * 0.24, hw * 0.26, 4);      // sobrancelha dir
+    ctx.fillStyle = '#1c1004';
+    ctx.fillRect(-hw * 0.3, -e.h * 0.17, hw * 0.18, 5);      // olho esq
+    ctx.fillRect(hw * 0.12, -e.h * 0.17, hw * 0.18, 5);      // olho dir
+
+    // passada da FRENTE dos anéis, por cima da cabeça
+    for (let i = 0; i < 4; i++) {
+      const a1 = tw * 2.4 + (i / 4) * Math.PI * 2;
+      if (Math.cos(a1) > 0) drawBastaoBlaze(ctx, Math.sin(a1) * R1, e.h * 0.06 + Math.cos(a1) * 6, 1);
+      const a2 = -tw * 3.1 + (i / 4) * Math.PI * 2 + 0.6;
+      if (Math.cos(a2) > 0) drawBastaoBlaze(ctx, Math.sin(a2) * R2, e.h * 0.32 + Math.cos(a2) * 5, 1);
+    }
+    ctx.restore();
+  }
+
   // ==================================================================
   // Registro de chefões
   // Cada boss vive no seu arquivo (boss1.js, boss2.js, boss3.js) e regista-se
@@ -2453,6 +3010,9 @@ window.FG = window.FG || {};
       this.boss = bossById[FG.level.bossId] || bossList[0] || null;
       // limpa partículas remanescentes
       for (let i = 0; i < MAXP; i++) particles[i].active = false;
+      // bolas de fogo do Nether: pool compartilhada de ghast/blaze, a dona é
+      // esta — nenhum chefão a limpa, então quem apaga no respawn é o reset()
+      for (let i = 0; i < MAXB; i++) bolas[i].active = false;
     },
 
     // Some inteiro o elenco comum no instante em que o chefão começa: a luta
@@ -2482,6 +3042,9 @@ window.FG = window.FG || {};
       }
       // boss da fase (ele mesmo cuida dos próprios projéteis)
       if (this.boss) this.boss.update(dt);
+      // bolas de fogo de ghast/blaze: vivem aqui, não em cada bicho — a bola
+      // sobrevive à morte do atirador, como qualquer projétil honesto
+      updateBolas(dt);
       updateParticles(dt);
     },
 
@@ -2514,10 +3077,15 @@ window.FG = window.FG || {};
         else if (e.type === 'peixeespada') drawPeixeEspada(ctx, e, t);
         else if (e.type === 'baleia') drawBaleia(ctx, e, t);
         else if (e.type === 'orca') drawOrca(ctx, e, t);
+        else if (e.type === 'fantasmachama') drawFantasmaChama(ctx, e, t);
+        else if (e.type === 'piglin') drawPiglin(ctx, e, t);
+        else if (e.type === 'ghast') drawGhast(ctx, e, t);
+        else if (e.type === 'blaze') drawBlaze(ctx, e, t);
         else drawSapeca(ctx, e, t);
       }
       ctx.restore();
       if (this.boss) this.boss.draw(ctx, cam);
+      drawBolas(ctx, cam);
       drawParticles(ctx, cam);
     },
   };

@@ -26,6 +26,10 @@
 //                 sobre a vala da estação — com uma topeira de capacete em
 //                 cada vagão que ergue a picareta e dá a picaretada em quem
 //                 chega ao alcance (uma de cada vez no comboio todo)
+//   strider     — a montaria das terras de lava: a criatura vermelho-magenta
+//                 que anda NA lava num vaivém; a selinha no topo da cabeça é
+//                 uma plataforma SÓLIDA que carrega o player sobre os vãos de
+//                 lava. Não machuca ninguém — é transporte, não perigo
 //
 // A colisão sai de graça: as peças sólidas vivas entram em `movers` e o engine
 // injeta esse array em FG.level.solids a cada frame. Aqui só se move a peça e
@@ -178,6 +182,20 @@ window.FG = window.FG || {};
   var LOCO_VMAX = 1100;         // velocidade de cruzeiro do desgovernado (px/s)
   var LOCO_ACEL = 260;          // aceleração até lá (px/s²) — o arranque pesado
   var LOCO_DANO_T = 1.0;        // intervalo do dano de quem cai no balastro
+
+  // --- strider (terras de lava) ------------------------------------------
+  // Def: { type:'strider', x, y, range, speed } com y = SUPERFÍCIE da lava.
+  // A peça sólida (a selinha no topo da cabeça) fica STRIDER_ALT acima dessa
+  // superfície; o corpo e as pernas compridas descem dali até dentro da lava.
+  // O vaivém horizontal é x ± range com as pontas suavizadas (seno), mais um
+  // bob vertical de quem anda em líquido e a "tremidinha de frio" permanente
+  // — no desenho de referência o strider treme fora da lava; aqui ele treme
+  // sempre, é o charme do bicho.
+  var STRIDER_W = 84;        // largura da peça sólida (o topo da cabeça)
+  var STRIDER_H = 16;        // altura da peça sólida
+  var STRIDER_ALT = 70;      // topo da cabeça acima da superfície da lava
+  var STRIDER_BOB = 5;       // amplitude do bob vertical senoidal (px)
+  var STRIDER_TREME = 1.6;   // amplitude da tremidinha de frio (px)
 
   // ------------------------------------------------------------------
   // Pool de partículas (poeirinha do desmorona, faíscas do rolo).
@@ -871,6 +889,23 @@ window.FG = window.FG || {};
     return o;
   }
 
+  // strider {x, y, range, speed} — y é a superfície da lava (880 na fase)
+  function makeStrider(d) {
+    var o = {
+      type: 'strider',
+      ox: d.x, lavaY: d.y,
+      range: d.range || 180,
+      speed: d.speed || 60,
+      phase: (d.x * 0.017) % TAU,  // dessincroniza striders vizinhos
+      cx: d.x,                     // centro atual (o desenho parte daqui)
+      dir: 1,                      // para onde ele olha (segue o vaivém)
+      treme: 0,                    // tremidinha do frame (o desenho reusa)
+      bob: 0,                      // bob do frame (pernas compensam no desenho)
+      rect: { x: d.x - STRIDER_W / 2, y: d.y - STRIDER_ALT, w: STRIDER_W, h: STRIDER_H },
+    };
+    return o;
+  }
+
   // ==================================================================
   // Auxiliares de runtime
   // ==================================================================
@@ -911,6 +946,44 @@ window.FG = window.FG || {};
     if (carrying) {
       p.x += ddx;
       p.y += ddy;
+    }
+  }
+
+  function updateStrider(o, dt, p, t) {
+    // Vaivém x ± range com as pontas suavizadas de graça: x = ox + range ·
+    // sin(w·t) com w = speed/range — a velocidade de pico é `speed` e nas
+    // pontas o seno freia sozinho (derivada zero), sem máquina de estados.
+    var w = o.speed / Math.max(1, o.range);
+    var ph = t * w + o.phase;
+    var nx = o.ox + Math.sin(ph) * o.range;
+    o.dir = Math.cos(ph) >= 0 ? 1 : -1;      // olha para onde anda
+
+    // bob de quem anda em líquido + a tremidinha de frio permanente. O bob
+    // inteiro entra na peça sólida (o player sente a lava ondular); do
+    // tremor só entra uma fração, senão vira plataforma vibrando ilegível.
+    o.bob = Math.sin(t * 2.1 + o.phase) * STRIDER_BOB;
+    o.treme = Math.sin(t * 46 + o.phase) * STRIDER_TREME;
+    var ny = o.lavaY - STRIDER_ALT + o.bob + o.treme * 0.4;
+
+    // mesmo esquema de arrasto da plataforma: mede o "em cima" com a posição
+    // antiga, move a peça, e leva o player junto pela diferença
+    var carrying = p && playerOnTop(o.rect, p);
+    var ddx = (nx - STRIDER_W / 2) - o.rect.x;
+    var ddy = ny - o.rect.y;
+    o.rect.x = nx - STRIDER_W / 2;
+    o.rect.y = ny;
+    o.cx = nx;
+    if (carrying) {
+      p.x += ddx;
+      p.y += ddy;
+    }
+
+    // respingos de lava onde as pernas entram — comedidos (em média ~6/s)
+    if (Math.random() < dt * 6) {
+      var lado = Math.random() < 0.5 ? -1 : 1;
+      spawnParticle(nx + lado * STRIDER_W * 0.26 + rand(-4, 4), o.lavaY - 2,
+        rand(-30, 30), rand(-130, -50), rand(0.3, 0.55), rand(2, 4),
+        'rgba(255,150,40,0.9)', 500);
     }
   }
 
@@ -1887,6 +1960,135 @@ window.FG = window.FG || {};
     }
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // O strider inteiro: pernas compridas afundadas na lava, corpão cúbico
+  // vermelho-magenta com listras mais escuras, olhos desencontrados no alto,
+  // cerdas no topo e a selinha de madeira — a selinha é o desenho da peça
+  // sólida, é ela que "explica" ao jogador que ali se pisa.
+  function drawStrider(ctx, o, cam, t) {
+    var r = o.rect;
+    var corpoH = 54;                             // altura do corpão cúbico
+    var lavaLocal = o.lavaY - r.y;               // linha da lava em coords locais
+    if (!visible(cam, r.x - 24, r.y - 14, STRIDER_W + 48, lavaLocal + 20)) return;
+
+    ctx.save();
+    // a tremidinha horizontal é só visual: a peça sólida não treme no x,
+    // senão o player apoiado escorregava do nada
+    ctx.translate(r.x + STRIDER_W / 2 - cam.x + o.treme, r.y - cam.y);
+
+    // pernas COMPRIDAS cinzas, do ventre até dentro da lava, pedalando
+    // devagar no ritmo do vaivém (defasadas uma da outra)
+    ctx.strokeStyle = '#7a7076';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    for (var s = -1; s <= 1; s += 2) {
+      var swing = Math.sin(t * 3.4 + o.phase + (s > 0 ? 0 : Math.PI)) * 7 * o.dir;
+      var bx = s * STRIDER_W * 0.26;
+      ctx.beginPath();
+      ctx.moveTo(bx, corpoH - 6);
+      // joelho alto para fora, pé afundando na lava (o -o.bob compensa o
+      // corpo subindo e descendo: o pé fica cravado na linha da lava)
+      ctx.quadraticCurveTo(bx + s * 10 + swing * 0.5, corpoH + (lavaLocal - corpoH) * 0.5,
+        bx + swing, lavaLocal + 6 - o.bob);
+      ctx.stroke();
+    }
+    // brilho da lava lambendo as canelas, na linha da superfície
+    ctx.fillStyle = 'rgba(255,140,30,0.75)';
+    for (s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.ellipse(s * STRIDER_W * 0.26, lavaLocal - o.bob, 10, 4, 0, 0, TAU);
+      ctx.fill();
+    }
+
+    // corpão cúbico vermelho-magenta (cantos levemente arredondados)
+    var g = ctx.createLinearGradient(0, 0, 0, corpoH);
+    g.addColorStop(0, '#c4485c');
+    g.addColorStop(0.55, '#a02c48');
+    g.addColorStop(1, '#6e1c34');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-STRIDER_W / 2 + 6, 2);
+    ctx.lineTo(STRIDER_W / 2 - 6, 2);
+    ctx.quadraticCurveTo(STRIDER_W / 2, 2, STRIDER_W / 2, 10);
+    ctx.lineTo(STRIDER_W / 2, corpoH - 8);
+    ctx.quadraticCurveTo(STRIDER_W / 2, corpoH, STRIDER_W / 2 - 8, corpoH);
+    ctx.lineTo(-STRIDER_W / 2 + 8, corpoH);
+    ctx.quadraticCurveTo(-STRIDER_W / 2, corpoH, -STRIDER_W / 2, corpoH - 8);
+    ctx.lineTo(-STRIDER_W / 2, 10);
+    ctx.quadraticCurveTo(-STRIDER_W / 2, 2, -STRIDER_W / 2 + 6, 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // listras horizontais mais escuras, levemente onduladas
+    ctx.strokeStyle = 'rgba(70,14,36,0.55)';
+    ctx.lineWidth = 4;
+    for (var li = 0; li < 3; li++) {
+      var ly = 14 + li * 14;
+      ctx.beginPath();
+      ctx.moveTo(-STRIDER_W / 2 + 4, ly);
+      ctx.quadraticCurveTo(0, ly + Math.sin(t * 1.6 + li) * 2, STRIDER_W / 2 - 4, ly);
+      ctx.stroke();
+    }
+
+    // olhos desencontrados no alto: um maior e mais alto, o outro menor e
+    // mais baixo — o desencontro é a cara do bicho
+    ctx.save();
+    ctx.scale(o.dir, 1);
+    ctx.fillStyle = '#f2e8d8';
+    ctx.beginPath(); ctx.arc(-11, 13, 6.5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(12, 17, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#2a0c18';
+    ctx.beginPath(); ctx.arc(-9.4, 13.6, 2.8, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(13.4, 17.4, 2.2, 0, TAU); ctx.fill();
+    // boquinha trêmula de quem está sempre com frio
+    ctx.strokeStyle = '#4a0e26'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-5, 28 + o.treme * 0.6);
+    ctx.quadraticCurveTo(1, 30 - o.treme * 0.6, 7, 28 + o.treme * 0.6);
+    ctx.stroke();
+    ctx.restore();
+
+    // cerdas no topo da cabeça (pelinhos espetados, balançando de leve)
+    ctx.strokeStyle = '#d87888';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    for (var c = 0; c < 7; c++) {
+      var cx2 = -STRIDER_W * 0.38 + c * (STRIDER_W * 0.76 / 6);
+      var sway = Math.sin(t * 4 + c * 1.3 + o.phase) * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(cx2, 3);
+      ctx.lineTo(cx2 + sway, -7 - (c % 2) * 3);
+      ctx.stroke();
+    }
+
+    // a SELINHA de madeira em cima das cerdas: a tábua onde o player pisa
+    // (desenha por último, por cima dos pelinhos, como uma sela de verdade)
+    var sg = ctx.createLinearGradient(0, -2, 0, STRIDER_H);
+    sg.addColorStop(0, '#9a6a38');
+    sg.addColorStop(0.5, '#6e4824');
+    sg.addColorStop(1, '#3c2612');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.moveTo(-STRIDER_W / 2, STRIDER_H * 0.4);
+    ctx.quadraticCurveTo(0, -3, STRIDER_W / 2, STRIDER_H * 0.4);
+    ctx.lineTo(STRIDER_W / 2 - 4, STRIDER_H * 0.8);
+    ctx.quadraticCurveTo(0, STRIDER_H * 0.45, -STRIDER_W / 2 + 4, STRIDER_H * 0.8);
+    ctx.closePath();
+    ctx.fill();
+    // ripas da tábua
+    ctx.strokeStyle = 'rgba(40,24,10,0.6)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-STRIDER_W * 0.3, STRIDER_H * 0.28);
+    ctx.lineTo(-STRIDER_W * 0.3, STRIDER_H * 0.62);
+    ctx.moveTo(0, STRIDER_H * 0.12);
+    ctx.lineTo(0, STRIDER_H * 0.5);
+    ctx.moveTo(STRIDER_W * 0.3, STRIDER_H * 0.28);
+    ctx.lineTo(STRIDER_W * 0.3, STRIDER_H * 0.62);
+    ctx.stroke();
+
     ctx.restore();
   }
 
@@ -3531,6 +3733,7 @@ window.FG = window.FG || {};
         else if (d.type === 'plateia') list.push(makePlateia(d));
         else if (d.type === 'locomotiva') list.push(makeLocomotiva(d));
         else if (d.type === 'herobrine') list.push(makeHerobrine(d));
+        else if (d.type === 'strider') list.push(makeStrider(d));
       }
     },
 
@@ -3594,6 +3797,9 @@ window.FG = window.FG || {};
           // o comboio inteiro é terreno: vagões e máquina entram em movers
           for (var vg = 0; vg < o.vagoes.length; vg++) movers.push(o.vagoes[vg]);
           movers.push(o.engine);
+        } else if (o.type === 'strider') {
+          updateStrider(o, dt, p, t);
+          movers.push(o.rect);   // a selinha é sólida e carrega o player
         }
       }
 
@@ -3624,6 +3830,7 @@ window.FG = window.FG || {};
         else if (o.type === 'plateia') drawPlateiaFundo(ctx, o, cam, t);
         else if (o.type === 'locomotiva') drawLocomotiva(ctx, o, cam, t);
         else if (o.type === 'herobrine') drawHerobrine(ctx, o, cam, t);
+        else if (o.type === 'strider') drawStrider(ctx, o, cam, t);
       }
     },
 

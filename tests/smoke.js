@@ -87,9 +87,9 @@ global.window.FG = {};
 // exercita as três. Só assets/audio/player/enemies/engine são obrigatórios.
 const order = [
   'assets.js', 'audio.js',
-  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js', 'level7.js',
-  'obstacles.js', 'player.js', 'companion.js', 'babachops.js', 'allistergator.js', 'simon.js', 'poe.js', 'ickylicky.js', 'rabiebaby.js',
-  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js', 'boss7.js',
+  'levelkit.js', 'level.js', 'level2.js', 'level3.js', 'level4.js', 'level5.js', 'level6.js', 'level7.js', 'level8.js',
+  'obstacles.js', 'player.js', 'companion.js', 'babachops.js', 'allistergator.js', 'simon.js', 'poe.js', 'ickylicky.js', 'rabiebaby.js', 'maggiemako.js',
+  'enemies.js', 'boss1.js', 'boss2.js', 'boss3.js', 'boss4.js', 'boss5.js', 'boss6.js', 'boss7.js', 'boss8.js',
   'engine.js', 'touch.js',
 ].filter((f) => fs.existsSync(path.join(DIR, f)));
 for (const f of order) {
@@ -223,6 +223,10 @@ for (let f = 0; f < totalFases; f++) {
   // O certo entra voando, dá UM soco (1 takeHit) e sai voando; recarga 30s.
   // Os demais têm de estar indisponíveis — inclusive fora das suas fases.
   const AJUDANTES = { hugo: ['baba chops', FG.babachops], sandrola: ['allister gator', FG.allister], sergiola: ['simon', FG.simon], draculina: ['poe', FG.poe], dalilesma: ['icky licky', FG.icky], otton: ['rabie baby', FG.rabie] };
+  // Maggie Mako (fase 8, luta do Verola) entra no mapa só quando o arquivo
+  // dela já existe no disco — o jogo cresce em arquivos e o smoke acompanha.
+  const maggie = FG.maggie || FG.maggiemako;
+  if (maggie || order.includes('maggiemako.js')) AJUDANTES.verola = ['maggie mako', maggie];
   for (const bid in AJUDANTES) {
     const nomeA = AJUDANTES[bid][0], aj = AJUDANTES[bid][1];
     if (!aj) throw new Error('ajudante ' + nomeA + ' não carregou');

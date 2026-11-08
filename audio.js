@@ -1,9 +1,9 @@
 // Fagulho: Lendas do Bosque — FG.audio: todo o áudio do jogo em WebAudio
 // procedural (osciladores, ruído gerado, filtros). As EXCEÇÕES são a trilha
-// da caverna e as dos chefões das fases 1 a 6, mp3s de verdade tocados por
+// da caverna e as dos chefões das fases 1 a 7, mp3s de verdade tocados por
 // um <audio> (ver ARQUIVOS, mais abaixo) — se o arquivo não carregar, a
 // versão procedural ('caverna' ou 'boss') assume o lugar e a fase nunca
-// fica muda. O chefão da fase 7 (Torpedão Francisco) ainda não tem mp3
+// fica muda. O chefão da fase 8 (Bujãozinho Verola) ainda não tem mp3
 // próprio: usa a trilha procedural genérica 'boss', mesmo ponto de partida
 // que todos os outros chefões tiveram antes de ganhar arquivo.
 //
@@ -11,9 +11,9 @@
 //   FG.audio.init()      — cria/resume o AudioContext (engine chama no 1º gesto)
 //   FG.audio.sfx(name)   — efeitos; nome desconhecido = silêncio, nunca throw
 //   FG.audio.music(name) — 'overworld'|'boss'|'boss1'|'boss2'|'boss3'|'boss4'|
-//                          'boss5'|'boss6'|'boss7'|'pantano'|'mansao'|'coliseu'|
-//                          'caverna'|'floresta'|'praia'|null; troca com
-//                          fade ~0.4s
+//                          'boss5'|'boss6'|'boss7'|'boss8'|'pantano'|'mansao'|
+//                          'coliseu'|'caverna'|'floresta'|'praia'|'lava'|null;
+//                          troca com fade ~0.4s
 //
 // Nada aqui pode derrubar o jogo: tudo que toca WebAudio está em try/catch e
 // vira no-op silencioso se o init ainda não rodou ou o contexto não roda.
@@ -601,6 +601,32 @@ window.FG = window.FG || {};
     60, 0, 62, 0, 64, 0, 0, 0,    // C:  dó ré mi — respira, fecho
   ];
 
+  // ---- composição: LAVA — lenta e pesada, mi frígio grave, 76 BPM ----
+  // As Terras de Lava não são perigo correndo atrás do jogador: são um lugar
+  // ANTIGO, quente e imóvel — a calma inquietante de um subsolo que borbulha
+  // sozinho há mil anos. Por isso o avesso do coliseu (que também é frígio,
+  // mas marcha): aqui o pedal se arrasta por 2 compassos, o baixo é um
+  // caldeirão pulsando devagar (seno com a afinação escorrendo pra baixo, a
+  // cada tempo, como bolha de lava inchando e cedendo), e a melodia é
+  // ESPARSA — um motivo de três notas em volta do semitom frígio mi–fá, com
+  // um compasso inteiro de silêncio no meio da primeira metade, porque o
+  // calor também precisa de espaço pra pesar. Na segunda metade da volta o
+  // motivo sobe uma quinta e a percussão surda dobra: a caldeira "acorda" um
+  // pouco antes de voltar a dormir. Percussão sem estalo nenhum: é o
+  // bumboLama do pântano, que aqui soa a golfada funda de magma.
+  var LV_RAIZ = [28, 28, 29, 28, 28, 24, 26, 28]; // E1 E1 F1 E1 E1 C1 D1 E1 — o bII frígio no 3º compasso
+
+  var LV_MEL = [
+    64, 0, 0, 0, 65, 0, 64, 0,   // E: mi . . . fá . mi . — o motivo, o semitom que arde
+    0, 0, 62, 0, 64, 0, 0, 0,    //    . . ré . mi . . . — responde grave e cala
+    0, 0, 0, 0, 0, 0, 0, 0,      // F: compasso de silêncio — só o caldeirão
+    67, 0, 65, 0, 64, 0, 0, 0,   // E: sol fá mi — desce de volta à tônica
+    71, 0, 0, 0, 72, 0, 71, 0,   // E: si . . . dó' . si . — o motivo uma 5ª acima
+    0, 0, 69, 0, 67, 0, 0, 0,    // C: . . lá . sol . . .
+    76, 0, 0, 0, 72, 0, 71, 0,   // D: mi' . . . dó' . si . — o pico da volta
+    69, 0, 67, 0, 65, 0, 64, 0,  // E: desce a escala frígia inteira até casa
+  ];
+
   var SONGS = {
     overworld: {
       bpm: 104,
@@ -649,6 +675,12 @@ window.FG = window.FG || {};
       stepDur: 60 / 82 / 2, // colcheia
       steps: 64,
       agenda: agendaPraia,
+    },
+    lava: {
+      bpm: 76,
+      stepDur: 60 / 76 / 2, // colcheia
+      steps: 64,
+      agenda: agendaLava,
     },
   };
 
@@ -1010,6 +1042,63 @@ window.FG = window.FG || {};
     if (volta % 3 === 1 && s === 51) bolha(t, dest);
   }
 
+  // borbulha de lava: parente da bolha da praia, mas ao contrário — grave,
+  // pastosa e caindo, porque lava não sobe leve, ela estoura e cede. Vive
+  // FORA da grade do compasso, como o pingo da caverna.
+  function borbulhaLava(t, dest) {
+    tone({ t: t, dur: 0.38, vol: 0.07, type: 'sine', freq: 230, freqEnd: 70,
+           attack: 0.02, dest: dest });
+    ruido({ t: t + 0.04, dur: 0.2, vol: 0.05, ftype: 'lowpass', f0: 520, f1: 140, q: 1.0,
+           attack: 0.04, dest: dest });
+  }
+
+  function agendaLava(step, t, dest) {
+    var s = step % 64;
+    var volta = Math.floor(step / 64);
+    var compasso = Math.floor(s / 8);
+    var dentro = s % 8;
+    var dur = SONGS.lava.stepDur;
+
+    // pedal grave de 2 compassos: serra quase fechada no filtro + quinta de
+    // seno por cima, quase inaudível — o "ar quente parado" da caldeira,
+    // irmão escuro do pedal da caverna
+    if (s % 16 === 0) {
+      tone({ t: t, dur: dur * 17, vol: 0.06, type: 'sawtooth', freq: nf(LV_RAIZ[compasso]),
+             filtro: { type: 'lowpass', f0: 170 }, attack: 0.6, dest: dest });
+      tone({ t: t, dur: dur * 17, vol: 0.022, type: 'sine', freq: nf(LV_RAIZ[compasso] + 19),
+             attack: 0.9, dest: dest });
+    }
+
+    // caldeirão: baixo pulsando em todos os tempos (uma oitava acima do
+    // pedal), com a afinação escorrendo um pouco pra baixo em cada pulso —
+    // bolha de lava inchando e cedendo, não um baixo "tocado"
+    if (dentro % 2 === 0) {
+      var cal = nf(LV_RAIZ[compasso] + 12);
+      tone({ t: t, dur: dur * 1.7, vol: 0.13, type: 'sine', freq: cal, freqEnd: cal * 0.93,
+             attack: 0.04, dest: dest });
+    }
+
+    // melodia esparsa e misteriosa: seno nu como o da caverna, com uma
+    // sombra de oitava embaixo em vez de eco em cima — aqui tudo puxa
+    // pro fundo
+    if (LV_MEL[s]) {
+      tone({ t: t, dur: dur * 2.6, vol: 0.09, type: 'sine', freq: nf(LV_MEL[s]),
+             attack: 0.06, dest: dest });
+      tone({ t: t, dur: dur * 3.4, vol: 0.025, type: 'triangle', freq: nf(LV_MEL[s] - 12),
+             attack: 0.12, dest: dest });
+    }
+
+    // percussão surda: golfada de magma no tempo 1 de cada compasso; na
+    // segunda metade da volta a caldeira acorda e o tempo 3 entra também
+    if (dentro === 0) bumboLama(t, dest);
+    if (s >= 32 && dentro === 4) bumboLama(t, dest);
+
+    // borbulhas fora da grade, em passos primos; uma terceira só de 3 em 3
+    // voltas — o mesmo truque anti-metrônomo do pingo e do pio
+    if (s === 7 || s === 37) borbulhaLava(t, dest);
+    if (volta % 3 === 2 && s === 53) borbulhaLava(t, dest);
+  }
+
   // -- máquina do scheduler --
   var mus = {
     name: null,     // música pedida ('overworld' | 'boss' | null)
@@ -1078,6 +1167,7 @@ window.FG = window.FG || {};
     boss5: { src: 'musica-boss5.mp3', vol: 0.9, fallback: 'boss' },
     boss6: { src: 'musica-boss6.mp3', vol: 0.9, fallback: 'boss' },
     boss7: { src: 'musica-boss7.mp3', vol: 0.9, fallback: 'boss' },
+    boss8: { src: 'musica-boss8.mp3', vol: 0.9, fallback: 'boss' },
   };
 
   var arqRuim = {};  // trilha cujo arquivo falhou: cai no procedural, sem insistir

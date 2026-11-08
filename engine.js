@@ -247,8 +247,14 @@ window.FG = window.FG || {};
 
   // A base de sólidos é POR FASE: guardá-la uma vez só (como era com um nível
   // único) faria a fase 2 colidir com a geometria da fase 1.
+  // E a cópia pristina fica guardada NO objeto da fase, feita só na PRIMEIRA
+  // visita: depois do primeiro syncSolids, FG.level.solids passa a apontar
+  // para o liveSolids compartilhado — refatiá-lo numa revisita (restart,
+  // pular fase) herdaria a geometria da fase anterior como parede invisível,
+  // fora do mundo visível mas bem real para a colisão.
   function captureBaseSolids() {
-    baseSolids = FG.level.solids.slice();
+    if (!FG.level.solidsBase) FG.level.solidsBase = FG.level.solids.slice();
+    baseSolids = FG.level.solidsBase;
   }
 
   // ---------- fases ----------
@@ -283,6 +289,7 @@ window.FG = window.FG || {};
     if (FG.poe) FG.poe.reset(false);
     if (FG.icky) FG.icky.reset(false);
     if (FG.rabie) FG.rabie.reset(false);
+    if (FG.maggie) FG.maggie.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -343,6 +350,7 @@ window.FG = window.FG || {};
     if (FG.poe) FG.poe.reset(true);
     if (FG.icky) FG.icky.reset(true);
     if (FG.rabie) FG.rabie.reset(true);
+    if (FG.maggie) FG.maggie.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -449,6 +457,7 @@ window.FG = window.FG || {};
     if (FG.poe) FG.poe.reset(false);
     if (FG.icky) FG.icky.reset(false);
     if (FG.rabie) FG.rabie.reset(false);
+    if (FG.maggie) FG.maggie.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -512,6 +521,11 @@ window.FG = window.FG || {};
         // idem: o Icky Licky só responde na luta da Dalilesma (fase 6)
         FG.icky.update(dt);
         if (input.babaPressed) FG.icky.command();
+      }
+      if (FG.maggie) {
+        // idem: a Maggie Mako só responde na luta da Verola (fase 8)
+        FG.maggie.update(dt);
+        if (input.babaPressed) FG.maggie.command();
       }
 
       // hazards
@@ -638,6 +652,7 @@ window.FG = window.FG || {};
     if (FG.poe) FG.poe.draw(ctx, cam);               // idem
     if (FG.icky) FG.icky.draw(ctx, cam);             // idem
     if (FG.rabie) FG.rabie.draw(ctx, cam);           // idem
+    if (FG.maggie) FG.maggie.draw(ctx, cam);         // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -1016,6 +1031,13 @@ window.FG = window.FG || {};
   const CONTROLS_TOQUE_RABIE = CONTROLS_TOQUE.concat([{ key: 'RABIE', desc: 'soco no chefão' }]);
   const CONTROLS_TECLADO_ICKY_MURPH = CONTROLS_TECLADO_ICKY.concat([{ key: 'C', desc: 'MurphOliver' }]);
   const CONTROLS_TOQUE_ICKY_MURPH = CONTROLS_TOQUE_ICKY.concat([{ key: 'MURPH', desc: 'cócegas' }]);
+  // Na luta da Verola (fase 8) a ajudante do B é a Maggie Mako — e lá o
+  // MurphOliver (que desde a fase 6 já começa junto) também está em cena,
+  // então há variantes com as duas linhas, como na fase 6.
+  const CONTROLS_TECLADO_MAGGIE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Maggie Mako' }]);
+  const CONTROLS_TOQUE_MAGGIE = CONTROLS_TOQUE.concat([{ key: 'MAKO', desc: 'dentada na chefã' }]);
+  const CONTROLS_TECLADO_MAGGIE_MURPH = CONTROLS_TECLADO_MAGGIE.concat([{ key: 'C', desc: 'MurphOliver' }]);
+  const CONTROLS_TOQUE_MAGGIE_MURPH = CONTROLS_TOQUE_MAGGIE.concat([{ key: 'MURPH', desc: 'cócegas' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
@@ -1026,6 +1048,7 @@ window.FG = window.FG || {};
     const po = FG.poe && FG.poe.disponivel();
     const iky = FG.icky && FG.icky.disponivel();
     const rab = FG.rabie && FG.rabie.disponivel();
+    const mag = FG.maggie && FG.maggie.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
@@ -1037,6 +1060,10 @@ window.FG = window.FG || {};
             ? (toque ? CONTROLS_TOQUE_POE : CONTROLS_TECLADO_POE)
             : rab
           ? (toque ? CONTROLS_TOQUE_RABIE : CONTROLS_TECLADO_RABIE)
+          : mag
+          ? (murph
+            ? (toque ? CONTROLS_TOQUE_MAGGIE_MURPH : CONTROLS_TECLADO_MAGGIE_MURPH)
+            : (toque ? CONTROLS_TOQUE_MAGGIE : CONTROLS_TECLADO_MAGGIE))
           : iky
               ? (murph
             ? (toque ? CONTROLS_TOQUE_ICKY_MURPH : CONTROLS_TECLADO_ICKY_MURPH)
