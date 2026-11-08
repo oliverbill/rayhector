@@ -5,25 +5,34 @@
 // (curvo, listrado em arcos marrom/creme). Veio direto do desenho de
 // referência: ela grandona, brava, soprando o berrante com as bochechas
 // infladas, cercada de piglins e ghasts que obedecem ao toque.
-// QUATRO ataques, todos tocados no berrante:
+// SEIS ataques — quatro tocados no berrante e duas armas próprias:
 //   - berrante: enche o peito e sopra uma ONDA SONORA visível (anéis
 //     concêntricos) que atravessa a arena na altura dela — 2 de dano e um
-//     empurrão forte; pula-se por cima;
-//   - convoca: toque curto pro CÉU e 3 bolas de fogo de ghast caem do alto,
-//     cada uma com a sombra/alvo pulsando no chão ~0.8s antes do impacto
-//     (respingo de lava, 2 de dano no raio);
+//     empurrão forte; pula-se por cima (na fase 2 vem uma SEGUNDA onda da
+//     beirada oposta, em pinça);
+//   - coroa: ela arranca a COROA da cabeça e a arremessa de bumerangue —
+//     vai rasante na altura do corpo e VOLTA na altura em que o jogador
+//     estiver no instante da virada (2 de dano; pula-se a ida e desvia-se
+//     da volta); a cabeça fica careca de coroa até ela voltar à mão;
+//   - convoca: toque curto pro CÉU e 3 bolas de fogo de ghast caem do alto
+//     (4 na fase 2), cada uma com a sombra/alvo pulsando no chão ~0.8s
+//     antes do impacto (respingo de lava, 2 de dano no raio);
 //   - pisao: ela pula e cai de bunda — tremor de câmera e DUAS ondas de
 //     choque de lava correndo pelo chão, uma pra cada lado (1 de dano,
 //     saltáveis);
-//   - rebanho: toque grave e 4 CABRITINHAS DE FOGO atravessam a arena em
-//     fila na direção do jogador (1 de dano cada, pulam-se).
+//   - geiser: ela crava o berrante no chão e RACHADURAS acendem no piso
+//     (uma debaixo do jogador) — ~0.9s depois cada uma vira uma COLUNA DE
+//     LAVA em erupção (2 de dano enquanto jorra; a rachadura é o aviso);
+//   - rebanho: toque grave e 4 CABRITINHAS DE FOGO (6 na fase 2) atravessam
+//     a arena em fila na direção do jogador (1 de dano cada, pulam-se).
 // Ela é chefã TERRESTRE (fica de pé no chão de pedra da arena, sobre o mar
 // de lava) — a gravidade só entra no pulo do pisão, o resto é pose.
 // Mesma arquitetura dos outros chefões: máquina de estados, pools de
 // projétil pré-alocadas, reset() que limpa tudo, janela 'exposto' de ~2.6s
 // depois de CADA ataque (ela senta tonta, a coroa escorrega e a cabeça desce
-// a ~150px do chão), e fase 2 a partir de hp<=4 (intervalos ×0.85 e
-// projéteis um pouco mais rápidos).
+// a ~150px do chão), e fase 2 a partir de hp<=6 (intervalos ×0.85, projéteis
+// mais rápidos, mais bolas/cabritinhas e a onda-pinça do berrante). 12 de
+// vida: é a chefa mais dura do jogo — fase 8 é o fim da linha.
 // A ÚNICA coisa que este arquivo faz no load é registar-se em FG.enemies
 // (enemies.js vem antes no index.html); todo o resto só olha para FG.*
 // dentro de funções chamadas em runtime.
@@ -97,6 +106,23 @@ window.FG = window.FG || {};
     cabras.push({ active: false, x: 0, y: 0, vx: 0, dir: 1, groundY: 0, w: 38, h: 30, phase: 0 });
   }
 
+  // A COROA-BUMERANGUE: um objeto só (ela tem uma coroa). `fase` é 'ida' ou
+  // 'volta'; na virada ela mira a ALTURA do jogador naquele instante — a ida
+  // se pula, a volta se desvia saindo da linha.
+  const COROA_SPEED = 560;
+  const COROA_R = 24;        // meia-caixa do dano (a coroa gira, a caixa é quadrada)
+  const coroaFly = { active: false, x: 0, y: 0, vx: 0, yAlvo: 0, fase: 'ida', giro: 0 };
+
+  // Gêiseres de lava: rachadura acesa avisa, coluna jorra. Pool pequena.
+  const MAXGEISER = 6;
+  const GEISER_W = 54;       // largura da coluna
+  const GEISER_H = 158;      // altura do jato (não dá pra pular POR CIMA: sai da frente)
+  const GEISER_JATO = 0.55;  // segundos jorrando
+  const geisers = [];
+  for (let i = 0; i < MAXGEISER; i++) {
+    geisers.push({ active: false, state: 'aviso', x: 0, groundY: 0, timer: 0 });
+  }
+
   // O berrante voando na morte — não é pool, é UM objeto da cinemática.
   const hornFly = { active: false, x: 0, y: 0, vx: 0, vy: 0, rot: 0, vrot: 0 };
 
@@ -108,8 +134,8 @@ window.FG = window.FG || {};
     started: false,
     active: false,
     dead: false,
-    hp: 10,
-    maxHp: 10,
+    hp: 12,
+    maxHp: 12,
 
     // --- geometria (resolvida em runtime) ---
     homeX: 0,
@@ -122,11 +148,12 @@ window.FG = window.FG || {};
     crouch: 0,       // agachada (telegraph do pisão)
     sit: 0,          // caída sentada, tonta (janela e morte)
     charge: 0,       // brilho crescente na boca do chifre (telegraphs de sopro)
+    coroaErg: 0,     // coroa erguida da cabeça (telegraph do arremesso)
     shake: 0,
     flash: 0,
 
     // --- máquina de estados ---
-    state: 'dormant', // dormant|intro|idle|berrante|convoca|pisao|rebanho|exposto|dying
+    state: 'dormant', // dormant|intro|idle|berrante|coroa|convoca|pisao|geiser|rebanho|exposto|dying
     phase: 0,
     timer: 0,
     attackIndex: 0,
@@ -190,6 +217,9 @@ window.FG = window.FG || {};
       this.y = 0;
       this.spawnLeft = 0;
       this.spawnTimer = 0;
+      this.coroaErg = 0;
+      coroaFly.active = false;
+      for (let i = 0; i < MAXGEISER; i++) geisers[i].active = false;
       for (let i = 0; i < MAXSOM; i++) sons[i].active = false;
       for (let i = 0; i < MAXBOLA; i++) bolas[i].active = false;
       for (let i = 0; i < MAXCHOQUE; i++) choques[i].active = false;
@@ -197,9 +227,10 @@ window.FG = window.FG || {};
       hornFly.active = false;
     },
 
-    // Fase 2 a partir de hp<=4: intervalos ×0.85 e projéteis um pouco mais
-    // rápidos. Os TELEGRAPHS não encurtam — 0.85s é piso da forma comum.
-    isPhase2() { return this.hp <= 4; },
+    // Fase 2 a partir de hp<=6 (metade da vida): intervalos ×0.85, projéteis
+    // mais rápidos, mais bolas/cabritinhas e a onda-pinça do berrante. Os
+    // TELEGRAPHS não encurtam — 0.85s é piso da forma comum.
+    isPhase2() { return this.hp <= 6; },
 
     // Recalcula as caixas. Em função porque o desenho também precisa dela
     // enquanto a chefa dorme (antes do primeiro update).
@@ -231,6 +262,7 @@ window.FG = window.FG || {};
       this.armCeu = 0;
       this.crouch = 0;
       this.charge = 0;
+      this.coroaErg = 0;
       this.y = 0;
       this.vy = 0;
     },
@@ -359,9 +391,11 @@ window.FG = window.FG || {};
         // sempre de olho no jogador — brava, acompanhando
         this.dir = (p.x + p.w / 2) < this.x ? -1 : 1;
         if (this.timer <= 0) {
-          // o berrante abre o ciclo: o sopro é a assinatura dela
-          const attacks = ['berrante', 'convoca', 'pisao', 'rebanho'];
-          this.state = attacks[this.attackIndex % 4];
+          // o berrante abre o ciclo: o sopro é a assinatura dela. As armas
+          // novas entram intercaladas — nunca duas "de projétil pesado" em
+          // seguida, pro ritmo respirar.
+          const attacks = ['berrante', 'coroa', 'convoca', 'pisao', 'geiser', 'rebanho'];
+          this.state = attacks[this.attackIndex % attacks.length];
           this.attackIndex++;
           this.phase = 0;
           this.timer = 0;
@@ -373,6 +407,7 @@ window.FG = window.FG || {};
         this.crouch += (0 - this.crouch) * Math.min(1, dt * 6);
         this.sopro += (0 - this.sopro) * Math.min(1, dt * 6);
         this.armCeu += (0 - this.armCeu) * Math.min(1, dt * 6);
+        this.coroaErg += (0 - this.coroaErg) * Math.min(1, dt * 6);
         this.refreshPose();
         // estrelinhas rodando em volta da cabeça tonta
         if (Math.random() < 0.3) {
@@ -412,6 +447,12 @@ window.FG = window.FG || {};
             FG.audio.sfx('bossRoar');
             this.shake = 0.7;
             this.spawnSom(this.x + this.dir * V_W * 0.7, this.dir);
+            // fase 2: o eco — uma SEGUNDA onda nasce na beirada oposta e
+            // volta em pinça; as duas se pulam, mas não dá pra só correr
+            if (p2) {
+              const borda = this.dir > 0 ? a.x + a.w - 30 : a.x + 30;
+              this.spawnSom(borda, -this.dir);
+            }
             // respingo de ar/poeira saindo do chifre
             for (let i = 0; i < 10; i++) {
               spawnParticle(this.x + this.dir * V_W * 0.7, this.groundY - V_H * 0.62,
@@ -447,8 +488,11 @@ window.FG = window.FG || {};
             this.spawnBola(p.x + p.w / 2, 0.8);
             this.spawnBola(p.x + p.w / 2 + rand(120, 220) * (Math.random() < 0.5 ? -1 : 1), 1.05);
             this.spawnBola(a.x + 120 + Math.random() * (a.w - 420), 1.3);
+            // fase 2: a quarta bola, de novo em cima do jogador — ficar
+            // parado depois da primeira esquiva deixa de ser plano
+            if (p2) this.spawnBola(p.x + p.w / 2, 1.55);
             this.phase = 2;
-            this.timer = 2.4;
+            this.timer = p2 ? 2.7 : 2.4;
           }
         } else if (this.phase === 2) {
           if (this.timer <= 0) this.expose();
@@ -510,8 +554,9 @@ window.FG = window.FG || {};
             FG.audio.sfx('bossRoar');
             this.shake = 0.4;
             this.charge = 0;
-            // as cabritinhas saem EM FILA: uma a cada 0.3s, 4 ao todo
-            this.spawnLeft = 4;
+            // as cabritinhas saem EM FILA: uma a cada 0.3s — 4 ao todo
+            // (6 na fase 2: o rebanho cresce junto com a raiva)
+            this.spawnLeft = p2 ? 6 : 4;
             this.spawnTimer = 0;
             this.phase = 2;
           }
@@ -529,6 +574,72 @@ window.FG = window.FG || {};
           }
         } else if (this.phase === 3) {
           this.sopro = Math.max(0, this.sopro - dt * 2.5);
+          if (this.timer <= 0) this.expose();
+        }
+
+      // ================= 5. COROA (bumerangue dourado) =================
+      } else if (this.state === 'coroa') {
+        if (this.phase === 0) {
+          // telegraph: a coroa LEVANTA da cabeça na mão dela — 0.85s com a
+          // coroa girando devagar no alto, impossível não ver
+          this.phase = 1;
+          this.timer = 0.85;
+          this.dir = (p.x + p.w / 2) < this.x ? -1 : 1;
+          FG.audio.sfx('bossSpit');
+        } else if (this.phase === 1) {
+          this.coroaErg = Math.min(1, this.coroaErg + dt * 2.4);
+          if (this.timer <= 0) {
+            // o ARREMESSO: rasante na altura do corpo do jogador — a ida se
+            // PULA; a volta mira a altura dele na virada, aí é sair da linha
+            FG.audio.sfx('bossRoar');
+            this.shake = 0.4;
+            this.coroaErg = 0;
+            coroaFly.active = true;
+            coroaFly.fase = 'ida';
+            coroaFly.x = this.x + this.dir * V_W * 0.3;
+            coroaFly.y = this.groundY - 52;
+            coroaFly.vx = this.dir * COROA_SPEED * projMul;
+            coroaFly.giro = 0;
+            this.phase = 2;
+            this.timer = 4;   // teto de segurança; o normal é a volta encerrar antes
+          }
+        } else if (this.phase === 2) {
+          // espera a coroa voltar à mão (updateBossStuff desativa ao chegar)
+          if (!coroaFly.active || this.timer <= 0) {
+            coroaFly.active = false;
+            this.phase = 3;
+            this.timer = 0.3;
+          }
+        } else if (this.phase === 3) {
+          if (this.timer <= 0) this.expose();
+        }
+
+      // ================= 6. GÊISER (colunas de lava do piso) =================
+      } else if (this.state === 'geiser') {
+        if (this.phase === 0) {
+          // telegraph: ela agacha e CRAVA o berrante no chão — 0.9s; as
+          // rachaduras acendem no piso onde os jatos vão sair
+          this.phase = 1;
+          this.timer = 0.9;
+          FG.audio.sfx('bossSpit');
+        } else if (this.phase === 1) {
+          this.crouch = Math.min(0.7, this.crouch + dt * 2);
+          this.charge = Math.min(0.9, this.charge + dt * 1.2);
+          if (this.timer <= 0) {
+            FG.audio.sfx('bossRoar');
+            this.shake = 0.6;
+            this.crouch = 0;
+            this.charge = 0;
+            // rachaduras: uma DEBAIXO do jogador, as outras espalhadas em
+            // tempos escalonados — a arena vira um tabuleiro de esquiva
+            this.spawnGeiser(p.x + p.w / 2, 0.9);
+            this.spawnGeiser(p.x + p.w / 2 + rand(130, 210) * (Math.random() < 0.5 ? -1 : 1), 1.15);
+            this.spawnGeiser(a.x + 120 + Math.random() * (a.w - 420), 1.4);
+            if (p2) this.spawnGeiser(p.x + p.w / 2 - this.dir * rand(160, 260), 1.65);
+            this.phase = 2;
+            this.timer = p2 ? 2.6 : 2.3;
+          }
+        } else if (this.phase === 2) {
           if (this.timer <= 0) this.expose();
         }
       }
@@ -578,6 +689,22 @@ window.FG = window.FG || {};
         b.vy = 0;
         b.timer = warn;
         b.r = BOLA_R;
+        return;
+      }
+    },
+
+    // Acende uma rachadura no chão em `x`; o jato sai `warn` segundos depois.
+    spawnGeiser(x, warn) {
+      const a = FG.level.arena;
+      const xx = Math.max(a.x + 60, Math.min(a.x + a.w - 60, x));
+      for (let i = 0; i < MAXGEISER; i++) {
+        const g = geisers[i];
+        if (g.active) continue;
+        g.active = true;
+        g.state = 'aviso';
+        g.x = xx;
+        g.groundY = groundYAt(xx, 300);
+        g.timer = warn;
         return;
       }
     },
@@ -728,6 +855,72 @@ window.FG = window.FG || {};
       if (c.x < a.x - 100 || c.x > a.x + a.w + 100) c.active = false;
     }
 
+    // ---- a coroa-bumerangue (2 de dano; ida rasante, volta na altura do
+    // jogador no instante da virada) ----
+    if (coroaFly.active) {
+      coroaFly.giro += dt * 13;
+      coroaFly.x += coroaFly.vx * dt;
+      if (coroaFly.fase === 'ida') {
+        // bateu na beirada da arena: VIRA, mirando a altura atual do jogador
+        if (coroaFly.x < a.x + 40 || coroaFly.x > a.x + a.w - 40) {
+          coroaFly.fase = 'volta';
+          coroaFly.vx = -coroaFly.vx;
+          coroaFly.yAlvo = Math.min(boss.groundY - 36,
+            Math.max(boss.groundY - 220, p.y + p.h / 2));
+          FG.audio.sfx('bossSpit');
+        }
+      } else {
+        // na volta desliza até a altura mirada (uma vez só — sem perseguição)
+        coroaFly.y += (coroaFly.yAlvo - coroaFly.y) * Math.min(1, dt * 6);
+        // chegou de volta à mão dela: fim do voo (o estado 'coroa' percebe)
+        if ((coroaFly.vx > 0 && coroaFly.x > boss.x - V_W * 0.2) ||
+            (coroaFly.vx < 0 && coroaFly.x < boss.x + V_W * 0.2)) {
+          coroaFly.active = false;
+        }
+        // guarda: se por qualquer motivo passar reto (ela se moveu no meio),
+        // morre na borda em vez de voar pra sempre
+        if (coroaFly.x < a.x - 60 || coroaFly.x > a.x + a.w + 60) coroaFly.active = false;
+      }
+      // rastro dourado
+      if (coroaFly.active && Math.random() < 0.7) {
+        spawnParticle(coroaFly.x, coroaFly.y, rand(-40, 40), rand(-40, 40),
+          0.35, 2.5 + Math.random() * 2.5, '#ffd24a', 0);
+      }
+      scratch.x = coroaFly.x - COROA_R; scratch.y = coroaFly.y - COROA_R;
+      scratch.w = COROA_R * 2; scratch.h = COROA_R * 2;
+      if (coroaFly.active && !janela && ov(p, scratch)) p.hurt(2, coroaFly.x);
+    }
+
+    // ---- gêiseres de lava (rachadura avisa, coluna jorra: 2 de dano) ----
+    for (let i = 0; i < MAXGEISER; i++) {
+      const g = geisers[i];
+      if (!g.active) continue;
+      g.timer -= dt;
+      if (g.state === 'aviso') {
+        // a rachadura cuspindo fagulhinhas — o aviso de onde NÃO estar
+        if (Math.random() < 0.5) {
+          spawnParticle(g.x + rand(-GEISER_W * 0.4, GEISER_W * 0.4), g.groundY - 2,
+            rand(-30, 30), rand(-140, -40), 0.35, 2 + Math.random() * 2, '#ff9a3a', 700);
+        }
+        if (g.timer <= 0) {
+          g.state = 'jato';
+          g.timer = GEISER_JATO;
+          FG.audio.sfx('bossRoar');
+          burstLava(g.x, g.groundY);
+        }
+      } else { // 'jato'
+        if (Math.random() < 0.9) {
+          spawnParticle(g.x + rand(-GEISER_W * 0.5, GEISER_W * 0.5),
+            g.groundY - GEISER_H + rand(-10, 30), rand(-80, 80), rand(-260, -80),
+            0.45, 3 + Math.random() * 4, Math.random() < 0.5 ? '#ff8c3a' : '#ffd24a', 800);
+        }
+        scratch.x = g.x - GEISER_W / 2; scratch.y = g.groundY - GEISER_H;
+        scratch.w = GEISER_W; scratch.h = GEISER_H;
+        if (!janela && ov(p, scratch)) p.hurt(2, g.x);
+        if (g.timer <= 0) g.active = false;
+      }
+    }
+
     // ---- o berrante voando na morte (só visual) ----
     if (hornFly.active) {
       hornFly.vy += GRAV * 0.7 * dt;
@@ -842,52 +1035,74 @@ window.FG = window.FG || {};
       ctx.beginPath(); ctx.ellipse(V_W * 0.04 + 12, -3, 13, 7, 0, 0, Math.PI * 2); ctx.fill();
     }
 
-    // ---------- CORPO EM PERA: saia/vestido claro, largo embaixo ----------
+    // ---------- CORPO BEM REDONDO: terninho rosa de executiva ----------
+    // A Verola é quase uma esfera: o blazer do terninho fecha em volta da
+    // barriga redonda e os membros são tocos curtos — nada de vestido nem
+    // cintura; a silhueta é a bola.
+    const bodyCY = -H * 0.42;
+    const bodyRX = V_W * 0.62 * spread, bodyRY = H * 0.44;
+    // calças do terninho: dois tocos curtinhos aparecendo sob a bola,
+    // terminando nas botas azuis (em pé; sentada as botas já esticam)
+    if (sit <= 0.4) {
+      ctx.fillStyle = '#b05a74';
+      ctx.fillRect(-V_W * 0.24, -36, 21, 20);
+      ctx.fillRect(V_W * 0.02, -36, 21, 20);
+    }
+    // a bola do corpo (o blazer)
     ctx.beginPath();
-    ctx.moveTo(-V_W * 0.52 * spread, -14);
-    ctx.quadraticCurveTo(-V_W * 0.56 * spread, -H * 0.42, -V_W * 0.24, -H * 0.72);
-    ctx.quadraticCurveTo(0, -H * 0.82, V_W * 0.24, -H * 0.72);
-    ctx.quadraticCurveTo(V_W * 0.56 * spread, -H * 0.42, V_W * 0.52 * spread, -14);
-    ctx.quadraticCurveTo(0, -2, -V_W * 0.52 * spread, -14);
-    ctx.closePath();
-    const gVest = ctx.createLinearGradient(0, -H * 0.82, 0, 0);
-    gVest.addColorStop(0, '#f4e6d2');
-    gVest.addColorStop(0.6, '#e8d2b4');
-    gVest.addColorStop(1, '#cfb28c');
-    ctx.fillStyle = gVest;
+    ctx.ellipse(0, bodyCY, bodyRX, bodyRY, 0, 0, Math.PI * 2);
+    const gTern = ctx.createLinearGradient(0, bodyCY - bodyRY, 0, bodyCY + bodyRY);
+    gTern.addColorStop(0, '#ea9eb4');
+    gTern.addColorStop(0.6, '#d87c98');
+    gTern.addColorStop(1, '#aa5470');
+    ctx.fillStyle = gTern;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(90,60,30,0.35)';
+    ctx.strokeStyle = 'rgba(90,30,50,0.4)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // corpete: faixa mais escura apertando a cintura (o que faz a pera)
-    ctx.fillStyle = '#b8855a';
+    // blusa branca no decote em V + as lapelas do blazer
+    const golaY = bodyCY - bodyRY * 0.9;
+    ctx.fillStyle = '#f6f2ea';
     ctx.beginPath();
-    ctx.moveTo(-V_W * 0.3, -H * 0.56);
-    ctx.quadraticCurveTo(0, -H * 0.5, V_W * 0.3, -H * 0.56);
-    ctx.lineTo(V_W * 0.26, -H * 0.7);
-    ctx.quadraticCurveTo(0, -H * 0.78, -V_W * 0.26, -H * 0.7);
+    ctx.moveTo(-V_W * 0.1, golaY);
+    ctx.lineTo(V_W * 0.14, golaY);
+    ctx.lineTo(V_W * 0.02, bodyCY - bodyRY * 0.28);
     ctx.closePath();
     ctx.fill();
-    // cordinha do corpete
-    ctx.strokeStyle = '#6a4424'; ctx.lineWidth = 1.6;
+    ctx.fillStyle = '#c0607e';   // lapelas, um tom abaixo do blazer
     ctx.beginPath();
-    ctx.moveTo(-8, -H * 0.72); ctx.lineTo(8, -H * 0.66);
-    ctx.moveTo(8, -H * 0.72); ctx.lineTo(-8, -H * 0.66);
-    ctx.stroke();
+    ctx.moveTo(-V_W * 0.12, golaY);
+    ctx.lineTo(-V_W * 0.02, bodyCY - bodyRY * 0.34);
+    ctx.lineTo(-V_W * 0.2, bodyCY - bodyRY * 0.44);
+    ctx.closePath();
+    ctx.moveTo(V_W * 0.16, golaY);
+    ctx.lineTo(V_W * 0.06, bodyCY - bodyRY * 0.34);
+    ctx.lineTo(V_W * 0.24, bodyCY - bodyRY * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    // botões dourados fechando o blazer na frente da bola
+    ctx.fillStyle = '#ffd24a';
+    for (let bt = 0; bt < 3; bt++) {
+      ctx.beginPath();
+      ctx.arc(V_W * 0.03, bodyCY - bodyRY * 0.18 + bt * bodyRY * 0.3, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // broche da capa no peito
     ctx.fillStyle = '#ffd24a';
-    ctx.beginPath(); ctx.arc(0, -H * 0.76, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, golaY - 4, 5, 0, Math.PI * 2); ctx.fill();
 
     // ---------- BRAÇOS e o BERRANTE ----------
     // O braço do berrante interpola entre: descansando (baixo), erguido à
     // boca (sopro) e apontado pro céu (armCeu).
+    // Braços TOCOS: curtos e gordinhos (lineWidth alto, alvos perto do
+    // corpo) — só o do berrante estica o necessário pra alcançar a boca.
     const skin = '#f0b990';
-    ctx.strokeStyle = skin; ctx.lineWidth = 11; ctx.lineCap = 'round';
-    const ombroX = V_W * 0.2, ombroY = -H * 0.72;
+    ctx.strokeStyle = skin; ctx.lineWidth = 14; ctx.lineCap = 'round';
+    const ombroX = V_W * 0.24, ombroY = -H * 0.7;
     // mão: três alvos possíveis da interpolação
-    const maoBaixoX = V_W * 0.42, maoBaixoY = -H * 0.42;
+    const maoBaixoX = V_W * 0.52, maoBaixoY = -H * 0.52;
     const maoBocaX = V_W * 0.3, maoBocaY = -H * 0.95;
     const maoCeuX = V_W * 0.3, maoCeuY = -H * 1.18;
     let maoX = lerp(maoBaixoX, maoBocaX, b.sopro);
@@ -900,12 +1115,19 @@ window.FG = window.FG || {};
       ctx.lineTo(maoX, maoY);
       ctx.stroke();
     }
-    // o outro braço: fechado no quadril (brava) ou esticado no chão (sentada)
+    // o outro braço: toco fechado na cintura (brava) ou apoiado no chão (sentada)
     ctx.beginPath();
-    ctx.moveTo(-V_W * 0.2, ombroY);
-    if (sit > 0.4) ctx.lineTo(-V_W * 0.52, -10);
-    else ctx.lineTo(-V_W * 0.42, -H * 0.5);
+    ctx.moveTo(-V_W * 0.24, ombroY);
+    if (sit > 0.4) ctx.lineTo(-V_W * 0.56, -10);
+    else ctx.lineTo(-V_W * 0.52, -H * 0.52);
     ctx.stroke();
+    // mãozinhas redondas nas pontas dos tocos
+    ctx.fillStyle = skin;
+    if (!dying) { ctx.beginPath(); ctx.arc(maoX, maoY, 8, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath();
+    if (sit > 0.4) ctx.arc(-V_W * 0.56, -10, 8, 0, Math.PI * 2);
+    else ctx.arc(-V_W * 0.52, -H * 0.52, 8, 0, Math.PI * 2);
+    ctx.fill();
 
     // o BERRANTE na mão (fora da morte): chifre de cabra curvo e listrado,
     // erguido à boca no sopro, pro céu no convoca
@@ -927,10 +1149,21 @@ window.FG = window.FG || {};
     ctx.translate(headX, headY);
     ctx.rotate(balanco);
 
-    // cabelo castanho na altura do ombro (atrás do rosto)
-    ctx.fillStyle = '#6a4226';
+    // cabelo LOIRO corte CHANEL (atrás do rosto): capacete arredondado que
+    // desce reto até a linha do queixo e fecha PRA DENTRO nas pontas — sem
+    // nenhuma faixa dando a volta no rosto, as laterais aparecem só dos
+    // lados da cara
+    ctx.fillStyle = '#e2b53e';
     ctx.beginPath();
-    ctx.ellipse(-3, 4, rH * 1.2, rH * 1.35, 0, 0, Math.PI * 2);
+    ctx.moveTo(-rH * 0.82, rH * 0.72);                                   // ponta de trás, virada pra dentro
+    ctx.quadraticCurveTo(-rH * 1.34, rH * 0.4, -rH * 1.2, -rH * 0.45);   // lateral de trás, reta
+    ctx.quadraticCurveTo(-rH * 0.9, -rH * 1.3, 0, -rH * 1.26);           // sobe pro topo
+    ctx.quadraticCurveTo(rH * 0.95, -rH * 1.28, rH * 1.24, -rH * 0.4);   // topo → lateral da frente
+    ctx.quadraticCurveTo(rH * 1.38, rH * 0.42, rH * 0.92, rH * 0.74);    // desce reta
+    ctx.quadraticCurveTo(rH * 1.05, rH * 0.2, rH * 0.98, -rH * 0.2);     // vira pra dentro no queixo
+    ctx.lineTo(-rH * 0.94, -rH * 0.2);                                   // atravessa POR TRÁS do rosto
+    ctx.quadraticCurveTo(-rH * 1.02, rH * 0.25, -rH * 0.82, rH * 0.72);
+    ctx.closePath();
     ctx.fill();
 
     // rosto redondo, bochechudo; soprando, as bochechas INFLAM
@@ -940,11 +1173,25 @@ window.FG = window.FG || {};
     ctx.ellipse(2, 0, rH * inflar, rH * 0.94 * inflar, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // franja por cima da testa
-    ctx.fillStyle = '#6a4226';
+    // franja RETA do chanel por cima da testa, com os dentinhos do corte
+    ctx.fillStyle = '#e2b53e';
     ctx.beginPath();
-    ctx.ellipse(0, -rH * 0.62, rH * 0.95, rH * 0.5, 0, Math.PI, 0);
+    ctx.moveTo(-rH * 0.95, -rH * 0.3);
+    ctx.quadraticCurveTo(-rH * 0.9, -rH * 1.05, 0, -rH * 1.02);
+    ctx.quadraticCurveTo(rH * 0.9, -rH * 1.05, rH * 0.98, -rH * 0.3);
+    // a barra de baixo da franja, quase reta, em leves dentinhos
+    ctx.lineTo(rH * 0.6, -rH * 0.42);
+    ctx.lineTo(rH * 0.25, -rH * 0.34);
+    ctx.lineTo(-rH * 0.15, -rH * 0.44);
+    ctx.lineTo(-rH * 0.55, -rH * 0.34);
+    ctx.closePath();
     ctx.fill();
+    // fios de brilho do loiro
+    ctx.strokeStyle = '#f4d276'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-rH * 0.5, -rH * 0.9); ctx.quadraticCurveTo(-rH * 0.52, -rH * 0.65, -rH * 0.48, -rH * 0.42);
+    ctx.moveTo(rH * 0.4, -rH * 0.92); ctx.quadraticCurveTo(rH * 0.45, -rH * 0.65, rH * 0.42, -rH * 0.44);
+    ctx.stroke();
 
     // bochechas rosadas — maiores e mais vermelhas inflando
     ctx.fillStyle = 'rgba(235,110,100,' + (0.45 + b.sopro * 0.3).toFixed(2) + ')';
@@ -1004,11 +1251,15 @@ window.FG = window.FG || {};
 
     // ---------- COROA dourada de pontas com bolinhas ----------
     // na janela/morte ela ESCORREGA: desce e gira de lado — o sinal visível
-    // de que o ponto fraco está servido
+    // de que o ponto fraco está servido. Durante o arremesso-bumerangue a
+    // cabeça fica SEM coroa (ela está voando, desenhada em drawBossStuff);
+    // no telegraph, coroaErg a levanta da cabeça girando devagar.
+    if (!coroaFly.active) {
     ctx.save();
     const slip = (exposto || dying) ? 1 : 0;
-    ctx.translate(lerp(0, rH * 0.55, slip * sit), lerp(-rH * 0.94, -rH * 0.52, slip * sit));
-    ctx.rotate(lerp(0, 0.55, slip * sit));
+    ctx.translate(lerp(0, rH * 0.55, slip * sit),
+      lerp(-rH * 0.94, -rH * 0.52, slip * sit) - b.coroaErg * 30);
+    ctx.rotate(lerp(0, 0.55, slip * sit) + b.coroaErg * Math.sin(t * 6) * 0.25);
     const CW = rH * 0.92, CH = 15;
     const gCor = ctx.createLinearGradient(0, -CH - 8, 0, 0);
     gCor.addColorStop(0, '#ffe88a');
@@ -1039,6 +1290,7 @@ window.FG = window.FG || {};
     ctx.fillStyle = '#d83a3a';
     ctx.beginPath(); ctx.arc(0, 3, 3.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+    }
 
     // anel pulsante no ponto fraco durante a janela — sem ele a cabeça some
     // contra o fundo escuro do Nether
@@ -1134,6 +1386,92 @@ window.FG = window.FG || {};
     const t = FG.engine.time;
     ctx.save();
     ctx.translate(-cam.x, -cam.y);
+
+    // ---- GÊISERES: rachadura acesa (aviso) e coluna de lava (jato) ----
+    for (let i = 0; i < MAXGEISER; i++) {
+      const gz = geisers[i];
+      if (!gz.active) continue;
+      if (gz.state === 'aviso') {
+        // a rachadura: fenda irregular pulsando laranja no piso
+        const pulso = 0.4 + 0.45 * Math.abs(Math.sin(t * 9));
+        ctx.save();
+        ctx.globalAlpha = pulso;
+        ctx.strokeStyle = '#ff7a2a';
+        ctx.lineWidth = 3.4;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#ff8c3a';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(gz.x - GEISER_W * 0.5, gz.groundY - 2);
+        ctx.lineTo(gz.x - GEISER_W * 0.2, gz.groundY - 7);
+        ctx.lineTo(gz.x + GEISER_W * 0.08, gz.groundY - 3);
+        ctx.lineTo(gz.x + GEISER_W * 0.34, gz.groundY - 8);
+        ctx.lineTo(gz.x + GEISER_W * 0.5, gz.groundY - 2);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // a COLUNA: jato de lava com as bordas ondulando e topo esfarelando
+        const k = gz.timer / GEISER_JATO;           // 1 → 0 enquanto jorra
+        const hh = GEISER_H * Math.min(1, (1 - k) * 6 + 0.25); // sobe num estalo
+        const ond = Math.sin(t * 22) * 4;
+        const gj = ctx.createLinearGradient(0, gz.groundY - hh, 0, gz.groundY);
+        gj.addColorStop(0, '#ffe88a');
+        gj.addColorStop(0.45, '#ff9a3a');
+        gj.addColorStop(1, '#e05818');
+        ctx.save();
+        ctx.shadowColor = '#ff8c3a';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = gj;
+        ctx.beginPath();
+        ctx.moveTo(gz.x - GEISER_W * 0.5 + ond, gz.groundY);
+        ctx.quadraticCurveTo(gz.x - GEISER_W * 0.62 - ond, gz.groundY - hh * 0.55,
+          gz.x - GEISER_W * 0.3, gz.groundY - hh);
+        ctx.quadraticCurveTo(gz.x, gz.groundY - hh * 1.12 - ond,
+          gz.x + GEISER_W * 0.3, gz.groundY - hh);
+        ctx.quadraticCurveTo(gz.x + GEISER_W * 0.62 + ond, gz.groundY - hh * 0.55,
+          gz.x + GEISER_W * 0.5 - ond, gz.groundY);
+        ctx.closePath();
+        ctx.fill();
+        // miolo mais claro
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#ffe88a';
+        ctx.beginPath();
+        ctx.ellipse(gz.x, gz.groundY - hh * 0.4, GEISER_W * 0.16, hh * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ---- a COROA-BUMERANGUE girando ----
+    if (coroaFly.active) {
+      ctx.save();
+      ctx.translate(coroaFly.x, coroaFly.y);
+      ctx.rotate(coroaFly.giro);
+      ctx.shadowColor = '#ffd24a';
+      ctx.shadowBlur = 14;
+      const CW2 = 24, CH2 = 13;
+      const gC2 = ctx.createLinearGradient(0, -CH2 - 7, 0, 7);
+      gC2.addColorStop(0, '#ffe88a');
+      gC2.addColorStop(1, '#d9a620');
+      ctx.fillStyle = gC2;
+      ctx.beginPath();
+      ctx.moveTo(-CW2, 0);
+      for (let i = 0; i < 4; i++) {
+        const x0 = -CW2 + (i / 4) * (CW2 * 2);
+        const x1 = -CW2 + ((i + 0.5) / 4) * (CW2 * 2);
+        const x2 = -CW2 + ((i + 1) / 4) * (CW2 * 2);
+        ctx.lineTo(x0, 0);
+        ctx.lineTo(x1, -CH2 - 6);
+        ctx.lineTo(x2, 0);
+      }
+      ctx.lineTo(CW2, 7); ctx.lineTo(-CW2, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#8a6210'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#d83a3a';
+      ctx.beginPath(); ctx.arc(0, 2.5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
 
     // ---- ONDA SONORA: anéis concêntricos expandindo na horizontal ----
     for (let i = 0; i < MAXSOM; i++) {
