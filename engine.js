@@ -290,6 +290,7 @@ window.FG = window.FG || {};
     if (FG.icky) FG.icky.reset(false);
     if (FG.rabie) FG.rabie.reset(false);
     if (FG.maggie) FG.maggie.reset(false);
+    if (FG.touille) FG.touille.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     // Atalho de teste (?chefe=1): pinga o jogador em cima do gatilho do
@@ -351,6 +352,7 @@ window.FG = window.FG || {};
     if (FG.icky) FG.icky.reset(true);
     if (FG.rabie) FG.rabie.reset(true);
     if (FG.maggie) FG.maggie.reset(true);
+    if (FG.touille) FG.touille.reset(true);
     loadLevel(faseInicial());
     FG.audio.sfx('select');
   }
@@ -458,6 +460,7 @@ window.FG = window.FG || {};
     if (FG.icky) FG.icky.reset(false);
     if (FG.rabie) FG.rabie.reset(false);
     if (FG.maggie) FG.maggie.reset(false);
+    if (FG.touille) FG.touille.reset(false);
     arenaLocked = false;
     engine.camZoom = 1; engine.camZoomTarget = 1;
     engine.setState('playing');
@@ -523,9 +526,14 @@ window.FG = window.FG || {};
         if (input.babaPressed) FG.icky.command();
       }
       if (FG.maggie) {
-        // idem: a Maggie Mako só responde na luta da Verola (fase 8)
+        // idem: a Maggie Mako só responde na luta do Francisco (fase 7)
         FG.maggie.update(dt);
         if (input.babaPressed) FG.maggie.command();
+      }
+      if (FG.touille) {
+        // idem: o Touille só responde na luta da Verola (fase 8)
+        FG.touille.update(dt);
+        if (input.babaPressed) FG.touille.command();
       }
 
       // hazards
@@ -653,6 +661,7 @@ window.FG = window.FG || {};
     if (FG.icky) FG.icky.draw(ctx, cam);             // idem
     if (FG.rabie) FG.rabie.draw(ctx, cam);           // idem
     if (FG.maggie) FG.maggie.draw(ctx, cam);         // idem
+    if (FG.touille) FG.touille.draw(ctx, cam);       // idem
     if (FG.obstacles) FG.obstacles.drawFront(ctx, cam);
     FG.level.drawFront(ctx, cam);
     if (zoomed) ctx.restore();
@@ -1031,13 +1040,19 @@ window.FG = window.FG || {};
   const CONTROLS_TOQUE_RABIE = CONTROLS_TOQUE.concat([{ key: 'RABIE', desc: 'soco no chefão' }]);
   const CONTROLS_TECLADO_ICKY_MURPH = CONTROLS_TECLADO_ICKY.concat([{ key: 'C', desc: 'MurphOliver' }]);
   const CONTROLS_TOQUE_ICKY_MURPH = CONTROLS_TOQUE_ICKY.concat([{ key: 'MURPH', desc: 'cócegas' }]);
-  // Na luta da Verola (fase 8) a ajudante do B é a Maggie Mako — e lá o
+  // Na luta do Francisco (fase 7) a ajudante do B é a Maggie Mako — e lá o
   // MurphOliver (que desde a fase 6 já começa junto) também está em cena,
   // então há variantes com as duas linhas, como na fase 6.
   const CONTROLS_TECLADO_MAGGIE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Maggie Mako' }]);
-  const CONTROLS_TOQUE_MAGGIE = CONTROLS_TOQUE.concat([{ key: 'MAKO', desc: 'dentada na chefã' }]);
+  const CONTROLS_TOQUE_MAGGIE = CONTROLS_TOQUE.concat([{ key: 'MAKO', desc: 'dentada no chefão' }]);
   const CONTROLS_TECLADO_MAGGIE_MURPH = CONTROLS_TECLADO_MAGGIE.concat([{ key: 'C', desc: 'MurphOliver' }]);
   const CONTROLS_TOQUE_MAGGIE_MURPH = CONTROLS_TOQUE_MAGGIE.concat([{ key: 'MURPH', desc: 'cócegas' }]);
+  // Na luta da Verola (fase 8) o ajudante do B é o Touille — mesmo arranjo
+  // da fase 7: o MurphOliver também está em cena, variantes com as duas linhas.
+  const CONTROLS_TECLADO_TOUILLE = CONTROLS_TECLADO.concat([{ key: 'B', desc: 'Touille' }]);
+  const CONTROLS_TOQUE_TOUILLE = CONTROLS_TOQUE.concat([{ key: 'RATO', desc: 'dentada na chefã' }]);
+  const CONTROLS_TECLADO_TOUILLE_MURPH = CONTROLS_TECLADO_TOUILLE.concat([{ key: 'C', desc: 'MurphOliver' }]);
+  const CONTROLS_TOQUE_TOUILLE_MURPH = CONTROLS_TOQUE_TOUILLE.concat([{ key: 'MURPH', desc: 'cócegas' }]);
   const TIP = { x: VIEW_W - 226, y: 58, w: 206, rowH: 21, padY: 12 };
 
   function drawControls() {
@@ -1049,6 +1064,7 @@ window.FG = window.FG || {};
     const iky = FG.icky && FG.icky.disponivel();
     const rab = FG.rabie && FG.rabie.disponivel();
     const mag = FG.maggie && FG.maggie.disponivel();
+    const tou = FG.touille && FG.touille.disponivel();
     const toque = FG.touch && FG.touch.active;
     const lista = baba
       ? (toque ? CONTROLS_TOQUE_BABA : CONTROLS_TECLADO_BABA)
@@ -1064,6 +1080,10 @@ window.FG = window.FG || {};
           ? (murph
             ? (toque ? CONTROLS_TOQUE_MAGGIE_MURPH : CONTROLS_TECLADO_MAGGIE_MURPH)
             : (toque ? CONTROLS_TOQUE_MAGGIE : CONTROLS_TECLADO_MAGGIE))
+          : tou
+          ? (murph
+            ? (toque ? CONTROLS_TOQUE_TOUILLE_MURPH : CONTROLS_TECLADO_TOUILLE_MURPH)
+            : (toque ? CONTROLS_TOQUE_TOUILLE : CONTROLS_TECLADO_TOUILLE))
           : iky
               ? (murph
             ? (toque ? CONTROLS_TOQUE_ICKY_MURPH : CONTROLS_TECLADO_ICKY_MURPH)

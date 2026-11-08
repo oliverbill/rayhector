@@ -3,17 +3,17 @@
 // (mesma família do Baba Chops/Icky Licky/Rabie Baby) — barriga clara,
 // barbatana dorsal na cabeça, rabo de tubarão, sorriso ENORME de dentes
 // triangulares, olhos bravos puxados e o colar com o DENTE DE TUBARÃO
-// dourado no peito. Ajudante exclusiva da luta contra o BUJÃOZINHO VEROLA
-// na fase 8 (a arena fica sobre um mar de LAVA). Fora dessa luta ela não
-// existe: o botão dela (touch.js) e a tecla B só respondem com a Verola
-// acordada.
+// dourado no peito. Ajudante exclusiva da luta contra o TORPEDÃO FRANCISCO
+// na fase 7 (a arena fica na PRAIA, de frente para o MAR — o habitat dela).
+// Fora dessa luta ela não existe: o botão dela (touch.js) e a tecla B só
+// respondem com o Francisco acordado.
 //
 // Mesmos moldes dos outros ajudantes, com a entrada temática dela: sob
-// comando ela SALTA DA LAVA como um tubarão saltando da água — surge num
-// arco vindo de fora da arena por baixo/esquerda, com respingos de lava e
-// um rastro de gotículas incandescentes — dá uma DENTADA (CHOMP! em vez de
-// POW!) na Verola (um takeHit de verdade, o mesmo dano do soco do jogador)
-// e mergulha de volta na lava saindo de cena. Pode ser acionada a cada 30s
+// comando ela SALTA DO MAR como um tubarão de verdade — surge num arco
+// vindo de fora da arena por baixo/esquerda, com respingos de água salgada
+// e um rastro de gotículas — dá uma DENTADA (CHOMP! em vez de POW!) no
+// Francisco (um takeHit de verdade, o mesmo dano do soco do jogador) e
+// mergulha de volta no mar saindo de cena. Pode ser acionada a cada 30s
 // (restTimer).
 //
 // Desenhada 100% em canvas, SEM sprite — e com TODOS os membros articulados
@@ -37,29 +37,29 @@ window.FG = window.FG || {};
   // brilha num flash radial dourado (versão "tesouro" do raio do Rabie)
   var clarao = { t: 0, x: 0, y: 0, DUR: 0.35 };
 
-  // o rastro de GOTÍCULAS incandescentes do salto: pool fixa de pingos de
-  // lava que nascem atrás dela no voo e caem apagando (coordenadas de mundo)
+  // o rastro de GOTÍCULAS do salto: pool fixa de pingos d'água que nascem
+  // atrás dela no voo e caem sumindo (coordenadas de mundo)
   var gotas = [];
   for (var gi = 0; gi < 16; gi++) gotas.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 0 });
   gotas.i = 0;
 
-  // respingo de lava: usado na decolagem e no mergulho de volta — um leque
-  // de partículas laranja via fx.spawnParticle (a pool de partículas é do
-  // enemies.js, aqui só se semeia)
+  // respingo do mar: usado na decolagem e no mergulho de volta — um leque
+  // de partículas azuis/espuma via fx.spawnParticle (a pool de partículas é
+  // do enemies.js, aqui só se semeia)
   function respingo(fx, x, y, forte) {
     var n = forte ? 14 : 9;
     for (var p = 0; p < n; p++) {
-      var quente = Math.random() < 0.5;
+      var espuma = Math.random() < 0.5;
       fx.spawnParticle(x + fx.rand(-16, 16), y,
         fx.rand(-170, 170), fx.rand(-320, -90), 0.5 + Math.random() * 0.25,
-        3 + Math.random() * 5, quente ? '#ff9a3c' : '#ffd24a', 520);
+        3 + Math.random() * 5, espuma ? '#e8f7ff' : '#5bb8e0', 520);
     }
   }
 
   var maggie = {
-    // mode: 'fora' (no fundo da lava) | 'entra' (o salto em arco até a
-    // Verola) | 'soca' (a dentada: arma o bocão e fecha) | 'sai' (mergulho
-    // de volta na lava)
+    // mode: 'fora' (no fundo do mar) | 'entra' (o salto em arco até o
+    // Francisco) | 'soca' (a dentada: arma o bocão e fecha) | 'sai'
+    // (mergulho de volta no mar)
     mode: 'fora',
     x: 0, y: 0,              // y = linha da base do corpo (ela paira, não pisa)
     facing: 1,
@@ -67,25 +67,25 @@ window.FG = window.FG || {};
     jaw: 0,                  // 0..1 — abertura da mandíbula na dobradiça
     chomp: 0,                // 0..1 — força do fechamento (lunge da dentada)
     tilt: 0,                 // inclinação do corpo no voo (nariz p/ cima/baixo)
-    hoverY: 0,               // altura de pairar diante da Verola
-    sx0: 0, sy0: 0,          // ponto de decolagem (dentro da lava)
+    hoverY: 0,               // altura de pairar diante do Francisco
+    sx0: 0, sy0: 0,          // ponto de decolagem (dentro do mar)
     alvoX: 0, alvoY: 0,      // onde o arco do salto termina
     socou: false,            // o takeHit desta visita já disparou?
     restTimer: 0,
     REST_MAX: 30,
 
-    // A Maggie só existe na luta da Verola: é isto que o touch.js lê para o
-    // botão dela aparecer — e some de novo quando a chefa morre.
+    // A Maggie só existe na luta do Francisco: é isto que o touch.js lê para
+    // o botão dela aparecer — e some de novo quando o chefão morre.
     disponivel: function () {
-      if (!FG.level || FG.level.bossId !== 'verola') return false;
+      if (!FG.level || FG.level.bossId !== 'francisco') return false;
       var b = FG.enemies && FG.enemies.boss;
-      return !!(b && b.id === 'verola' && b.started && !b.dead);
+      return !!(b && b.id === 'francisco' && b.started && !b.dead);
     },
 
     podeComandar: function () {
       if (!this.disponivel() || this.mode !== 'fora' || this.restTimer > 0) return false;
       var b = FG.enemies.boss;
-      // só depois da intro (active) — dentada em chefã ainda berrando não vale
+      // só depois da intro (active) — dentada em chefão ainda berrando não vale
       return !!(b.active && typeof b.takeHit === 'function');
     },
 
@@ -101,21 +101,21 @@ window.FG = window.FG || {};
       this.chomp = 0;
       this.socou = false;
       this.facing = 1;
-      // decola de DENTRO da lava, fora da arena pela esquerda, por baixo —
-      // a Verola mora na direita, então o arco atravessa a arena subindo
+      // decola de DENTRO do mar, fora da arena pela esquerda, por baixo —
+      // o Francisco mora na direita, então o arco atravessa a arena subindo
       this.sx0 = a.x - 60;
       this.sy0 = fx.groundYAt(a.x + 40, 300) + 120;
       this.x = this.sx0;
       this.y = this.sy0;
       this.tilt = -0.5;                       // nariz para cima na decolagem
-      // o respingo da decolagem: a lava abre quando ela rompe a superfície
+      // o respingo da decolagem: o mar abre quando ela rompe a superfície
       respingo(fx, this.sx0 + 30, this.sy0 - 100, true);
       FG.audio.sfx('select');
     },
 
     // Chamado pelo engine junto com o reset do companion: qualquer reset de
     // fase/checkpoint a tira de cena. A recarga só sobrevive se a visita
-    // chegou a ser gasta (socou) — morrer na chefa não devolve a dentada.
+    // chegou a ser gasta (socou) — morrer no chefão não devolve a dentada.
     reset: function (novoJogo) {
       for (var i = 0; i < chomps.length; i++) chomps[i].life = 0;
       chomps.i = 0;
@@ -142,12 +142,12 @@ window.FG = window.FG || {};
         n.y -= 46 * dt;
       }
 
-      // envelhece as gotículas de lava do rastro (caem como pingos de verdade)
+      // envelhece as gotículas d'água do rastro (caem como pingos de verdade)
       for (var gq = 0; gq < gotas.length; gq++) {
         var g2 = gotas[gq];
         if (g2.life <= 0) continue;
         g2.life -= dt;
-        g2.vy += 620 * dt;           // gravidade: gota de lava cai
+        g2.vy += 620 * dt;           // gravidade: gota d'água cai
         g2.x += g2.vx * dt;
         g2.y += g2.vy * dt;
       }
@@ -156,11 +156,11 @@ window.FG = window.FG || {};
       if (this.mode === 'fora') return;
 
       var b = FG.enemies && FG.enemies.boss;
-      var vivo = b && b.id === 'verola' && b.started && !b.dead;
+      var vivo = b && b.id === 'francisco' && b.started && !b.dead;
       var fx = FG.enemies.fx;
       this.t += dt;
 
-      // semeia o rastro incandescente enquanto voa (salto e mergulho)
+      // semeia o rastro de borrifo enquanto voa (salto e mergulho)
       if (this.mode === 'entra' || this.mode === 'sai') {
         if (Math.random() < dt * 30) {
           var gt = gotas[gotas.i];
@@ -176,9 +176,9 @@ window.FG = window.FG || {};
       }
 
       if (this.mode === 'entra') {
-        // Verola morreu/sumiu no meio do salto: mergulha de volta sem gastar
+        // Francisco morreu/sumiu no meio do salto: mergulha de volta sem gastar
         if (!vivo) { this.mode = 'sai'; this.t = 0; return; }
-        // o arco mira a cara dela, na altura da dentada
+        // o arco mira a cara dele, na altura da dentada
         this.alvoX = b.x - 120;
         this.alvoY = fx.groundYAt(b.x, 300) - 130;
         this.hoverY = this.alvoY;
@@ -229,28 +229,28 @@ window.FG = window.FG || {};
           nh.y = this.y - 46;
           nh.max = 0.9;
           nh.life = 0.9;
-          // faíscas de lava voando da mordida
+          // spray de água salgada voando da mordida
           for (var p = 0; p < 10; p++) {
             fx.spawnParticle(this.x + this.facing * 30, this.y - 36,
               fx.rand(-160, 160), fx.rand(-260, -60), 0.5,
-              3 + Math.random() * 4, '#ff9a3c', 420);
+              3 + Math.random() * 4, '#9adcf4', 420);
           }
         }
         if (this.t > 0.85) { this.mode = 'sai'; this.t = 0; this.facing = -1; }
 
       } else if (this.mode === 'sai') {
-        // mergulha de volta: nariz para baixo, acelerando rumo à lava
+        // mergulha de volta: nariz para baixo, acelerando rumo ao mar
         this.jaw = Math.max(0, this.jaw - dt * 5);
         this.chomp = Math.max(0, this.chomp - dt * 4);
         this.tilt += (0.7 - this.tilt) * Math.min(1, dt * 5);
         this.x += this.facing * 420 * dt;
         this.y += (160 + this.t * 700) * dt;
         var a = FG.level.arena;
-        var lavaY = fx.groundYAt(a.x + a.w * 0.5, 300);
-        if (this.y > lavaY + 110 || this.x < a.x - 120 ||
+        var marY = fx.groundYAt(a.x + a.w * 0.5, 300);
+        if (this.y > marY + 110 || this.x < a.x - 120 ||
             this.x > a.x + a.w + 120 || this.t > 3) {
-          // o respingo do mergulho: a lava fecha em cima dela
-          respingo(fx, this.x, Math.min(this.y, lavaY + 10) - 20, false);
+          // o respingo do mergulho: o mar fecha em cima dela
+          respingo(fx, this.x, Math.min(this.y, marY + 10) - 20, false);
           this.mode = 'fora';
         }
       }
@@ -273,7 +273,7 @@ window.FG = window.FG || {};
       }
       ctx.restore();
 
-      // o rastro de gotículas incandescentes
+      // o rastro de gotículas d'água
       ctx.save();
       for (var gq = 0; gq < gotas.length; gq++) {
         var g3 = gotas[gq];
@@ -282,12 +282,12 @@ window.FG = window.FG || {};
         if (gx < -20 || gx > 980) continue;
         var kk = g3.life / g3.max;
         ctx.globalAlpha = kk;
-        // miolo amarelo com casca laranja: pingo de lava viva
-        ctx.fillStyle = '#ff8a2a';
+        // miolo de espuma com casca azul: pingo de água do mar
+        ctx.fillStyle = '#3ea8d8';
         ctx.beginPath();
         ctx.arc(gx, gy, g3.size * (0.6 + kk * 0.4), 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#ffd24a';
+        ctx.fillStyle = '#d6f2ff';
         ctx.beginPath();
         ctx.arc(gx, gy, g3.size * 0.45 * kk, 0, Math.PI * 2);
         ctx.fill();

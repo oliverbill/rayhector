@@ -78,12 +78,16 @@ window.FG = window.FG || {};
     // contrato, mas em SLOT PRÓPRIO — na floresta o botão do MurphOliver
     // (872,284) também existe, então o Icky mora à esquerda dele.
     { id: 'icky', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'icky' },
-    // chamada da Maggie Mako (dentada na chefã da fase 8, a Verola): mesmo
-    // contrato dos demais ajudantes, mesma ação 'baba' (a tecla B) — e no
-    // SLOT do Icky (748,260), pela mesma razão dele: na fase 8 o Murph está
-    // em cena e o (872,284) é o botão da cóceja. Fases diferentes, os dois
-    // nunca coexistem.
+    // chamada da Maggie Mako (dentada no chefão da fase 7, o Torpedão
+    // Francisco): mesmo contrato dos demais ajudantes, mesma ação 'baba' (a
+    // tecla B) — e no SLOT do Icky (748,260), pela mesma razão dele: na fase
+    // 7 o Murph está em cena e o (872,284) é o botão da cóceja. Fases
+    // diferentes, os dois nunca coexistem.
     { id: 'maggie', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'maggie' },
+    // chamada do Touille (dentada na chefã da fase 8, a Verola): mesmo
+    // contrato e mesmo SLOT do Icky/Maggie (748,260) — na fase 8 o Murph
+    // também está em cena, e os três ajudantes nunca coexistem entre si.
+    { id: 'touille', action: 'baba', x: 748, y: 260, r: 40, hit: 56, tipo: 'touille' },
   ];
   var pressed = {};     // id do botão -> true enquanto houver dedo em cima
   var ponteiros = {};   // pointerId -> {clientX, clientY} (caminho Pointer Event)
@@ -126,6 +130,10 @@ window.FG = window.FG || {};
     if (b.id === 'maggie') {
       return !!(FG.maggie && typeof FG.maggie.disponivel === 'function' &&
                 FG.maggie.disponivel());
+    }
+    if (b.id === 'touille') {
+      return !!(FG.touille && typeof FG.touille.disponivel === 'function' &&
+                FG.touille.disponivel());
     }
     return true;
   }
@@ -903,6 +911,97 @@ window.FG = window.FG || {};
     ctx.restore();
   }
 
+  // Botão do Touille: a carinha do ratinho cinza — as orelhonas de miolo
+  // rosa, os olhos bravos em máscaras pretas, o bocão escancarado com os
+  // dois dentões e a espinha de peixe azul do colar embaixo. Na recarga
+  // (30s) fica apagado com o arco esvaziando; mesmo contrato dos outros.
+  function touilleBtn(ctx, b, on) {
+    var tl = FG.touille;
+    var resto = (tl && tl.restTimer > 0) ? tl.restTimer / (tl.REST_MAX || 30) : 0;
+    var recarga = resto > 0;
+    var apagado = recarga ||
+      !(tl && typeof tl.podeComandar === 'function' && tl.podeComandar());
+    ctx.save();
+    if (apagado) { ctx.globalAlpha = 0.5; ctx.shadowBlur = 0; }
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = on && !apagado ? 'rgba(107,111,115,0.4)' : 'rgba(22,24,26,0.5)';
+    ctx.fill();
+    ctx.lineWidth = on && !apagado ? 3.5 : 2.5;
+    ctx.strokeStyle = apagado ? 'rgba(150,150,155,0.45)' : 'rgba(215,218,214,0.85)';
+    ctx.stroke();
+    var r = b.r;
+    // as orelhonas redondas com o miolo rosa
+    for (var d0 = -1; d0 <= 1; d0 += 2) {
+      ctx.fillStyle = apagado ? '#595d61' : '#6b6f73';
+      ctx.beginPath();
+      ctx.ellipse(b.x + d0 * r * 0.4, b.y - r * 0.52, r * 0.26, r * 0.3, d0 * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = apagado ? '#a06a68' : '#f5847c';
+      ctx.beginPath();
+      ctx.ellipse(b.x + d0 * r * 0.4, b.y - r * 0.5, r * 0.16, r * 0.2, d0 * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // cabeça cinza
+    ctx.fillStyle = apagado ? '#595d61' : '#6b6f73';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y - r * 0.02, r * 0.54, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // olhos bravos: máscaras pretas com o branco pequeno dentro
+    ctx.fillStyle = '#16181a';
+    ctx.beginPath();
+    ctx.ellipse(b.x - r * 0.2, b.y - r * 0.16, r * 0.15, r * 0.11, 0.26, 0, Math.PI * 2);
+    ctx.ellipse(b.x + r * 0.2, b.y - r * 0.16, r * 0.15, r * 0.11, -0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(b.x - r * 0.16, b.y - r * 0.15, r * 0.05, 0, Math.PI * 2);
+    ctx.arc(b.x + r * 0.16, b.y - r * 0.15, r * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    // sobrancelha franzida em V
+    ctx.strokeStyle = '#16181a';
+    ctx.lineWidth = r * 0.07;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x - r * 0.36, b.y - r * 0.34);
+    ctx.lineTo(b.x, b.y - r * 0.22);
+    ctx.lineTo(b.x + r * 0.37, b.y - r * 0.33);
+    ctx.stroke();
+    // o bocão escancarado com os DOIS DENTÕES
+    ctx.fillStyle = '#17090d';
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y + r * 0.18, r * 0.38, r * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    for (var d2 = -1; d2 <= 0; d2++) {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(b.x + d2 * r * 0.15 + r * 0.01, b.y + r * 0.02, r * 0.13, r * 0.18, r * 0.03);
+      else ctx.rect(b.x + d2 * r * 0.15 + r * 0.01, b.y + r * 0.02, r * 0.13, r * 0.18);
+      ctx.fill();
+    }
+    // a espinha de peixe AZUL do colar, abaixo do bocão
+    ctx.strokeStyle = apagado ? '#4a6a88' : '#2e86d4';
+    ctx.lineWidth = r * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y + r * 0.46);
+    ctx.lineTo(b.x, b.y + r * 0.74);
+    for (var cs = 0; cs < 2; cs++) {
+      var cy = b.y + r * (0.54 + cs * 0.1);
+      ctx.moveTo(b.x - r * 0.09, cy);
+      ctx.lineTo(b.x + r * 0.09, cy);
+    }
+    ctx.stroke();
+    if (recarga) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#d7dad6';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * resto);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.72;
@@ -920,6 +1019,7 @@ window.FG = window.FG || {};
       if (b.tipo === 'rabie') { rabieBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'icky') { ickyBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       if (b.tipo === 'maggie') { maggieBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
+      if (b.tipo === 'touille') { touilleBtn(ctx, b, on); ctx.shadowBlur = 0; continue; }
       circulo(ctx, b, on);
       ctx.shadowBlur = 0;
       if (b.tipo === 'seta') seta(ctx, b, on);
